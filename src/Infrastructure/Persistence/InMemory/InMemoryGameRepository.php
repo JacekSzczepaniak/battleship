@@ -1,9 +1,10 @@
 <?php
+
 namespace App\Infrastructure\Persistence\InMemory;
 
-use App\Application\Ports\GameRepository;
-use App\Domain\Shared\GameId;
 use App\Domain\Game\Game;
+use App\Domain\Game\GameRepository;
+use App\Domain\Shared\GameId;
 
 final class InMemoryGameRepository implements GameRepository
 {
@@ -12,11 +13,11 @@ final class InMemoryGameRepository implements GameRepository
 
     public function save(Game $game): void
     {
-        $this->store[(string)$game->id()] = $game;
+        $this->store[(string) $game->id()] = $game;
     }
 
     public function get(GameId $id): ?Game
     {
-        return $this->store[(string)$id] ?? null;
+        return $this->store[(string) $id] ?? null;
     }
 }

@@ -9,7 +9,7 @@ final class GameId
     public function __construct(private string $value)
     {
         if (!Uuid::isValid($value)) {
-            throw new \InvalidArgumentException("Invalid UUID");
+            throw new \InvalidArgumentException('Invalid UUID');
         }
     }
 

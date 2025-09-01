@@ -17,5 +17,5 @@ services:
         # public: true   # (niekonieczne, tag wystarczy)
 
     # Infrastructure bindings
-    App\Application\Ports\GameRepository: '@App\Infrastructure\Persistence\Doctrine\DoctrineGameRepository'
-
+#    App\Application\Ports\GameRepository: '@App\Infrastructure\Persistence\Doctrine\DoctrineGameRepository'
+    App\Domain\Game\GameRepository: '@App\Infrastructure\Persistence\Doctrine\DoctrineGameRepository'

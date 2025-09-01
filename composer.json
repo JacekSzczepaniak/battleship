@@ -42,7 +42,7 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "App\\Tests\\": "tests/"
+            "Tests\\": "tests/"
         }
     },
     "replace": {
@@ -77,6 +77,7 @@
         }
     },
     "require-dev": {
+        "roave/security-advisories": "dev-latest",
         "friendsofphp/php-cs-fixer": "^3.86",
         "pestphp/pest": "^4.0",
         "phpstan/phpstan": "^2.1",

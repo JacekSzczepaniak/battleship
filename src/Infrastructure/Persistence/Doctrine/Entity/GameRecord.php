@@ -2,8 +2,8 @@
 
 namespace App\Infrastructure\Persistence\Doctrine\Entity;
 
-use Doctrine\ORM\Mapping as ORM;
 use Doctrine\DBAL\Types\Types;
+use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'games')]
@@ -52,7 +52,7 @@ class GameRecord
     public function setState(array $state): void
     {
         $this->state = $state;
-        $this->version++;
+        ++$this->version;
         $this->updatedAt = new \DateTime('now');
     }
 }

@@ -2,7 +2,7 @@
 
 namespace App\Infrastructure\Http\Controller;
 
-use App\Application\Ports\GameRepository;
+use App\Domain\Game\GameRepository;
 use App\Domain\Shared\GameId;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
@@ -30,7 +30,7 @@ final class GameQueryController
         $size = $game->ruleset()->boardSize();
 
         return new JsonResponse([
-            'id' => (string)$game->id(),
+            'id' => (string) $game->id(),
             'status' => $game->status()->value, // enum -> string
             'board' => ['w' => $size->width, 'h' => $size->height],
         ]);

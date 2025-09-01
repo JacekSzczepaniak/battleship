@@ -2,8 +2,10 @@
 
 namespace App\Application\Game;
 
-use App\Application\Ports\GameRepository;
-use App\Domain\Game\{Ship, Orientation, Coordinate};
+use App\Domain\Game\Coordinate;
+use App\Domain\Game\GameRepository;
+use App\Domain\Game\Orientation;
+use App\Domain\Game\Ship;
 use App\Domain\Shared\GameId;
 
 final class PlaceFleet
@@ -25,9 +27,9 @@ final class PlaceFleet
         $ships = [];
         foreach ($shipsSpec as $s) {
             $ships[] = new Ship(
-                new Coordinate((int)$s['x'], (int)$s['y']),
-                Orientation::from(strtoupper((string)$s['o'])),
-                (int)$s['l']
+                new Coordinate((int) $s['x'], (int) $s['y']),
+                Orientation::from(strtoupper((string) $s['o'])),
+                (int) $s['l']
             );
         }
 

@@ -68,12 +68,15 @@ final class Board
         // touching (8-neighborhood)
         $neighbors = function (Coordinate $c): array {
             $out = [];
-            for ($dx = -1; $dx <= 1; $dx++) {
-                for ($dy = -1; $dy <= 1; $dy++) {
-                    if ($dx === 0 && $dy === 0) continue;
+            for ($dx = -1; $dx <= 1; ++$dx) {
+                for ($dy = -1; $dy <= 1; ++$dy) {
+                    if (0 === $dx && 0 === $dy) {
+                        continue;
+                    }
                     $out[] = [$c->x + $dx, $c->y + $dy];
                 }
             }
+
             return $out;
         };
 
@@ -89,6 +92,7 @@ final class Board
                 return true;
             }
         }
+
         return false;
     }
 }

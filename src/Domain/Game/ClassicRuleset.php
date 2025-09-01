@@ -1,11 +1,17 @@
 <?php
+
 namespace App\Domain\Game;
 
 final class ClassicRuleset implements Ruleset
 {
-    public function __construct(private BoardSize $size = new BoardSize(10,10)) {}
+    public function __construct(private BoardSize $size = new BoardSize(10, 10))
+    {
+    }
 
-    public function boardSize(): BoardSize { return $this->size; }
+    public function boardSize(): BoardSize
+    {
+        return $this->size;
+    }
 
     public function allowedShips(): array
     {

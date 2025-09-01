@@ -1,0 +1,21 @@
+parameters: { }
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    # -> auto-discovery dla całego src (wykluczamy Kernel)
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/Kernel.php'
+
+    App\Infrastructure\Http\Controller\:
+        resource: '../src/Infrastructure/Http/Controller/'
+        tags: ['controller.service_arguments']
+        # public: true   # (niekonieczne, tag wystarczy)
+
+    # Infrastructure bindings
+    App\Application\Ports\GameRepository: '@App\Infrastructure\Persistence\Doctrine\DoctrineGameRepository'
+

@@ -1,0 +1,3 @@
+health:
+    path: /healthz
+    controller: App\Controller\HealthCheckController::index

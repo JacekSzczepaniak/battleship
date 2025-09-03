@@ -76,4 +76,9 @@ jobs:
         run: php bin/console doctrine:migrations:migrate --no-interaction --env=test
 
       - name: Run tests
-        run: vendor/bin/phpunit
+        run: |
+          if [ -f vendor/bin/pest ]; then
+            vendor/bin/pest -c phpunit.xml.dist
+          else
+            vendor/bin/phpunit -c phpunit.xml.dist
+          fi

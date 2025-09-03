@@ -1,0 +1,113 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Sea Battle Demo</title>
+<style>
+    body { font-family: system-ui, sans-serif; margin: 24px; }
+    .toolbar { display:flex; gap:12px; align-items:center; margin-bottom:16px; }
+    .board { display:grid; gap:4px; }
+    .cell {
+        width:32px; height:32px; border:1px solid #ddd; background:#fff;
+        cursor:pointer; border-radius:4px;
+    }
+    .cell.miss { background:#e8e8e8; }
+    .cell.hit { background:#f5b7b1; }
+    .cell.sunk { background:#c39bd3; }
+    .cell.dup { outline:2px dashed #f1c40f; }
+</style>
+<div class="toolbar">
+    <button id="newgame">New game</button>
+    <button id="place">Place fleet</button>
+    <strong id="status">Status: —</strong>
+</div>
+<div id="board" class="board"></div>
+<script>
+    const W = 10, H = 10;
+    let gameId = null;
+
+    const boardEl = document.getElementById('board');
+    boardEl.style.gridTemplateColumns = `repeat(${W}, 32px)`;
+
+    // zbuduj siatkę 10x10
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            const b = document.createElement('button');
+            b.className = 'cell';
+            b.dataset.x = x; b.dataset.y = y;
+            b.onclick = () => fire(x, y, b);
+            boardEl.appendChild(b);
+        }
+    }
+
+    function setStatus(s) {
+        document.getElementById('status').textContent = `Status: ${s}`;
+    }
+    function clearBoard() {
+        [...document.querySelectorAll('.cell')].forEach(c => {
+            c.classList.remove('miss','hit','sunk','dup'); c.disabled = false;
+        });
+    }
+
+    async function createGame() {
+        const res = await fetch('/api/games', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || 'create failed'); return; }
+        gameId = data.id;
+        setStatus(data.status || 'pending');
+        clearBoard();
+    }
+
+    async function placeFleet() {
+        if (!gameId) return alert('Create game first');
+        const ships = [
+            {x:0,y:0,o:'h',l:4},
+            {x:0,y:2,o:'h',l:3},
+            {x:6,y:0,o:'v',l:3},
+            {x:5,y:4,o:'h',l:2},
+            {x:9,y:0,o:'v',l:2},
+            {x:3,y:6,o:'v',l:2},
+            {x:0,y:6,o:'h',l:1},
+            {x:1,y:8,o:'h',l:1},
+            {x:5,y:9,o:'h',l:1},
+            {x:8,y:8,o:'h',l:1},
+        ];
+        const res = await fetch(`/api/games/${gameId}/fleet`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ ships })
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) { alert(body.error || 'place fleet failed'); return; }
+        const g = await (await fetch(`/api/games/${gameId}`)).json();
+        setStatus(g.status || 'in_progress');
+    }
+
+    async function fire(x, y, cellEl) {
+        if (!gameId) return alert('Create game first');
+        const res = await fetch(`/api/games/${gameId}/shots`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ x, y })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { alert(data.error || 'fire failed'); return; }
+
+        if (data.result === 'miss') cellEl.classList.add('miss');
+        if (data.result === 'hit') cellEl.classList.add('hit');
+        if (data.result === 'sunk') cellEl.classList.add('sunk');
+        if (data.result === 'duplicate') cellEl.classList.add('dup');
+
+        // backend zwraca 'win' (bool), nie 'status'
+        if (data.win === true) {
+            setStatus('won');
+            [...document.querySelectorAll('.cell')].forEach(c => c.disabled = true);
+        } else {
+            // opcjonalnie możesz odpytać o bieżący status:
+            // const g = await (await fetch(`/api/games/${gameId}`)).json();
+            // setStatus(g.status || 'in_progress');
+        }
+    }
+
+    document.getElementById('newgame').onclick = createGame;
+    document.getElementById('place').onclick = placeFleet;
+
+    // start
+    createGame();
+</script>

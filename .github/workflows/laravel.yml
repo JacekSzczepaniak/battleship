@@ -27,8 +27,7 @@ jobs:
 
     env:
       APP_ENV: test
-      # jeśli chcesz wymusić URL z workflow zamiast .env.test, odkomentuj:
-      # DATABASE_URL: "postgresql://statki:statki@database:5432/statki?serverVersion=16&charset=utf8"
+      DATABASE_URL: "postgresql://statki:statki@127.0.0.1:5432/statki?serverVersion=16&charset=utf8"
 
     steps:
       - uses: actions/checkout@v4

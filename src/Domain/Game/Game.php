@@ -42,6 +42,19 @@ final class Game
         return $this->status;
     }
 
+    /**
+     * Zwraca informację czy gra jest zakończona.
+     * Oparty o status oraz (asekuracyjnie) o faktyczne trafienia wszystkich pól.
+     */
+    public function isFinished(): bool
+    {
+        if (GameStatus::Won === $this->status) {
+            return true;
+        }
+
+        return $this->allShipsSunk();
+    }
+
     public static function fromSnapshot(GameId $id, Ruleset $ruleset, GameStatus $status): self
     {
         $self = new self($id, $ruleset);
@@ -183,5 +196,84 @@ final class Game
         }
 
         return $out;
+    }
+
+    /** @param array<int, array{x:int,y:int,r?:string}> $shots */
+    public function setShotsFromSnapshot(array $shots): void
+    {
+        // u nas: shots = strzały (bool), hits = trafienia (bool)
+        $this->shots = [];
+        $this->hits = [];
+
+        foreach ($shots as $s) {
+            $key = $s['x'].':'.$s['y'];
+            $this->shots[$key] = true;
+
+            // jeżeli snapshot zawiera wynik strzału, odtwórz trafienia
+            $r = $s['r'] ?? null; // 'hit' | 'sunk' | 'miss' | 'duplicate' | null
+            if ('hit' === $r || 'sunk' === $r) {
+                $this->hits[$key] = true;
+            }
+        }
+    }
+
+    /**
+     * Zwraca listę strzałów z obliczonym wynikiem dla każdego strzału.
+     *
+     * @return list<array{x:int,y:int,result:string}>
+     */
+    public function shotsWithResults(): array
+    {
+        $out = [];
+        foreach (array_keys($this->shots) as $key) {
+            [$x, $y] = array_map('intval', explode(':', $key));
+
+            // domyślnie pudło
+            $result = 'miss';
+
+            // jeżeli był trafiony ten klucz -> hit lub sunk
+            if (isset($this->hits[$key])) {
+                $result = 'hit';
+
+                // jeśli mamy planszę i flotę, możemy sprawdzić czy zatopiony
+                if (null !== $this->board) {
+                    foreach ($this->board->ships() as $ship) {
+                        $cells = $this->cellsFor($ship);
+                        if (in_array($key, $cells, true)) {
+                            $sunk = true;
+                            foreach ($cells as $cellKey) {
+                                if (!isset($this->hits[$cellKey])) {
+                                    $sunk = false;
+                                    break;
+                                }
+                            }
+                            $result = $sunk ? 'sunk' : 'hit';
+                            break;
+                        }
+                    }
+                }
+            }
+
+            $out[] = ['x' => $x, 'y' => $y, 'result' => $result];
+        }
+
+        return $out;
+    }
+
+    private function allShipsSunk(): bool
+    {
+        if (null === $this->board) {
+            return false;
+        }
+
+        foreach ($this->board->ships() as $ship) {
+            foreach ($this->cellsFor($ship) as $cellKey) {
+                if (!isset($this->hits[$cellKey])) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 }

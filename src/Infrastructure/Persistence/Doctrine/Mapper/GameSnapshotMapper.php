@@ -32,9 +32,13 @@ final class GameSnapshotMapper
 
         // jeśli domena udostępnia listę strzałów — zapiszmy je do snapshotu
         $shots = [];
-        if (method_exists($game, 'shots')) {
-            /** @var list<array{x:int,y:int}> $shots */
-            $shots = $game->shots();
+        if (method_exists($game, 'shotsWithResults')) {
+            /** @var list<array{x:int,y:int,result:string}> $withResults */
+            $withResults = $game->shotsWithResults();
+            $shots = array_map(
+                static fn (array $s) => ['x' => $s['x'], 'y' => $s['y'], 'r' => $s['result']],
+                $withResults
+            );
         }
 
         return [
@@ -73,7 +77,12 @@ final class GameSnapshotMapper
             $shots = [];
             foreach ($state['shots'] as $s) {
                 if (isset($s['x'], $s['y'])) {
-                    $shots[] = [(int) $s['x'], (int) $s['y']];
+                    // wcześniej traciliśmy 'r' -> przywróćmy go, jeśli jest
+                    $entry = ['x' => (int) $s['x'], 'y' => (int) $s['y']];
+                    if (isset($s['r'])) {
+                        $entry['r'] = (string) $s['r']; // 'hit' | 'sunk' | 'miss' | 'duplicate'
+                    }
+                    $shots[] = $entry;
                 }
             }
 
@@ -86,8 +95,9 @@ final class GameSnapshotMapper
 
                 // budujemy mapę 'x:y' => true
                 $shotMap = [];
-                foreach ($shots as [$x, $y]) {
-                    $shotMap["$x:$y"] = true;
+                foreach ($shots as $s) {
+                    $key = $s['x'].':'.$s['y'];
+                    $shotMap[$key] = true;
                 }
 
                 // a) ustaw prywatne pole $shots, jeśli istnieje

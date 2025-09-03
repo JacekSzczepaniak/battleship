@@ -14,11 +14,11 @@ jobs:
       database:
         image: postgres:16
         env:
-          POSTGRES_DB: statki
+          POSTGRES_DB: statki_test
           POSTGRES_USER: statki
           POSTGRES_PASSWORD: statki
         options: >-
-          --health-cmd="pg_isready -U statki -d statki"
+          --health-cmd="pg_isready -U statki -d statki_test"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
@@ -63,11 +63,14 @@ jobs:
       - name: Wait for DB
         run: |
           for i in {1..30}; do
-            if pg_isready -h 127.0.0.1 -p 5432 -U statki; then
+            if pg_isready -h 127.0.0.1 -p 5432 -U statki -d statki_test; then
               echo "DB is ready"; break;
             fi
             sleep 2
           done
+
+      - name: Create test database (if needed)
+        run: php bin/console doctrine:database:create --if-not-exists --env=test
 
       - name: Run migrations (test)
         run: php bin/console doctrine:migrations:migrate --no-interaction --env=test

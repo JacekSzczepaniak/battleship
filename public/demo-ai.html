@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <title>Sea Battle – Demo AI</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; }
+    .toolbar { display:flex; gap:12px; align-items:center; margin-bottom:16px; }
+    .row { display:flex; gap:24px; align-items:flex-start; }
+    .board { display:grid; gap:4px; grid-template-columns: repeat(10, 28px); }
+    .cell { width:28px; height:28px; border:1px solid #ddd; background:#fff; border-radius:4px; }
+    .cell.miss { background:#e8e8e8; }
+    .cell.hit { background:#f5b7b1; }
+    .cell.sunk { background:#c39bd3; }
+    .panel { min-width: 300px; }
+    .log { height: 260px; overflow: auto; background: #f8f8f8; border: 1px solid #eee; padding: 8px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>Demo AI</h1>
+  <div class="toolbar">
+    <label>AI 1:
+      <select id="ai1">
+        <option value="hunt">HuntTarget (checkerboard >=10)</option>
+        <option value="hunt-no-chess">HuntTarget (bez checkerboard)</option>
+        <option value="hunt-chess-8">HuntTarget (checkerboard >=8)</option>
+        <option value="random">Random</option>
+      </select>
+    </label>
+    <label>AI 2:
+      <select id="ai2">
+        <option value="hunt">HuntTarget (checkerboard >=10)</option>
+        <option value="hunt-no-chess">HuntTarget (bez checkerboard)</option>
+        <option value="hunt-chess-8">HuntTarget (checkerboard >=8)</option>
+        <option value="random">Random</option>
+      </select>
+    </label>
+    <button id="start">Start (AI vs AI)</button>
+    <button id="step">Krok</button>
+    <button id="reset">Reset</button>
+  </div>
+
+  <div class="row">
+    <div class="panel">
+      <h3>Plansza P2 (celowana przez AI 1)</h3>
+      <div id="board2" class="board"></div>
+    </div>
+    <div class="panel">
+      <h3>Plansza P1 (celowana przez AI 2)</h3>
+      <div id="board1" class="board"></div>
+    </div>
+    <div class="panel">
+      <h3>Log</h3>
+      <div id="log" class="log"></div>
+    </div>
+  </div>
+
+  <script>
+    // Najpierw helpery – muszą być zdefiniowane przed pierwszym użyciem
+    function coordKey(x, y) { return `${x}:${y}`; }
+    function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+    function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    function makeBoard(N) {
+      return { size: N, cells: Array.from({ length: N*N }, (_, i) => ({ x: i%N, y: Math.floor(i/N), tried: false, ship: false, state: '' })), tried: new Set() };
+    }
+    function idx(board, x, y) { return y * board.size + x; }
+    function seedShips(board, count) {
+      let placed = 0;
+      while (placed < count) {
+        const x = randInt(0, board.size - 1);
+        const y = randInt(0, board.size - 1);
+
+        if (!canPlaceSingle(board, x, y)) {
+          continue;
+        }
+
+        const c = board.cells[idx(board, x, y)];
+        c.ship = true;
+        placed++;
+      }
+    }
+
+    // sprawdza brak zajętości i brak styku 8‑kierunkowego dla 1‑polowej jednostki
+    function canPlaceSingle(board, x, y) {
+      const pos = idx(board, x, y);
+      if (board.cells[pos].ship) return false;
+
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= board.size || ny >= board.size) continue;
+          if (board.cells[idx(board, nx, ny)].ship) return false;
+        }
+      }
+      return true;
+    }
+    function buildBoardDom(id, board) {
+      const host = document.getElementById(id);
+      host.innerHTML = '';
+      host.style.gridTemplateColumns = `repeat(${board.size}, 28px)`;
+      board.cells.forEach(c => {
+        const el = document.createElement('div');
+        el.className = 'cell';
+        el.dataset.x = c.x; el.dataset.y = c.y;
+        host.appendChild(el);
+      });
+    }
+    function paintBoard(id, board) {
+      const host = document.getElementById(id);
+      for (const c of board.cells) {
+        const i = c.y * board.size + c.x;
+        const el = host.children[i];
+        el.className = 'cell' + (c.state ? ' ' + c.state : '');
+      }
+    }
+    function paintBoards() { paintBoard('board1', window.board1); paintBoard('board2', window.board2); }
+    function log(msg) {
+      const el = document.getElementById('log');
+      // zamiast dodawać HTML, tworzymy <div> na linię – łatwiej przycinać
+      const line = document.createElement('div');
+      line.textContent = msg;
+      el.appendChild(line);
+      // przytnij log do ostatnich 500 linii (bez rozrastania DOM)
+      const max = 500;
+      while (el.childElementCount > max) {
+        el.removeChild(el.firstElementChild);
+      }
+      el.scrollTop = el.scrollHeight;
+    }
+    function clearLog() { document.getElementById('log').innerHTML = ''; }
+    function disableInputs(disabled) {
+      document.getElementById('ai1').disabled = disabled;
+      document.getElementById('ai2').disabled = disabled;
+      document.getElementById('start').disabled = disabled;
+      document.getElementById('step').disabled = disabled;
+      document.getElementById('reset').disabled = false;
+    }
+
+    // ReadModel i AI
+    function makeReadModel(board) {
+      return {
+        size: () => board.size,
+        wasTried: (c) => board.tried.has(coordKey(c.x, c.y)),
+      };
+    }
+    function RandomShooter() {
+      const tried = new Set();
+      return {
+        nextShot(board) {
+          const N = board.size();
+          let x, y, k;
+          do {
+            x = randInt(0, N - 1);
+            y = randInt(0, N - 1);
+            k = coordKey(x, y);
+          } while (tried.has(k) || board.wasTried({x,y}));
+          tried.add(k);
+          return {x, y};
+        },
+        notify() {}
+      };
+    }
+    function HuntTargetAI(opts = { minSize: 10, offset: 0 }) {
+      const tried = new Set();
+      const targets = [];
+      let firstHit = null;
+
+      const shouldUseCheckerboard = (N) => opts.minSize != null && N >= opts.minSize;
+
+      const key = (c) => c ? coordKey(c.x, c.y) : '__invalid__';
+      const already = (c) => !c ? true : tried.has(key(c));
+      const mark = (c) => { if (!c) return c; tried.add(key(c)); return c; };
+      const inBounds = (c, N) => !!c && c.x >= 0 && c.y >= 0 && c.x < N && c.y < N;
+
+      function pushNeighbors(c) {
+        targets.push({x: c.x + 1, y: c.y});
+        targets.push({x: c.x - 1, y: c.y});
+        targets.push({x: c.x, y: c.y + 1});
+        targets.push({x: c.x, y: c.y - 1});
+      }
+      function pushLineFrom(a, b) {
+        if (a.x === b.x) {
+          const x = a.x;
+          targets.push({x, y: Math.min(a.y, b.y) - 1});
+          targets.push({x, y: Math.max(a.y, b.y) + 1});
+        } else if (a.y === b.y) {
+          const y = a.y;
+          targets.push({x: Math.min(a.x, b.x) - 1, y});
+          targets.push({x: Math.max(a.x, b.x) + 1, y});
+        } else {
+          pushNeighbors(b);
+        }
+      }
+
+      return {
+        nextShot(board) {
+          // 1) spróbuj cele z “Target”
+          while (targets.length) {
+            const t = targets.pop();
+            if (!inBounds(t, board.size()) || already(t)) continue;
+            return mark(t);
+          }
+
+          // 2) Hunt z limitem prób i fallbackiem na pełne skanowanie
+          const N = board.size();
+          let useChess = shouldUseCheckerboard(N);
+          let offset = (opts.offset ?? 0) % 2;
+
+          // policz ile pól o danej parzystości – jeśli wszystkie wyszły, wyłącz filtr
+          if (useChess) {
+            // oszacowanie: gdy lokalnie “tried” ma >= połowy pól i parity nie działa – odpuść
+            let freeOnParity = false;
+            outer:
+            for (let y = 0; y < N; y++) {
+              for (let x = 0; x < N; x++) {
+                if (((x + y) % 2) !== offset) continue;
+                const c = {x, y};
+                if (!already(c) && !board.wasTried(c)) { freeOnParity = true; break outer; }
+              }
+            }
+            if (!freeOnParity) useChess = false;
+          }
+
+          // próby losowe
+          let attempts = 0;
+          const maxAttempts = Math.max(256, N * N * 2);
+          while (attempts++ < maxAttempts) {
+            let x = randInt(0, N - 1);
+            let y = randInt(0, N - 1);
+            if (useChess && (((x + y) % 2) !== offset)) continue;
+            const c = {x, y};
+            if (already(c) || board.wasTried(c)) continue;
+            return mark(c);
+          }
+
+          // fallback: pełny przegląd siatki (najpierw z chess, potem bez)
+          if (useChess) {
+            for (let y = 0; y < N; y++) {
+              for (let x = 0; x < N; x++) {
+                if (((x + y) % 2) !== offset) continue;
+                const c = {x, y};
+                if (!already(c) && !board.wasTried(c)) return mark(c);
+              }
+            }
+          }
+          for (let y = 0; y < N; y++) {
+            for (let x = 0; x < N; x++) {
+              const c = {x, y};
+              if (!already(c) && !board.wasTried(c)) return mark(c);
+            }
+          }
+
+          // ostateczny bezpiecznik – wszystkie pola wystrzelane: zwróć coś pewnego (zakończy turę jako MISS/duplikat)
+          return { x: 0, y: 0 };
+        },
+        notify(c, result) {
+          if (result === ShotResult.Miss) return;
+          if (result === ShotResult.Hit) {
+            if (!firstHit) {
+              firstHit = c;
+              pushNeighbors(c);
+            } else {
+              pushLineFrom(firstHit, c);
+            }
+            return;
+          }
+          // SUNK
+          firstHit = null;
+          targets.length = 0;
+        }
+      };
+    }
+    function makeAI(kind) {
+      switch (kind) {
+        case 'random': return RandomShooter();
+        case 'hunt-no-chess': return HuntTargetAI({ minSize: null, offset: 0 });
+        case 'hunt-chess-8': return HuntTargetAI({ minSize: 8, offset: 0 });
+        case 'hunt': default: return HuntTargetAI({ minSize: 10, offset: 0 });
+      }
+    }
+
+    // Model gry i logika tury (używane po inicjalizacji)
+    const ShotResult = { Miss: 'MISS', Hit: 'HIT', Sunk: 'SUNK' };
+    function shoot(board, c) {
+      const k = coordKey(c.x, c.y);
+      board.tried.add(k);
+      const cell = board.cells[idx(board, c.x, c.y)];
+      if (cell.tried) return ShotResult.Miss; // powtórka kończy turę
+      cell.tried = true;
+      if (!cell.ship) { cell.state = 'miss'; return ShotResult.Miss; }
+      cell.state = 'sunk'; // uproszczenie na potrzeby wizualizacji
+      return ShotResult.Hit;
+    }
+    function isDefeated(board) {
+      return board.cells.filter(c => c.ship).every(c => c.tried);
+    }
+
+    // Autoplay – zabezpieczenie przed wiszeniem: flaga + limit kroków
+    let isRunning = false;
+
+    // Inicjalizacja po załadowaniu DOM – tu tworzymy plansze i podpinamy zdarzenia
+    window.addEventListener('DOMContentLoaded', () => {
+      // globalnie dostępne plansze i AI (na potrzeby painterów)
+      window.N = 10;
+      window.board1 = makeBoard(N);
+      window.board2 = makeBoard(N);
+      seedShips(board1, 15);
+      seedShips(board2, 15);
+
+      window.view1 = makeReadModel(board2);
+      window.view2 = makeReadModel(board1);
+
+      window.turn = 1;
+      window.ai1 = makeAI('hunt');
+      window.ai2 = makeAI('hunt');
+
+      buildBoardDom('board1', board1);
+      buildBoardDom('board2', board2);
+      paintBoards();
+
+      document.getElementById('start').onclick = async () => {
+        if (isRunning) return; // nie dubluj pętli
+        isRunning = true;
+        disableInputs(true);
+
+        let steps = 0;
+        const maxSteps = 10000; // bezpiecznik UI
+        while (!isDefeated(board1) && !isDefeated(board2) && steps < maxSteps) {
+          step();
+          steps++;
+          await delay(0); // oddaj kontrolę UI
+        }
+
+        if (steps >= maxSteps) {
+          log('Autoplay przerwany (bezpiecznik UI)');
+        }
+        disableInputs(false);
+        isRunning = false;
+      };
+      document.getElementById('step').onclick = step;
+      document.getElementById('reset').onclick = () => resetAll();
+      document.getElementById('ai1').onchange = (e) => { window.ai1 = makeAI(e.target.value); };
+      document.getElementById('ai2').onchange = (e) => { window.ai2 = makeAI(e.target.value); };
+    });
+
+    function step() {
+      if (isDefeated(board1) || isDefeated(board2)) return;
+
+      const shooter = (turn === 1) ? ai1 : ai2;
+      const board = (turn === 1) ? board2 : board1;
+      const view = (turn === 1) ? view1 : view2;
+      const name = (turn === 1) ? 'AI1' : 'AI2';
+
+      let res;
+      do {
+        const c = shooter.nextShot(view);
+        res = shoot(board, c);
+        shooter.notify(c, res);
+        paintBoards();
+        log(`${name} (${c.x},${c.y}) -> ${res}`);
+
+        if (isDefeated(board)) {
+          log(`${name} WYGRYWA`);
+          return;
+        }
+      } while (res !== ShotResult.Miss);
+
+      turn = (turn === 1) ? 2 : 1;
+    }
+
+    function resetAll() {
+      board1.cells.forEach(c => { c.tried = false; c.ship = false; c.state = ''; });
+      board2.cells.forEach(c => { c.tried = false; c.ship = false; c.state = ''; });
+      board1.tried.clear(); board2.tried.clear();
+      seedShips(board1, 15);
+      seedShips(board2, 15);
+      turn = 1;
+      ai1 = makeAI(document.getElementById('ai1').value);
+      ai2 = makeAI(document.getElementById('ai2').value);
+      clearLog();
+      paintBoards();
+    }
+  </script>

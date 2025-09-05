@@ -70,9 +70,31 @@
       while (placed < count) {
         const x = randInt(0, board.size - 1);
         const y = randInt(0, board.size - 1);
+
+        if (!canPlaceSingle(board, x, y)) {
+          continue;
+        }
+
         const c = board.cells[idx(board, x, y)];
-        if (!c.ship) { c.ship = true; placed++; }
+        c.ship = true;
+        placed++;
       }
+    }
+
+    // sprawdza brak zajętości i brak styku 8‑kierunkowego dla 1‑polowej jednostki
+    function canPlaceSingle(board, x, y) {
+      const pos = idx(board, x, y);
+      if (board.cells[pos].ship) return false;
+
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= board.size || ny >= board.size) continue;
+          if (board.cells[idx(board, nx, ny)].ship) return false;
+        }
+      }
+      return true;
     }
     function buildBoardDom(id, board) {
       const host = document.getElementById(id);

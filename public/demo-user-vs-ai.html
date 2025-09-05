@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <title>Sea Battle – User vs AI</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; }
+    .toolbar { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap: wrap; }
+    .row { display:flex; gap:24px; align-items:flex-start; }
+    .board { display:grid; gap:4px; grid-template-columns: repeat(10, 28px); }
+    .cell { width:28px; height:28px; border:1px solid #ddd; background:#fff; border-radius:4px; cursor:pointer; }
+    .cell.ship { background:#a3d5ff; }
+    .cell.miss { background:#e8e8e8; }
+    .cell.hit { background:#f5b7b1; }
+    .cell.sunk { background:#c39bd3; }
+    .panel { min-width: 320px; }
+    .log { height: 260px; overflow: auto; background: #f8f8f8; border: 1px solid #eee; padding: 8px; font-size: 13px; }
+    .hint { color:#666; font-size: 12px; }
+    .fleet { font-size: 13px; }
+    .disabled { opacity: .6; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <h1>User vs AI</h1>
+
+  <div class="toolbar">
+    <div>
+      Tryb:
+      <strong id="mode">Rozstawianie floty</strong>
+    </div>
+    <div class="fleet">
+      Flota do rozstawienia: <span id="fleet-left"></span>
+    </div>
+    <div>
+      Orientacja:
+      <select id="orientation">
+        <option value="H">Poziomo</option>
+        <option value="V">Pionowo</option>
+      </select>
+    </div>
+    <div>
+      Aktualny statek:
+      <select id="next-ship"></select>
+    </div>
+    <button id="undo">Cofnij</button>
+    <button id="reset">Reset</button>
+    <button id="confirm">Zatwierdź i graj</button>
+    <div>
+      AI:
+      <select id="ai">
+        <option value="hunt">HuntTarget (checkerboard >=10)</option>
+        <option value="hunt-no-chess">HuntTarget (bez checkerboard)</option>
+        <option value="hunt-chess-8">HuntTarget (checkerboard >=8)</option>
+        <option value="random">Random</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="panel">
+      <h3>Twoja plansza (rozstaw/obrona)</h3>
+      <div id="player-board" class="board"></div>
+      <div class="hint">Klikaj, aby stawiać statki. Brak styku (również po skosie).</div>
+    </div>
+    <div class="panel">
+      <h3>Plansza AI (atak)</h3>
+      <div id="ai-board" class="board"></div>
+      <div class="hint">Po rozpoczęciu gry klikaj pola, aby strzelać.</div>
+    </div>
+    <div class="panel">
+      <h3>Log</h3>
+      <div id="log" class="log"></div>
+    </div>
+  </div>
+
+  <script>
+    // Helpers
+    function coordKey(x, y) { return `${x}:${y}`; }
+    function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+    function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    const ShotResult = { Miss: 'MISS', Hit: 'HIT', Sunk: 'SUNK' };
+
+    // Boards
+    function makeBoard(N) {
+      return {
+        size: N,
+        cells: Array.from({ length: N*N }, (_, i) => ({
+          x: i%N, y: Math.floor(i/N),
+          ship: false, tried: false, state: ''
+        })),
+        tried: new Set(),
+        ships: [] // lista statków: {x,y,len,o, cells:[{x,y}], hits:Set}
+      };
+    }
+    function idx(board, x, y) { return y * board.size + x; }
+
+    // Demo fleet: 10x10 klasyczna
+    const FLEET = [4,3,3,2,2,2,1,1,1,1];
+
+    // Placement validation (no overlap, no touching 8-way)
+    function canPlaceShip(board, x, y, len, o) {
+      const cells = [];
+      for (let i=0;i<len;i++) {
+        const cx = x + (o==='H' ? i : 0);
+        const cy = y + (o==='V' ? i : 0);
+        if (cx<0 || cy<0 || cx>=board.size || cy>=board.size) return false;
+        cells.push({x:cx,y:cy});
+      }
+      // check overlap/touch
+      for (const seg of cells) {
+        for (let dy=-1; dy<=1; dy++) {
+          for (let dx=-1; dx<=1; dx++) {
+            const nx = seg.x+dx, ny=seg.y+dy;
+            if (nx<0||ny<0||nx>=board.size||ny>=board.size) continue;
+            const c = board.cells[idx(board,nx,ny)];
+            if (c.ship) return false;
+          }
+        }
+      }
+      return true;
+    }
+    function placeShip(board, x, y, len, o) {
+      const cells = [];
+      for (let i=0;i<len;i++) {
+        const cx = x + (o==='H' ? i : 0);
+        const cy = y + (o==='V' ? i : 0);
+        const c = board.cells[idx(board,cx,cy)];
+        c.ship = true;
+        cells.push({x:cx,y:cy});
+      }
+      board.ships.push({ x, y, len, o, cells, hits: new Set() });
+    }
+    function removeLastShip(board) {
+      const s = board.ships.pop();
+      if (!s) return;
+      for (const seg of s.cells) {
+        board.cells[idx(board, seg.x, seg.y)].ship = false;
+      }
+    }
+
+    // Shooting
+    function shoot(board, c) {
+      const k = coordKey(c.x, c.y);
+      board.tried.add(k);
+      const cell = board.cells[idx(board, c.x, c.y)];
+      if (cell.tried) return ShotResult.Miss; // powtórka kończy turę
+      cell.tried = true;
+
+      if (!cell.ship) {
+        cell.state = 'miss';
+        return ShotResult.Miss;
+      }
+
+      // znajdź statek i oznacz trafienie
+      let sunkNow = false;
+      for (const s of board.ships) {
+        if (s.cells.some(seg => seg.x===c.x && seg.y===c.y)) {
+          s.hits.add(k);
+          const allHit = s.cells.every(seg => board.cells[idx(board, seg.x, seg.y)].tried);
+          if (allHit) sunkNow = true;
+          break;
+        }
+      }
+      cell.state = sunkNow ? 'sunk' : 'hit';
+      return sunkNow ? ShotResult.Sunk : ShotResult.Hit;
+    }
+    function isDefeated(board) {
+      return board.ships.length>0 && board.ships.every(s => s.cells.every(seg => board.cells[idx(board, seg.x, seg.y)].tried));
+    }
+
+    // Read model for AI
+    function makeReadModel(board) {
+      return {
+        size: () => board.size,
+        wasTried: (c) => board.tried.has(coordKey(c.x, c.y)),
+      };
+    }
+
+    // Shooters
+    function RandomShooter() {
+      const tried = new Set();
+      return {
+        nextShot(board) {
+          const N = board.size();
+          let x, y, k;
+          do {
+            x = randInt(0, N - 1);
+            y = randInt(0, N - 1);
+            k = coordKey(x, y);
+          } while (tried.has(k) || board.wasTried({x,y}));
+          tried.add(k);
+          return {x, y};
+        },
+        notify() {}
+      };
+    }
+
+    function HuntTargetAI(opts = { minSize: 10, offset: 0 }) {
+      const tried = new Set();
+      const targets = [];
+      let firstHit = null;
+
+      const shouldUseCheckerboard = (N) => opts.minSize != null && N >= opts.minSize;
+
+      const key = (c) => c ? coordKey(c.x, c.y) : '__invalid__';
+      const already = (c) => !c ? true : tried.has(key(c));
+      const mark = (c) => { if (!c) return c; tried.add(key(c)); return c; };
+      const inBounds = (c, N) => !!c && c.x >= 0 && c.y >= 0 && c.x < N && c.y < N;
+
+      function pushNeighbors(c) {
+        targets.push({x: c.x + 1, y: c.y});
+        targets.push({x: c.x - 1, y: c.y});
+        targets.push({x: c.x, y: c.y + 1});
+        targets.push({x: c.x, y: c.y - 1});
+      }
+      function pushLineFrom(a, b) {
+        if (a.x === b.x) {
+          const x = a.x;
+          targets.push({x, y: Math.min(a.y, b.y) - 1});
+          targets.push({x, y: Math.max(a.y, b.y) + 1});
+        } else if (a.y === b.y) {
+          const y = a.y;
+          targets.push({x: Math.min(a.x, b.x) - 1, y});
+          targets.push({x: Math.max(a.x, b.x) + 1, y});
+        } else {
+          pushNeighbors(b);
+        }
+      }
+
+      return {
+        nextShot(board) {
+          while (targets.length) {
+            const t = targets.pop();
+            if (!inBounds(t, board.size()) || already(t)) continue;
+            return mark(t);
+          }
+
+          const N = board.size();
+          let useChess = shouldUseCheckerboard(N);
+          let offset = (opts.offset ?? 0) % 2;
+
+          // jeśli brak wolnych pól w parzystości – wyłącz filtr
+          if (useChess) {
+            let freeOnParity = false;
+            outer:
+            for (let y = 0; y < N; y++) {
+              for (let x = 0; x < N; x++) {
+                if (((x + y) % 2) !== offset) continue;
+                const c = {x, y};
+                if (!already(c) && !board.wasTried(c)) { freeOnParity = true; break outer; }
+              }
+            }
+            if (!freeOnParity) useChess = false;
+          }
+
+          let attempts = 0;
+          const maxAttempts = Math.max(256, N * N * 2);
+          while (attempts++ < maxAttempts) {
+            let x = randInt(0, N - 1);
+            let y = randInt(0, N - 1);
+            if (useChess && (((x + y) % 2) !== offset)) continue;
+            const c = {x, y};
+            if (already(c) || board.wasTried(c)) continue;
+            return mark(c);
+          }
+          // fallback – pełny skan: najpierw chess, potem bez
+          if (useChess) {
+            for (let y=0;y<N;y++) for (let x=0;x<N;x++) {
+              if (((x+y)%2)!==offset) continue;
+              const c={x,y}; if (!already(c)&&!board.wasTried(c)) return mark(c);
+            }
+          }
+          for (let y=0;y<N;y++) for (let x=0;x<N;x++) {
+            const c={x,y}; if (!already(c)&&!board.wasTried(c)) return mark(c);
+          }
+          return {x:0,y:0}; // ostateczny bezpiecznik
+        },
+        notify(c, result) {
+          if (result === ShotResult.Miss) return;
+          if (result === ShotResult.Hit) {
+            if (!firstHit) {
+              firstHit = c;
+              pushNeighbors(c);
+            } else {
+              pushLineFrom(firstHit, c);
+            }
+            return;
+          }
+          // SUNK
+          firstHit = null;
+          targets.length = 0;
+        }
+      };
+    }
+
+    function makeAI(kind) {
+      switch (kind) {
+        case 'random': return RandomShooter();
+        case 'hunt-no-chess': return HuntTargetAI({ minSize: null, offset: 0 });
+        case 'hunt-chess-8': return HuntTargetAI({ minSize: 8, offset: 0 });
+        case 'hunt': default: return HuntTargetAI({ minSize: 10, offset: 0 });
+      }
+    }
+
+    // UI + game flow
+    const N = 10;
+    const player = makeBoard(N);
+    const ai = makeBoard(N);
+
+    // rozstaw floty AI (losowo, bez styku)
+    function seedAI() {
+      ai.ships = [];
+      ai.cells.forEach(c => { c.ship=false; c.tried=false; c.state=''; });
+      for (const len of FLEET) {
+        let placed=false, guard=0;
+        while(!placed && guard++<10000) {
+          const o = randInt(0,1)===0?'H':'V';
+          const x = randInt(0, N-1);
+          const y = randInt(0, N-1);
+          if (canPlaceShip(ai, x, y, len, o)) {
+            placeShip(ai, x, y, len, o);
+            placed=true;
+          }
+        }
+        if (!placed) { console.warn('Nie udało się rozstawić AI'); break; }
+      }
+    }
+
+    seedAI();
+
+    const aiView = makeReadModel(player);
+    let aiShooter = makeAI(document.getElementById('ai').value);
+    document.getElementById('ai').onchange = (e) => aiShooter = makeAI(e.target.value);
+
+    let placementMode = true;
+    let running = false;
+
+    // Build boards
+    buildBoard('player-board', player, onPlayerClick);
+    buildBoard('ai-board', ai, onAIClick);
+    refreshFleetLeft();
+    paintBoards();
+
+    document.getElementById('undo').onclick = () => {
+      if (!placementMode) return;
+      removeLastShip(player); refreshFleetLeft(); paintBoards();
+    };
+    document.getElementById('reset').onclick = () => resetAll();
+    document.getElementById('confirm').onclick = () => {
+      if (!placementMode) return;
+      const remaining = pendingFleet();
+      if (remaining.length) {
+        alert('Najpierw rozstaw całą flotę');
+        return;
+      }
+      placementMode = false;
+      document.getElementById('mode').textContent = 'Gra w toku';
+      document.getElementById('player-board').classList.remove('disabled');
+      document.getElementById('ai-board').classList.remove('disabled');
+    };
+
+    function resetAll() {
+      // reset gracza
+      player.cells.forEach(c => { c.ship=false; c.tried=false; c.state=''; });
+      player.ships = [];
+      // reset AI
+      ai.tried.clear();
+      ai.cells.forEach(c => { c.tried=false; c.state=''; });
+      seedAI();
+
+      placementMode = true;
+      running = false;
+      document.getElementById('mode').textContent = 'Rozstawianie floty';
+      refreshFleetLeft();
+      paintBoards();
+    }
+
+    function buildBoard(id, board, onClick) {
+      const host = document.getElementById(id);
+      host.innerHTML='';
+      host.style.gridTemplateColumns = `repeat(${board.size}, 28px)`;
+      for (const c of board.cells) {
+        const el = document.createElement('div');
+        el.className = 'cell';
+        el.addEventListener('click', () => onClick(c.x, c.y, el));
+        host.appendChild(el);
+      }
+    }
+    function paintBoards() { paintBoard('player-board', player, true); paintBoard('ai-board', ai, false); }
+    function paintBoard(id, board, showShips) {
+      const host = document.getElementById(id);
+      for (const c of board.cells) {
+        const el = host.children[idx(board,c.x,c.y)];
+        const states = ['miss','hit','sunk'];
+        el.className = 'cell';
+        if (showShips && c.ship) el.classList.add('ship');
+        for (const s of states) if (c.state===s) el.classList.add(s);
+      }
+    }
+
+    function onPlayerClick(x, y) {
+      if (!placementMode) return;
+      const o = document.getElementById('orientation').value;
+      const len = parseInt(document.getElementById('next-ship').value, 10);
+      if (Number.isNaN(len)) {
+        alert('Wybierz długość statku z listy');
+        return;
+      }
+      if (!canPlaceShip(player, x, y, len, o)) return;
+      placeShip(player, x, y, len, o);
+      refreshFleetLeft();
+      paintBoards();
+    }
+
+    function onAIClick(x, y) {
+      if (placementMode || running) return;
+      // User strzela w AI
+      if (isDefeated(ai) || isDefeated(player)) return;
+      running = true;
+
+      const c = {x, y};
+      const res = shoot(ai, c);
+      paintBoards();
+      log(`User: (${x},${y}) -> ${res}`);
+      if (isDefeated(ai)) { log('User WYGRYWA'); running=false; return; }
+
+      if (res === ShotResult.Miss) {
+        // Tura AI – ciągnij póki trafia
+        aiTurn().then(() => { running=false; });
+      } else {
+        running = false;
+      }
+    }
+
+    async function aiTurn() {
+      const view = aiView; // widok planszy gracza
+      let res;
+      do {
+        const c = aiShooter.nextShot(view);
+        res = shoot(player, c);
+        aiShooter.notify(c, res);
+        paintBoards();
+        log(`AI: (${c.x},${c.y}) -> ${res}`);
+        await delay(80);
+        if (isDefeated(player)) { log('AI WYGRYWA'); return; }
+      } while (res !== ShotResult.Miss);
+    }
+
+    function pendingFleet() {
+      // ile jeszcze segmentów do rozstawienia?
+      const placed = player.ships.map(s => s.len).sort((a,b)=>b-a);
+      const needed = [...FLEET].sort((a,b)=>b-a);
+      // usuń dopasowane długości z końca
+      for (let i=placed.length-1;i>=0;i--) {
+        const v = placed[i];
+        const idx = needed.indexOf(v);
+        if (idx !== -1) needed.splice(idx,1);
+      }
+      return needed;
+    }
+    function refreshFleetLeft() {
+      const left = pendingFleet();
+      const el = document.getElementById('fleet-left');
+      el.textContent = left.length ? left.join(',') : 'OK (gotowe)';
+      const sel = document.getElementById('next-ship');
+      sel.innerHTML='';
+      const usedCount = {};
+      const targetCount = {};
+      for (const v of FLEET) targetCount[v]=(targetCount[v]||0)+1;
+      for (const s of player.ships) usedCount[s.len]=(usedCount[s.len]||0)+1;
+      const candidates = Object.keys(targetCount).map(n=>parseInt(n,10)).sort((a,b)=>b-a);
+      for (const len of candidates) {
+        if ((usedCount[len]||0) >= targetCount[len]) continue;
+        const opt = document.createElement('option');
+        opt.value = String(len);
+        opt.textContent = String(len);
+        sel.appendChild(opt);
+      }
+    }
+
+    // Log z przycinaniem
+    function log(msg) {
+      const el = document.getElementById('log');
+      const line = document.createElement('div');
+      line.textContent = msg;
+      el.appendChild(line);
+      const max = 500;
+      while (el.childElementCount > max) el.removeChild(el.firstElementChild);
+      el.scrollTop = el.scrollHeight;
+    }
+  </script>
+</body>
+</html>

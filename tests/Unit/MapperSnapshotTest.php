@@ -36,3 +36,5 @@ it('mapuje Game -> array -> Game (round-trip) z flotą', function () {
     expect($g2->ruleset()->boardSize()->width)->toBe(12);
     expect($g2->fleet())->not->toBeNull();
 });
+
+//test

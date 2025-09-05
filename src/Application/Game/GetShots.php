@@ -22,7 +22,7 @@ final class GetShots
 
         $shots = $game->shotsWithResults();
 
-        // Zbierz trafione pola (hit lub sunk)
+        // Collect hit cells (hit or sunk)
         $hitSet = [];
         foreach ($shots as $s) {
             if ($s['result'] === 'hit' || $s['result'] === 'sunk') {
@@ -30,7 +30,6 @@ final class GetShots
             }
         }
 
-        // Gra zakończona, jeśli każde pole każdego statku jest trafione
         $finished = false;
         $fleet = $game->fleet();
         if ($fleet) {

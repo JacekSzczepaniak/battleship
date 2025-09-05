@@ -30,7 +30,7 @@ final class GameSnapshotMapper
             }, $game->fleet());
         }
 
-        // jeśli domena udostępnia listę strzałów — zapiszmy je do snapshotu
+        // include shots (with results) if domain exposes them
         $shots = [];
         if (method_exists($game, 'shotsWithResults')) {
             /** @var list<array{x:int,y:int,result:string}> $withResults */
@@ -58,7 +58,7 @@ final class GameSnapshotMapper
         $status = GameStatus::from((string) ($state['status'] ?? GameStatus::Pending->value));
         $game = Game::fromSnapshot(new GameId($id), $ruleset, $status);
 
-        // Flota ze snapshotu
+        // fleet from snapshot
         if (isset($state['fleet']) && is_array($state['fleet'])) {
             $ships = [];
             foreach ($state['fleet'] as $s) {
@@ -71,13 +71,12 @@ final class GameSnapshotMapper
             $game->setFleetFromSnapshot($ships);
         }
 
-        // Strzały ze snapshotu (opcjonalnie) + rekonstrukcja 'hits'
+        // shots from snapshot (optional) + hits reconstruction
         if (!empty($state['shots']) && is_array($state['shots'])) {
-            // 1) normalizuj wejście
+            // normalize input
             $shots = [];
             foreach ($state['shots'] as $s) {
                 if (isset($s['x'], $s['y'])) {
-                    // wcześniej traciliśmy 'r' -> przywróćmy go, jeśli jest
                     $entry = ['x' => (int) $s['x'], 'y' => (int) $s['y']];
                     if (isset($s['r'])) {
                         $entry['r'] = (string) $s['r']; // 'hit' | 'sunk' | 'miss' | 'duplicate'
@@ -86,27 +85,27 @@ final class GameSnapshotMapper
                 }
             }
 
-            // 2) jeśli domena ma dedykowany setter — użyj go
+            // preferred: domain setter (if available)
             if (method_exists($game, 'setShotsFromSnapshot')) {
-                $game->setShotsFromSnapshot($shots); // preferowane rozwiązanie, jeśli dodałeś taką metodę
+                $game->setShotsFromSnapshot($shots);
             } else {
-                // 3) fallback: Reflection — wpisz 'shots' i wylicz 'hits' po flocie
+                // fallback: reflection — set 'shots' and compute 'hits'
                 $ref = new \ReflectionObject($game);
 
-                // budujemy mapę 'x:y' => true
+                // build 'x:y' => true map for shots
                 $shotMap = [];
                 foreach ($shots as $s) {
                     $key = $s['x'].':'.$s['y'];
                     $shotMap[$key] = true;
                 }
 
-                // a) ustaw prywatne pole $shots, jeśli istnieje
+                // set private $shots if present
                 if ($ref->hasProperty('shots')) {
                     $p = $ref->getProperty('shots');
                     $p->setValue($game, $shotMap);
                 }
 
-                // b) wylicz trafienia na podstawie floty
+                // compute hits based on current fleet
                 $hitMap = [];
                 $fleet = $game->fleet() ?? [];
                 foreach ($fleet as $ship) {
@@ -117,7 +116,7 @@ final class GameSnapshotMapper
                     }
                 }
 
-                // c) ustaw prywatne pole $hits, jeśli istnieje
+                // set private $hits if present
                 if ($ref->hasProperty('hits')) {
                     $p = $ref->getProperty('hits');
                     $p->setValue($game, $hitMap);
@@ -136,7 +135,7 @@ final class GameSnapshotMapper
     }
 
     /**
-     * @return list<string> klucze pól statku w formie "x:y"
+     * @return list<string> ship cell keys in "x:y" format
      */
     private function cellsFor(Ship $ship): array
     {

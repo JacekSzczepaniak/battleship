@@ -22,12 +22,11 @@ final class FireShot
 
         $out = $game->fireShot(new Coordinate($x, $y));
 
-        // ważne: utrwal stan po strzale (żeby kolejne requesty widziały zmiany)
         $this->repo->save($game);
 
         return [
             'result' => $out->value,                     // 'miss' | 'hit' | 'sunk' | 'duplicate'
-            'win' => 'won' === $game->status()->value, // dostosuj jeżeli masz inny enum/value
+            'win' => 'won' === $game->status()->value,
         ];
     }
 }

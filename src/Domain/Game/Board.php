@@ -13,13 +13,13 @@ final class Board
 
     public function place(Ship $ship): void
     {
-        // 1) granice planszy
+        // 1) board bounds
         foreach ($ship->cells() as $c) {
             if (!$this->isInside($c)) {
                 throw new \DomainException('Ship out of board bounds');
             }
         }
-        // 2) kolizje i brak styku (również po skosie)
+        // 2) no collisions or contact (including diagonals)
         foreach ($this->ships as $other) {
             if ($this->touchOrOverlap($ship, $other)) {
                 throw new \DomainException('Ships overlap or touch');
@@ -52,7 +52,6 @@ final class Board
         $ac = $a->cells();
         $bc = $b->cells();
 
-        // zrób sety dla szybkiego sprawdzania
         $bSet = [];
         foreach ($bc as $c) {
             $bSet["{$c->x},{$c->y}"] = true;

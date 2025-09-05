@@ -43,8 +43,8 @@ final class Game
     }
 
     /**
-     * Zwraca informację czy gra jest zakończona.
-     * Oparty o status oraz (asekuracyjnie) o faktyczne trafienia wszystkich pól.
+     * Returns whether the game is finished.
+     * Checks status and (as a safeguard) actual hits on all ship cells.
      */
     public function isFinished(): bool
     {
@@ -58,7 +58,7 @@ final class Game
     public static function fromSnapshot(GameId $id, Ruleset $ruleset, GameStatus $status): self
     {
         $self = new self($id, $ruleset);
-        $self->status = $status; // kontrolujemy wartości w repo/mapperze
+        $self->status = $status;
 
         return $self;
     }
@@ -70,14 +70,14 @@ final class Game
     }
 
     /**
-     * Używane przy odczycie ze snapshotu (bez walidacji biznesowej).
+     * Used when loading from a snapshot (no business validation).
      *
      * @param Ship[] $ships
      */
     public function setFleetFromSnapshot(array $ships): void
     {
         $this->fleet = $ships;
-        // odbuduj planszę, aby fireShot działał po odczycie z repozytorium
+        // rebuild the board so fireShot works after loading from repository
         $board = new Board($this->ruleset->boardSize());
         $board->placeMany($ships);
         $this->board = $board;
@@ -92,7 +92,7 @@ final class Game
             throw new \DomainException('Fleet already placed');
         }
 
-        // walidacja zestawu statków wg ruleset
+        // validate fleet composition against ruleset
         $expected = $this->ruleset->allowedShips();
         $got = [];
         foreach ($ships as $s) {
@@ -104,19 +104,19 @@ final class Game
             throw new \DomainException('Invalid fleet composition');
         }
 
-        // walidacja pozycji na planszy
+        // validate positions on the board
         $board = new Board($this->ruleset->boardSize());
         $board->placeMany($ships);
 
         $this->fleet = $ships;
-        $this->board = $board; // kluczowe: przypisz planszę do właściwości obiektu
-        $this->status = GameStatus::InProgress; // opcjonalnie: uznajmy, że po rozstawieniu gra startuje
+        $this->board = $board;
+        $this->status = GameStatus::InProgress;
     }
 
     /**
-     * Oddaj strzał. Zwraca ShotResult.
+     * Fires a shot and returns ShotResult.
      *
-     * Rzuca DomainException tylko gdy flota nie jest rozstawiona.
+     * Throws DomainException only when the fleet is not placed.
      */
     public function fireShot(Coordinate $c): ShotResult
     {
@@ -144,7 +144,7 @@ final class Game
             return ShotResult::Miss;
         }
 
-        // sprawdź czy zatopiony ten statek
+        // check if the hit ship is sunk
         $sunk = true;
         foreach ($this->cellsFor($hitShip) as $cellKey) {
             if (!isset($this->hits[$cellKey])) {
@@ -153,7 +153,7 @@ final class Game
             }
         }
 
-        // sprawdź czy wygrana (wszystkie pola wszystkich statków trafione)
+        // check if all ships are sunk (win)
         $allHit = true;
         foreach ($this->board->ships() as $s) {
             foreach ($this->cellsFor($s) as $cellKey) {
@@ -165,19 +165,17 @@ final class Game
         }
 
         if ($allHit) {
-            // jeżeli masz taki stan w GameStatus
             $this->status = GameStatus::Won;
         }
 
         return $sunk ? ShotResult::Sunk : ShotResult::Hit;
     }
 
-    /** @return list<string> klucze 'x:y' pól zajmowanych przez statek */
+    /** @return list<string> keys 'x:y' of cells occupied by the ship */
     private function cellsFor(Ship $ship): array
     {
         $cells = [];
         for ($i = 0; $i < $ship->length; ++$i) {
-            // używaj $start (spójnie z konstrukcją Ship i fabrykami)
             $x = $ship->start->x + (Orientation::H === $ship->orientation ? $i : 0);
             $y = $ship->start->y + (Orientation::V === $ship->orientation ? $i : 0);
             $cells[] = $x.':'.$y;
@@ -201,7 +199,7 @@ final class Game
     /** @param array<int, array{x:int,y:int,r?:string}> $shots */
     public function setShotsFromSnapshot(array $shots): void
     {
-        // u nas: shots = strzały (bool), hits = trafienia (bool)
+        // in domain: shots = fired positions (bool), hits = successful hits (bool)
         $this->shots = [];
         $this->hits = [];
 
@@ -209,7 +207,7 @@ final class Game
             $key = $s['x'].':'.$s['y'];
             $this->shots[$key] = true;
 
-            // jeżeli snapshot zawiera wynik strzału, odtwórz trafienia
+            // if snapshot contains result, restore hits
             $r = $s['r'] ?? null; // 'hit' | 'sunk' | 'miss' | 'duplicate' | null
             if ('hit' === $r || 'sunk' === $r) {
                 $this->hits[$key] = true;
@@ -218,7 +216,7 @@ final class Game
     }
 
     /**
-     * Zwraca listę strzałów z obliczonym wynikiem dla każdego strzału.
+     * Returns shots with calculated result for each shot.
      *
      * @return list<array{x:int,y:int,result:string}>
      */
@@ -228,14 +226,12 @@ final class Game
         foreach (array_keys($this->shots) as $key) {
             [$x, $y] = array_map('intval', explode(':', $key));
 
-            // domyślnie pudło
             $result = 'miss';
 
-            // jeżeli był trafiony ten klucz -> hit lub sunk
             if (isset($this->hits[$key])) {
                 $result = 'hit';
 
-                // jeśli mamy planszę i flotę, możemy sprawdzić czy zatopiony
+                // if we have a board, determine if that hit sunk a ship
                 if (null !== $this->board) {
                     foreach ($this->board->ships() as $ship) {
                         $cells = $this->cellsFor($ship);

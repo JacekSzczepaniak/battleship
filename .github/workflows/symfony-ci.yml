@@ -26,7 +26,7 @@ jobs:
         env:
             APP_ENV: test
             APP_DEBUG: 1
-            DATABASE_URL: "postgresql://statki:statki@postgres:5432/statki?serverVersion=16&charset=utf8"
+            DATABASE_URL: "postgresql://statki:statki@127.0.0.1:5432/statki?serverVersion=16&charset=utf8"
 
         steps:
             - uses: actions/checkout@v4
@@ -56,11 +56,10 @@ jobs:
                   echo
                   echo "=== ping postgres ==="
                   ping -c 3 postgres || echo "ping failed"
-            # 👇 dodajemy krok oczekiwania na bazę
             - name: Wait for Postgres to be healthy
               run: |
                   for i in {1..30}; do
-                    if pg_isready -h postgres -U statki -d statki; then
+                    if pg_isready -h 127.0.0.1 -U statki -d statki; then
                       echo "Postgres is ready!"
                       break
                     fi

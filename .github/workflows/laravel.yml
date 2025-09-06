@@ -7,78 +7,56 @@ on:
     branches: [ "main" ]
 
 jobs:
-  symfony-tests:
+  tests:
     runs-on: ubuntu-latest
 
     services:
-      database:
-        image: postgres:16
+      postgres:
+        image: postgres:16-alpine
         env:
-          POSTGRES_DB: statki_test
-          POSTGRES_USER: statki
-          POSTGRES_PASSWORD: statki
-        options: >-
-          --health-cmd="pg_isready -U statki -d statki_test"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+          POSTGRES_DB: app
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
         ports:
           - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U app -d app"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
 
     env:
       APP_ENV: test
-      DATABASE_URL: "postgresql://statki:statki@127.0.0.1:5432/statki?serverVersion=16&charset=utf8"
+      DATABASE_URL: postgresql://app:app@postgres:5432/app?serverVersion=16&charset=utf8
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@15c43e89cdef867065b0213be354c2841860869e
+        uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: pdo_pgsql, intl, mbstring, zip, dom, curl
+          extensions: pdo_pgsql, intl
           coverage: none
 
-      - name: Validate Composer files
-        run: composer validate --no-check-publish
-
-      - name: Cache Composer
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.composer/cache
-            vendor
-          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-php-
-
-      - name: Install dependencies
+      - name: Install Composer dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
 
-      - name: Prepare .env
-        run: |
-          cp -n .env .env.backup || true
-          cp -n .env.test .env || true
-
-      - name: Wait for DB
+      - name: Wait for Postgres to be healthy
         run: |
           for i in {1..30}; do
-            if pg_isready -h 127.0.0.1 -p 5432 -U statki -d statki_test; then
-              echo "DB is ready"; break;
-            fi
+            (echo > /dev/tcp/127.0.0.1/5432) >/dev/null 2>&1 && echo "Postgres is up" && break
+            echo "Waiting for Postgres..."
             sleep 2
           done
 
-      - name: Create test database (if needed)
-        run: php bin/console doctrine:database:create --if-not-exists --env=test
-
-      - name: Run migrations (test)
-        run: php bin/console doctrine:migrations:migrate --no-interaction --env=test
+      - name: Prepare test schema
+        run: |
+          php bin/console doctrine:database:create --if-not-exists --env=test
+          # Jeśli masz migracje:
+          php bin/console doctrine:migrations:migrate --no-interaction --env=test
+          # Lub alternatywnie bez migracji (jedna z metod, nie obie):
+          # php bin/console doctrine:schema:create --env=test
 
       - name: Run tests
-        run: |
-          if [ -f vendor/bin/pest ]; then
-            vendor/bin/pest -c phpunit.xml.dist
-          else
-            vendor/bin/phpunit -c phpunit.xml.dist
-          fi
+        run: vendor/bin/phpunit

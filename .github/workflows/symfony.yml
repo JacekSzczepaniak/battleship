@@ -1,4 +1,4 @@
-name: Laravel CI
+name: Symfony CI
 
 on:
     push:
@@ -25,17 +25,8 @@ jobs:
 
         env:
             APP_ENV: test
-            APP_KEY: base64:2H6…wstaw_swoj_klucz…
-            APP_DEBUG: 0
-            CACHE_DRIVER: array
-            SESSION_DRIVER: array
-            QUEUE_CONNECTION: sync
-            DB_CONNECTION: pgsql
-            DB_HOST: postgres
-            DB_PORT: 5432
-            DB_DATABASE: statki
-            DB_USERNAME: statki
-            DB_PASSWORD: statki
+            APP_DEBUG: 1
+            DATABASE_URL: "postgresql://statki:statki@postgres:5432/statki?serverVersion=16&charset=utf8"
 
         steps:
             - uses: actions/checkout@v4
@@ -57,9 +48,6 @@ jobs:
             - name: Install dependencies
               run: composer install --no-interaction --no-progress --prefer-dist
 
-            - name: Generate application key
-              run: php artisan key:generate --env=testing
-
             - name: Wait for Postgres to be healthy
               run: |
                   for i in {1..30}; do
@@ -71,8 +59,15 @@ jobs:
               env:
                   PGPASSWORD: statki
 
+            - name: Create database
+              run: php bin/console doctrine:database:create --if-not-exists --env=test
+
             - name: Run migrations
-              run: php artisan migrate --env=testing --force
+              run: php bin/console doctrine:migrations:migrate --no-interaction --env=test
+
+            # jeśli nie masz migracji, a chcesz po prostu stworzyć schemat:
+            # - name: Create schema
+            #   run: php bin/console doctrine:schema:create --env=test
 
             - name: Run tests
-              run: php artisan test --env=testing
+              run: php bin/phpunit

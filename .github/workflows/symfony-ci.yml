@@ -27,6 +27,7 @@ jobs:
             APP_ENV: test
             APP_DEBUG: 1
             DATABASE_URL: "postgresql://statki:statki@127.0.0.1:5432/statki?serverVersion=16&charset=utf8"
+            TEST_DATABASE_URL: "postgresql://statki:statki@127.0.0.1:5432/statki?serverVersion=16&charset=utf8"
 
         steps:
             - uses: actions/checkout@v4
@@ -44,6 +45,9 @@ jobs:
               run: |
                   echo "=== DATABASE_URL ==="
                   echo "$DATABASE_URL"
+                  echo
+                  echo "=== TEST_DATABASE_URL ==="
+                  echo "$TEST_DATABASE_URL"
                   echo
                   echo "=== /etc/hosts ==="
                   cat /etc/hosts

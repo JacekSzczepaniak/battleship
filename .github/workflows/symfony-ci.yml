@@ -75,4 +75,4 @@ jobs:
               run: php bin/console doctrine:migrations:migrate --no-interaction --env=test
 
             - name: Run tests
-              run: php bin/phpunit
+              run: ./vendor/bin/pest -vv

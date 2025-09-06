@@ -54,7 +54,22 @@ jobs:
                   done
               env:
                   PGPASSWORD: statki
-
+            - name: Debug network
+              run: |
+                  echo "=== DATABASE_URL ==="
+                  echo "$DATABASE_URL"
+                  echo
+                  echo "=== /etc/hosts ==="
+                  cat /etc/hosts
+                  echo
+                  echo "=== getent hosts postgres ==="
+                  getent hosts postgres || echo "Host 'postgres' not found"
+                  echo
+                  echo "=== nslookup postgres ==="
+                  nslookup postgres || echo "nslookup failed"
+                  echo
+                  echo "=== ping postgres ==="
+                  ping -c 3 postgres || echo "ping failed"
             - name: Create database
               run: php bin/console doctrine:database:create --if-not-exists --env=test
 

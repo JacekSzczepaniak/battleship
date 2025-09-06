@@ -40,20 +40,6 @@ jobs:
 
             - name: Install dependencies
               run: composer install --no-interaction --no-progress --prefer-dist
-
-            # 👇 dodajemy krok oczekiwania na bazę
-            - name: Wait for Postgres to be healthy
-              run: |
-                  for i in {1..30}; do
-                    if pg_isready -h postgres -U statki -d statki; then
-                      echo "Postgres is ready!"
-                      break
-                    fi
-                    echo "Waiting for Postgres..."
-                    sleep 2
-                  done
-              env:
-                  PGPASSWORD: statki
             - name: Debug network
               run: |
                   echo "=== DATABASE_URL ==="
@@ -70,6 +56,19 @@ jobs:
                   echo
                   echo "=== ping postgres ==="
                   ping -c 3 postgres || echo "ping failed"
+            # 👇 dodajemy krok oczekiwania na bazę
+            - name: Wait for Postgres to be healthy
+              run: |
+                  for i in {1..30}; do
+                    if pg_isready -h postgres -U statki -d statki; then
+                      echo "Postgres is ready!"
+                      break
+                    fi
+                    echo "Waiting for Postgres..."
+                    sleep 2
+                  done
+              env:
+                  PGPASSWORD: statki
             - name: Create database
               run: php bin/console doctrine:database:create --if-not-exists --env=test
 

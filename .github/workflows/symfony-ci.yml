@@ -72,6 +72,18 @@ jobs:
                   done
               env:
                   PGPASSWORD: statki
+            - name: Show PHP-visible envs for DB
+              run: |
+                  php -r 'echo "PHP getenv DATABASE_URL: ", getenv("DATABASE_URL") ?: "(null)", PHP_EOL;'
+                  php -r 'echo "PHP getenv TEST_DATABASE_URL: ", getenv("TEST_DATABASE_URL") ?: "(null)", PHP_EOL;'
+            - name: Patch phpunit.xml(.dist) DSNs to 127.0.0.1 (if present)
+              run: |
+                  for f in phpunit.xml phpunit.xml.dist; do
+                    if [ -f "$f" ]; then
+                      echo "Patching $f"
+                      sed -E -i 's/@postgres/@127.0.0.1/g' "$f"
+                    fi
+                  done
             - name: Create database
               run: php bin/console doctrine:database:create --if-not-exists --env=test
 

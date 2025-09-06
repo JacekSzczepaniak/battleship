@@ -1,4 +1,4 @@
-name: CI
+name: Laravel CI
 
 on:
     push:
@@ -12,21 +12,30 @@ jobs:
             postgres:
                 image: postgres:16-alpine
                 env:
-                    POSTGRES_DB: app
-                    POSTGRES_USER: app
-                    POSTGRES_PASSWORD: app
+                    POSTGRES_DB: statki
+                    POSTGRES_USER: statki
+                    POSTGRES_PASSWORD: statki
                 ports:
                     - 5432:5432
                 options: >-
-                    --health-cmd="pg_isready -U app -d app"
+                    --health-cmd="pg_isready -U statki -d statki"
                     --health-interval=10s
                     --health-timeout=5s
                     --health-retries=10
 
         env:
             APP_ENV: test
+            APP_KEY: base64:2H6…wstaw_swoj_klucz…
             APP_DEBUG: 0
-            DATABASE_URL: postgresql://app:app@postgres:5432/app?serverVersion=16&charset=utf8
+            CACHE_DRIVER: array
+            SESSION_DRIVER: array
+            QUEUE_CONNECTION: sync
+            DB_CONNECTION: pgsql
+            DB_HOST: postgres
+            DB_PORT: 5432
+            DB_DATABASE: statki
+            DB_USERNAME: statki
+            DB_PASSWORD: statki
 
         steps:
             - uses: actions/checkout@v4
@@ -38,25 +47,32 @@ jobs:
                   extensions: pdo_pgsql
                   coverage: none
 
-            - name: Install Composer dependencies
+            - name: Cache Composer dependencies
+              uses: actions/cache@v3
+              with:
+                  path: vendor
+                  key: composer-${{ hashFiles('**/composer.lock') }}
+                  restore-keys: composer-
+
+            - name: Install dependencies
               run: composer install --no-interaction --no-progress --prefer-dist
 
-            # zamiast getent — używamy pg_isready
+            - name: Generate application key
+              run: php artisan key:generate --env=testing
+
             - name: Wait for Postgres to be healthy
               run: |
-                  echo "DATABASE_URL=$DATABASE_URL"
                   for i in {1..30}; do
-                    pg_isready -h postgres -U app -d app && echo "Postgres is ready" && break
+                    pg_isready -h postgres -U statki -d statki && echo "Postgres is ready" && break
                     echo "Waiting for Postgres..."
                     sleep 2
                   done
+                  sleep 3
+              env:
+                  PGPASSWORD: statki
 
-            - name: Prepare test schema
-              run: |
-                  php bin/console doctrine:database:create --if-not-exists --env=test
-                  php bin/console doctrine:migrations:migrate --no-interaction --env=test
-                  # albo alternatywnie, jeśli brak migracji:
-                  # php bin/console doctrine:schema:create --env=test
+            - name: Run migrations
+              run: php artisan migrate --env=testing --force
 
             - name: Run tests
-              run: vendor/bin/phpunit
+              run: php artisan test --env=testing

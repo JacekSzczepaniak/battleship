@@ -285,6 +285,8 @@ final class Game
             throw new \DomainException('Fleet not placed');
         }
 
+        $this->ruleset->fireTorpedo();
+
         $w = $this->ruleset->boardSize()->width;
         $h = $this->ruleset->boardSize()->height;
 
@@ -355,6 +357,48 @@ final class Game
             }
             $occupied = $this->isShipAt($x, $y);
             $results[] = ['x' => $x, 'y' => $y, 'occupied' => $occupied];
+        }
+
+        return $results;
+    }
+
+    public function sendAirRaid(Coordinate $start, Area $area): array
+    {
+        if (null === $this->board) {
+            throw new \DomainException('Fleet not placed');
+        }
+
+        //sprawdzam czy start jest na planszy
+        $w = $this->ruleset->boardSize()->width;
+        $h = $this->ruleset->boardSize()->height;
+
+        $x = $start->x;
+        $y = $start->y;
+
+        if ($x < 0 || $y < 0 || $x >= $w || $y >= $h) {
+            throw new \DomainException('Air Raid start outside board');
+        }
+        //(5-9)
+        $areaStartX = ($start->x - $area->height) > 0 ? $start->x - $area->height : 1;
+        $areaEndX = ($start->x + $area->height) >= $this->ruleset->boardSize()->height ?
+            $this->ruleset->boardSize()->height - 1 : $start->x + $area->height;
+
+        $areaStartY = ($start->y - $area->width) > 0 ? $start->y - $area->width : 1;
+        $areaEndY = ($start->y + $area->width) >= $this->ruleset->boardSize()->width ?
+            $this->ruleset->boardSize()->width - 1 : $start->y + $area->width;
+
+        if ($areaEndX - $areaStartX > $this->ruleset->airRaidSize()->width
+        || $areaEndY - $areaStartY > $this->ruleset->airRaidSize()->height) {
+            throw new \DomainException('Air Raid area is oversize');
+        }
+
+        $results = [];
+
+        for ($x = $areaStartX; $x <= $areaEndX; ++$x) {
+            for ($y = $areaStartY; $y <= $areaEndY; ++$y) {
+                $r = $this->fireShot(new Coordinate($x, $y));
+                $results[] = ['x' => $x, 'y' => $y, 'result' => $r->value];
+            }
         }
 
         return $results;

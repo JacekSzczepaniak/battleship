@@ -2,7 +2,7 @@
 
 namespace App\Domain\Game;
 
-final class ClassicRuleset implements Ruleset
+final class FunRuleset implements Ruleset
 {
     public function __construct(private BoardSize $size = new BoardSize(10, 10))
     {
@@ -15,18 +15,16 @@ final class ClassicRuleset implements Ruleset
 
     public function allowedShips(): array
     {
-        // classic fleet: 1x4, 2x3, 3x2, 4x1
         return [4 => 1, 3 => 2, 2 => 3, 1 => 4];
     }
 
     public function airRaidSize(): Area
     {
-        throw new \DomainException('Not accepted in classic ruleset');
+        return new Area(new Coordinate(2, 2), 3, 3);
     }
 
     public function fireTorpedo(): bool
     {
-        throw new \DomainException('Not accepted in classic ruleset');
+        return true;
     }
-
 }

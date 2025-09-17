@@ -10,4 +10,11 @@ interface Ruleset
      * @return array<int,int> mapowanie: długość => dozwolona liczba sztuk
      */
     public function allowedShips(): array;
+
+    /**
+     * @return array<int,int> rozmiar nalotu
+     */
+    public function airRaidSize(): Area;
+
+    public function fireTorpedo(): bool;
 }

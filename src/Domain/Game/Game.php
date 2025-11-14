@@ -272,4 +272,155 @@ final class Game
 
         return true;
     }
+
+    /**
+     * Torpedo: moves across the entire board in a given direction.
+     * For each cell along the line it calls fireShot() and returns the list of results.
+     *
+     * @return list<array{x:int,y:int,result:string}>
+     */
+    public function fireTorpedo(Coordinate $start, Direction $direction): array
+    {
+        if (null === $this->board) {
+            throw new \DomainException('Fleet not placed');
+        }
+
+        $this->ruleset->fireTorpedo();
+
+        $w = $this->ruleset->boardSize()->width;
+        $h = $this->ruleset->boardSize()->height;
+
+        $x = $start->x;
+        $y = $start->y;
+
+        if ($x < 0 || $y < 0 || $x >= $w || $y >= $h) {
+            throw new \DomainException('Torpedo start outside board');
+        }
+
+        // Direction vector
+        [$dx, $dy] = match ($direction) {
+            Direction::N => [0, -1],
+            Direction::S => [0, 1],
+            Direction::E => [1, 0],
+            Direction::W => [-1, 0],
+        };
+
+        $results = [];
+
+        // Include the start point and each subsequent point until hitting the edge (inclusive)
+        $cx = $x;
+        $cy = $y;
+        while ($cx >= 0 && $cy >= 0 && $cx < $w && $cy < $h) {
+            $r = $this->fireShot(new Coordinate($cx, $cy));
+            $results[] = ['x' => $cx, 'y' => $cy, 'result' => $r->value];
+            $cx += $dx;
+            $cy += $dy;
+        }
+
+        return $results;
+    }
+
+    // ... existing code ...
+    /**
+     * Sonar ping: reveals occupancy info for the center and up to $radius cells
+     * in each cardinal direction (cross shape). It does not modify shots/hits.
+     *
+     * @return list<array{x:int,y:int,occupied:bool}>
+     */
+    public function sonarPing(Coordinate $center, int $radius = 3): array
+    {
+        if (null === $this->board) {
+            throw new \DomainException('Fleet not placed');
+        }
+
+        $w = $this->ruleset->boardSize()->width;
+        $h = $this->ruleset->boardSize()->height;
+
+        $inBounds = static fn (int $x, int $y) => $x >= 0 && $y >= 0 && $x < $w && $y < $h;
+
+        $cells = [];
+        // center
+        $cells[] = [$center->x, $center->y];
+
+        // N/E/S/W up to radius
+        for ($i = 1; $i <= $radius; ++$i) {
+            $cells[] = [$center->x, $center->y - $i]; // N
+            $cells[] = [$center->x + $i, $center->y]; // E
+            $cells[] = [$center->x, $center->y + $i]; // S
+            $cells[] = [$center->x - $i, $center->y]; // W
+        }
+
+        $results = [];
+        foreach ($cells as [$x, $y]) {
+            if (!$inBounds($x, $y)) {
+                continue;
+            }
+            $occupied = $this->isShipAt($x, $y);
+            $results[] = ['x' => $x, 'y' => $y, 'occupied' => $occupied];
+        }
+
+        return $results;
+    }
+
+    public function sendAirRaid(Coordinate $start, Area $area): array
+    {
+        if (null === $this->board) {
+            throw new \DomainException('Fleet not placed');
+        }
+
+        //sprawdzam czy start jest na planszy
+        $w = $this->ruleset->boardSize()->width;
+        $h = $this->ruleset->boardSize()->height;
+
+        $x = $start->x;
+        $y = $start->y;
+
+        if ($x < 0 || $y < 0 || $x >= $w || $y >= $h) {
+            throw new \DomainException('Air Raid start outside board');
+        }
+        //(5-9)
+        $areaStartX = ($start->x - $area->height) > 0 ? $start->x - $area->height : 1;
+        $areaEndX = ($start->x + $area->height) >= $this->ruleset->boardSize()->height ?
+            $this->ruleset->boardSize()->height - 1 : $start->x + $area->height;
+
+        $areaStartY = ($start->y - $area->width) > 0 ? $start->y - $area->width : 1;
+        $areaEndY = ($start->y + $area->width) >= $this->ruleset->boardSize()->width ?
+            $this->ruleset->boardSize()->width - 1 : $start->y + $area->width;
+
+        if ($areaEndX - $areaStartX > $this->ruleset->airRaidSize()->width
+        || $areaEndY - $areaStartY > $this->ruleset->airRaidSize()->height) {
+            throw new \DomainException('Air Raid area is oversize');
+        }
+
+        $results = [];
+
+        for ($x = $areaStartX; $x <= $areaEndX; ++$x) {
+            for ($y = $areaStartY; $y <= $areaEndY; ++$y) {
+                $r = $this->fireShot(new Coordinate($x, $y));
+                $results[] = ['x' => $x, 'y' => $y, 'result' => $r->value];
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * Checks whether any ship occupies the given coordinate.
+     */
+    private function isShipAt(int $x, int $y): bool
+    {
+        if (null === $this->board) {
+            return false;
+        }
+        $key = $x.':'.$y;
+        foreach ($this->board->ships() as $ship) {
+            foreach ($this->cellsFor($ship) as $cellKey) {
+                if ($cellKey === $key) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 }

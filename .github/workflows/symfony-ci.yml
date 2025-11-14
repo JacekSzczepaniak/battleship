@@ -1,0 +1,94 @@
+name: Symfony CI
+
+on:
+    push:
+    pull_request:
+
+jobs:
+    tests:
+        runs-on: ubuntu-latest
+
+        services:
+            postgres:
+                image: postgres:16-alpine
+                env:
+                    POSTGRES_DB: statki
+                    POSTGRES_USER: statki
+                    POSTGRES_PASSWORD: statki
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd="pg_isready -U statki -d statki"
+                    --health-interval=10s
+                    --health-timeout=5s
+                    --health-retries=10
+
+        env:
+            APP_ENV: test
+            APP_DEBUG: 1
+            DATABASE_URL: "postgresql://statki:statki@127.0.0.1:5432/statki?serverVersion=16&charset=utf8"
+            TEST_DATABASE_URL: "postgresql://statki:statki@127.0.0.1:5432/statki?serverVersion=16&charset=utf8"
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup PHP
+              uses: shivammathur/setup-php@v2
+              with:
+                  php-version: '8.3'
+                  extensions: pdo_pgsql
+                  coverage: none
+
+            - name: Install dependencies
+              run: composer install --no-interaction --no-progress --prefer-dist
+            - name: Debug network
+              run: |
+                  echo "=== DATABASE_URL ==="
+                  echo "$DATABASE_URL"
+                  echo
+                  echo "=== TEST_DATABASE_URL ==="
+                  echo "$TEST_DATABASE_URL"
+                  echo
+                  echo "=== /etc/hosts ==="
+                  cat /etc/hosts
+                  echo
+                  echo "=== getent hosts postgres ==="
+                  getent hosts postgres || echo "Host 'postgres' not found"
+                  echo
+                  echo "=== nslookup postgres ==="
+                  nslookup postgres || echo "nslookup failed"
+                  echo
+                  echo "=== ping postgres ==="
+                  ping -c 3 postgres || echo "ping failed"
+            - name: Wait for Postgres to be healthy
+              run: |
+                  for i in {1..30}; do
+                    if pg_isready -h 127.0.0.1 -U statki -d statki; then
+                      echo "Postgres is ready!"
+                      break
+                    fi
+                    echo "Waiting for Postgres..."
+                    sleep 2
+                  done
+              env:
+                  PGPASSWORD: statki
+            - name: Show PHP-visible envs for DB
+              run: |
+                  php -r 'echo "PHP getenv DATABASE_URL: ", getenv("DATABASE_URL") ?: "(null)", PHP_EOL;'
+                  php -r 'echo "PHP getenv TEST_DATABASE_URL: ", getenv("TEST_DATABASE_URL") ?: "(null)", PHP_EOL;'
+            - name: Patch phpunit.xml(.dist) DSNs to 127.0.0.1 (if present)
+              run: |
+                  for f in phpunit.xml phpunit.xml.dist; do
+                    if [ -f "$f" ]; then
+                      echo "Patching $f"
+                      sed -E -i 's/@postgres/@127.0.0.1/g' "$f"
+                    fi
+                  done
+            - name: Create database
+              run: php bin/console doctrine:database:create --if-not-exists --env=test
+
+            - name: Run migrations
+              run: php bin/console doctrine:migrations:migrate --no-interaction --env=test
+
+            - name: Run tests
+              run: ./vendor/bin/pest -vv

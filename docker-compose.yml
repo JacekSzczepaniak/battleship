@@ -46,15 +46,15 @@ services:
     container_name: statki-redis
     ports:
       - "127.0.0.1:6379:6379"
-
-  mailhog:
-    platform: linux/amd64
-    image: mailhog/mailhog:v1.0.1
-    container_name: statki-mailhog
-    ports:
-      - "127.0.0.1:8025:8025"   # UI
-      - "127.0.0.1:1025:1025"   # SMTP
-      - "127.0.0.1:1026:1025"   # SMTP (używamy JEDNEGO mapowania)
+#
+#  mailhog:
+#    platform: linux/amd64
+#    image: mailhog/mailhog:v1.0.1
+#    container_name: statki-mailhog
+#    ports:
+#      - "127.0.0.1:8025:8025"   # UI
+#      - "127.0.0.1:1025:1025"   # SMTP
+#      - "127.0.0.1:1026:1025"   # SMTP (używamy JEDNEGO mapowania)
 
 volumes:
   db-data:

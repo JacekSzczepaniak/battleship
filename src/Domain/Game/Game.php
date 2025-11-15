@@ -16,6 +16,11 @@ final class Game
     /** @var Ship[]|null */
     private ?array $fleet = null;
 
+    // Iteration 1: minimalne meta gry (na razie jako proste stringi)
+    private string $mode = 'standard';      // 'standard' | 'nonstandard'
+    private string $opponent = 'mock';      // 'mock' | 'ai' | 'pvp'
+    private string $turn = 'player';        // 'player' | 'opponent'
+
     public function __construct(
         private GameId $id,
         private Ruleset $ruleset,
@@ -61,6 +66,36 @@ final class Game
         $self->status = $status;
 
         return $self;
+    }
+
+    public function mode(): string
+    {
+        return $this->mode;
+    }
+
+    public function setMode(string $mode): void
+    {
+        $this->mode = $mode;
+    }
+
+    public function opponent(): string
+    {
+        return $this->opponent;
+    }
+
+    public function setOpponent(string $opponent): void
+    {
+        $this->opponent = $opponent;
+    }
+
+    public function turn(): string
+    {
+        return $this->turn;
+    }
+
+    public function setTurn(string $turn): void
+    {
+        $this->turn = $turn;
     }
 
     /** @return Ship[]|null */

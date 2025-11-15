@@ -4,6 +4,7 @@ namespace App\Infrastructure\Http\Controller;
 
 use App\Application\Game\CreateGame;
 use App\Application\Game\PlaceFleet;
+use App\Infrastructure\Http\Error\ApiException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
@@ -43,16 +44,11 @@ final class GameController
         $ships = $payload['ships'] ?? null;
 
         if (!is_array($ships) || [] === $ships) {
-            return new JsonResponse(['error' => 'ships array required'], 400);
+            throw new ApiException('ships array required', 'VALIDATION_ERROR', 400);
         }
 
-        try {
-            $this->placeFleet->handle($id, $ships);
-        } catch (\DomainException $e) {
-            return new JsonResponse(['error' => $e->getMessage()], 422);
-        } catch (\Throwable $e) {
-            return new JsonResponse(['error' => 'failed to place fleet'], 400);
-        }
+        // Pozwól wyjątków domenowych/argumentów zostać przechwyconymi przez ExceptionSubscriber
+        $this->placeFleet->handle($id, $ships);
 
         return new JsonResponse(['ok' => true], 200);
     }

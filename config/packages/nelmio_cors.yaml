@@ -1,8 +1,11 @@
 nelmio_cors:
     defaults:
         allow_credentials: true
-        allow_origin: ['http://localhost:5173', 'http://127.0.0.1:5173']
-        allow_headers: ['Content-Type', 'X-Requested-With', 'Authorization']
+        # Dopuszczamy pochodzenie z dev (regex). Uwaga: gdy origin_regex=true, wpisy w allow_origin traktowane są jako regexy.
+        origin_regex: true
+        allow_origin: ['^https?://([a-z0-9-]+\.)?statki\.local(:\d+)?$', '^https?://localhost(:\d+)?$', '^https?://127\.0\.0\.1(:\d+)?$']
+        # W dev pozwólmy na szerokie nagłówki, aby uniknąć problemów z preflight
+        allow_headers: ['*']
         expose_headers: ['Link']
         allow_methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
         max_age: 3600

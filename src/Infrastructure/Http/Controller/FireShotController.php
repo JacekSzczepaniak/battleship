@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Infrastructure\Http\Controller;
 
 use App\Application\Game\FireShot;
+use App\Infrastructure\Http\Error\ApiException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
@@ -20,15 +21,9 @@ final class FireShotController
     {
         $data = json_decode($request->getContent() ?: '[]', true);
         if (!is_array($data) || !isset($data['x'], $data['y'])) {
-            return new JsonResponse(['error' => 'Invalid payload: expected {"x":int,"y":int}'], 400);
+            throw new ApiException('Invalid payload: expected {"x":int,"y":int}', 'VALIDATION_ERROR', 400);
         }
-        try {
-            $result = $this->fire->handle($id, (int) $data['x'], (int) $data['y']);
-        } catch (\DomainException $e) {
-            return new JsonResponse(['error' => $e->getMessage()], 422);
-        } catch (\InvalidArgumentException $e) {
-            return new JsonResponse(['error' => $e->getMessage()], 404);
-        }
+        $result = $this->fire->handle($id, (int) $data['x'], (int) $data['y']);
 
         return new JsonResponse($result, 200);
     }

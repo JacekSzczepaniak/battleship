@@ -1,31 +1,55 @@
 import { http } from './http';
 
-export type CellState = 'empty' | 'ship' | 'hit' | 'miss'; // frontendowe
+export type CellState = 'empty' | 'ship' | 'hit' | 'miss';
 
-export interface GameDTO {
+export interface EnemyFogGridView {
+    hits: [number, number][];
+    misses: [number, number][];
+    sunk: { cells: [number, number][] }[];
+}
+
+export interface PlayerFleetItem { x: number; y: number; o: 'h' | 'v'; l: number }
+
+export interface GameViewDTO {
     id: string;
-    size: number; // 10
-    playerGrid: CellState[][];      // pełna plansza gracza
-    enemyFogGrid: CellState[][];    // plansza przeciwnika z mgłą (bez statków)
-    turn: 'player' | 'enemy';
-    status: 'ongoing' | 'won' | 'lost';
+    status: 'pending' | 'in_progress' | 'won' | 'lost' | 'ready' | 'waiting_for_fleet';
+    board: { w: number; h: number };
+    mode: 'standard' | 'nonstandard' | string;
+    opponent: 'mock' | 'ai' | 'pvp' | string;
+    turn: 'player' | 'opponent' | string;
+    playerFleet: PlayerFleetItem[];
+    enemyFogGrid: EnemyFogGridView;
+    shotsCount: number;
+    finished: boolean;
+}
+
+export interface CreateGameResponse {
+    id: string;
+    status: string;
+    board: { w: number; h: number };
 }
 
 export interface ShotResultDTO {
-    hit: boolean;
-    sunk?: { size: number; cells: { x: number; y: number }[] };
-    finished?: boolean;
-    turn: 'player' | 'enemy';
-    // opcjonalnie zaktualizowana mgła w odpowiedzi:
-    enemyFogGrid?: CellState[][];
+    result: 'miss' | 'hit' | 'sunk' | 'duplicate';
+    finished: boolean;
+    win: boolean;
+    loss: boolean;
+    turn: 'player' | 'opponent';
+    opponentMoves: { x: number; y: number; result: 'hit' | 'miss' | 'sunk' | 'duplicate' }[];
 }
 
-export async function createGame(): Promise<GameDTO> {
-    return http.post<GameDTO>('/games', { mode: 'classic' });
+export async function createGame(): Promise<CreateGameResponse> {
+    // backend przyjmuje puste body (opcjonalne width/height)
+    return http.post<CreateGameResponse>('/games', {});
 }
 
-export async function getGame(id: string): Promise<GameDTO> {
-    return http.get<GameDTO>(`/games/${id}`);
+export async function getGame(id: string): Promise<GameViewDTO> {
+    return http.get<GameViewDTO>(`/games/${id}`);
+}
+
+export interface PlaceFleetPayload { ships: PlayerFleetItem[] }
+export async function placeFleet(id: string, ships: PlayerFleetItem[]): Promise<{ ok: true }> {
+    return http.post<{ ok: true }>(`/games/${id}/fleet`, { ships } satisfies PlaceFleetPayload);
 }
 
 export async function fireShot(id: string, x: number, y: number): Promise<ShotResultDTO> {

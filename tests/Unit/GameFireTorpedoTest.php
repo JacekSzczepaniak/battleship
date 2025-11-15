@@ -5,7 +5,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
-use App\Domain\Game\ClassicRuleset;
+use App\Domain\Game\FunRuleset;
 use App\Domain\Game\Coordinate;
 use App\Domain\Game\Direction;
 use App\Domain\Game\Game;
@@ -16,7 +16,7 @@ final class GameFireTorpedoTest extends TestCase
 {
     public function testFireTorpedoAcrossEntireRow(): void
     {
-        $rules = new ClassicRuleset();
+        $rules = new FunRuleset();
         $game = Game::create($rules);
         $fleet = FleetFactory::classic10x10();
         $game->placeFleet($fleet);
@@ -40,7 +40,7 @@ final class GameFireTorpedoTest extends TestCase
 
     public function testFireTorpedoNorthFromCenter(): void
     {
-        $rules = new ClassicRuleset();
+        $rules = new FunRuleset();
         $game = Game::create($rules);
         $fleet = FleetFactory::classic10x10();
         $game->placeFleet($fleet);

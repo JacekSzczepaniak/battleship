@@ -45,7 +45,7 @@ stan: ## Uruchom PHPStan (toleruj błędy wyjścia)
 cs-fix: ## Uruchom PHP-CS-Fixer (bez cache, toleruj błędy)
 	docker compose exec app ./vendor/bin/php-cs-fixer fix --using-cache=no || true
 
-.PHONY: test-all test-unit migrate-test test-int test-func help
+.PHONY: test-all test-unit migrate-test test-int test-func help fe-dev fe-build fe-publish fe-install
 
 # dodatkowe argumenty do Pest, np.: make test-int ARGS="-vvv --stop-on-failure"
 ARGS ?= -vv --colors=always
@@ -76,3 +76,18 @@ help: ## Pokaż pomoc do dostępnych celów
 	@awk 'BEGIN {FS = ":.*?## "}; /^[a-zA-Z0-9_.-]+:.*?## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@printf "\nPrzykłady:\n"
 	@printf "  make test-all ARGS=\"-vvv --stop-on-failure\"\n\n"
+
+# --- Frontend (Vite) ---
+fe-install: ## Zainstaluj zależności frontendu (npm ci)
+	cd frontend && npm ci
+
+fe-dev: ## Uruchom Vite dev pod statki.local:5173
+	cd frontend && npm run dev -- --host statki.local
+
+fe-build: ## Zbuduj frontend (Vite build)
+	cd frontend && npm run build
+
+fe-publish: fe-build ## Skopiuj build do public/frontend (serwowanie przez Nginx w prod)
+	rm -rf public/frontend
+	mkdir -p public/frontend
+	cp -R frontend/dist/* public/frontend/

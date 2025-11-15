@@ -3,7 +3,8 @@
 namespace App\Infrastructure\Http\Controller;
 
 use App\Application\Game\SendAirRaid;
-use http\Env\Request;
+use App\Infrastructure\Http\Error\ApiException;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Uid\Uuid;
@@ -19,12 +20,12 @@ final class SendAirRaidController
     public function __invoke(string $id, Request $request): JsonResponse
     {
         if (!Uuid::isValid($id)) {
-            return new JsonResponse(['error' => 'Invalid game id'], 400);
+            throw new ApiException('Invalid game id', 'INVALID_GAME_ID', 400);
         }
 
         $payload = json_decode($request->getContent() ?: '{}', true);
         if (!is_array($payload)) {
-            return new JsonResponse(['error' => 'Invalid JSON'], 400);
+            throw new ApiException('Invalid JSON', 'VALIDATION_ERROR', 400);
         }
 
         $x = $payload['x'] ?? null;
@@ -33,16 +34,11 @@ final class SendAirRaidController
         $height = $payload['height'] ?? null;
 
         if (!is_int($x) || !is_int($y) || !is_int($width) || !is_int($height)) {
-            return new JsonResponse(['error' => 'Missing or invalid fields: x:int, y:int, width:int, height:int'], 400);
+            throw new ApiException('Missing or invalid fields: x:int, y:int, width:int, height:int', 'VALIDATION_ERROR', 400);
         }
 
-        try {
-            $list = ($this->sendAirRaid)($id, $x, $y, $width, $height);
-        } catch (\DomainException $ex) {
-
-            $code = ('Fleet not placed' === $ex->getMessage()) ? 422 : 400;
-            return new JsonResponse(['error' => $ex->getMessage()], $code);
-        }
+        // DomainException zostanie obsłużony przez ExceptionSubscriber (422/400)
+        $list = ($this->sendAirRaid)($id, $x, $y, $width, $height);
 
         return new JsonResponse([
             'result' => $list, //list of {x,y,result?}

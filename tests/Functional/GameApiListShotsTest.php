@@ -84,7 +84,8 @@ final class GameApiListShotsTest extends WebTestCase
     public function testListShotsNotFound(): void
     {
         $client = static::createClient();
+        // Nieprawidłowy identyfikator gry (nie-UUID) powinien zwrócić 400 INVALID_GAME_ID
         $client->request('GET', '/api/games/non-existent-id/shots');
-        self::assertResponseStatusCodeSame(404);
+        self::assertResponseStatusCodeSame(400);
     }
 }

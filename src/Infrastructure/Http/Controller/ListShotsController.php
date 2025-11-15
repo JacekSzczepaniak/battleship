@@ -15,10 +15,7 @@ final readonly class ListShotsController
     #[Route('/api/games/{id}/shots', name: 'api_games_list_shots', methods: ['GET'])]
     public function __invoke(string $id): JsonResponse
     {
-        try {
-            return new JsonResponse($this->query->handle($id));
-        } catch (\InvalidArgumentException $e) {
-            return new JsonResponse(['error' => $e->getMessage()], 404);
-        }
+        // Wyjątki typu InvalidArgumentException (np. "Game not found") przejmie ExceptionSubscriber
+        return new JsonResponse($this->query->handle($id));
     }
 }

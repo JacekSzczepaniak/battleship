@@ -11,18 +11,32 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-    const res = await fetch(`${BASE_URL}${path}`, {
+    const url = `${BASE_URL}${path}`;
+    // Logi diagnostyczne do konsoli przeglądarki
+    try { console.log('[http] →', init?.method ?? 'GET', url, { init }); } catch {}
+
+    const res = await fetch(url, {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include', // jeśli sesje/cookies
         ...init,
     });
 
     const text = await res.text();
-    const data = text ? JSON.parse(text) : null;
+    let data: any = null;
+    try {
+        data = text ? JSON.parse(text) : null;
+    } catch (e) {
+        // Nie-JSON odpowiedź – zalogujmy treść, by łatwiej było namierzyć
+        try { console.warn('[http] non-JSON response', { url, status: res.status, text }); } catch {}
+    }
 
     if (!res.ok) {
-        throw new ApiError(data?.message ?? 'API error', res.status, data);
+        const message = data?.error?.message ?? data?.message ?? 'API error';
+        try { console.warn('[http] ← ERROR', res.status, url, { data }); } catch {}
+        throw new ApiError(message, res.status, data);
     }
+
+    try { console.log('[http] ←', res.status, url, { data }); } catch {}
     return data as T;
 }
 

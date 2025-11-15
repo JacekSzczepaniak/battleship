@@ -49,6 +49,10 @@ final class GameSnapshotMapper
             ],
             'fleet' => $fleet,
             'shots' => $shots,
+            // Iteration 1 meta
+            'mode' => $game->mode(),
+            'opponent' => $game->opponent(),
+            'turn' => $game->turn(),
         ];
     }
 
@@ -57,6 +61,17 @@ final class GameSnapshotMapper
         $ruleset = $this->rulesetFromArray($state['ruleset'] ?? []);
         $status = GameStatus::from((string) ($state['status'] ?? GameStatus::Pending->value));
         $game = Game::fromSnapshot(new GameId($id), $ruleset, $status);
+
+        // meta (optional in older snapshots)
+        if (isset($state['mode']) && is_string($state['mode'])) {
+            $game->setMode($state['mode']);
+        }
+        if (isset($state['opponent']) && is_string($state['opponent'])) {
+            $game->setOpponent($state['opponent']);
+        }
+        if (isset($state['turn']) && is_string($state['turn'])) {
+            $game->setTurn($state['turn']);
+        }
 
         // fleet from snapshot
         if (isset($state['fleet']) && is_array($state['fleet'])) {

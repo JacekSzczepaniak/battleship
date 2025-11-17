@@ -36,39 +36,24 @@ final class FireShot
         // Wyliczenia po ruchu gracza
         $finished = $game->isFinished();
         $win = 'won' === $game->status()->value;
-        $loss = false; // w obecnym modelu nie śledzimy przegranej (brak planszy gracza)
+        $loss = 'lost' === $game->status()->value;
 
         $opponentMoves = [];
 
-        // Mock przeciwnika: 1 strzał synchronicznie, tylko gdy gra nie skończona
+        // Mock przeciwnika (AI v1): 1 strzał synchronicznie, tylko gdy gra nie skończona
         if (!$finished) {
-            $boardSize = $game->ruleset()->boardSize();
-            // Zbiór pól już ostrzelanych przez gracza (aby wygladało sensowniej)
-            $shotMap = [];
-            foreach ($game->shots() as $s) {
-                $shotMap[$s['x'] . ':' . $s['y']] = true;
-            }
-            $mx = 0;
-            $my = 0;
-            $found = false;
-            for ($yy = 0; $yy < $boardSize->height; ++$yy) {
-                for ($xx = 0; $xx < $boardSize->width; ++$xx) {
-                    if (!isset($shotMap[$xx . ':' . $yy])) {
-                        $mx = $xx;
-                        $my = $yy;
-                        $found = true;
-                        break;
-                    }
-                }
-                if ($found) {
-                    break;
-                }
-            }
-            // Brak drugiej planszy, więc wynik ruchu przeciwnika traktujemy neutralnie jako "miss"
-            $opponentMoves[] = ['x' => $mx, 'y' => $my, 'result' => 'miss'];
+            // wybór celu według logiki AI (hunt/target)
+            $target = $game->chooseOpponentTarget();
+            $oppResult = $game->fireOpponentShot($target);
+            $opponentMoves[] = ['x' => $target->x, 'y' => $target->y, 'result' => $oppResult];
+
+            // Re-ewaluacja zakończenia po ruchu przeciwnika
+            $finished = $finished || 'lost' === $game->status()->value;
+            $win = 'won' === $game->status()->value;
+            $loss = 'lost' === $game->status()->value;
         }
 
-        // Po ruchu przeciwnika tura wraca do gracza
+        // Po ruchu przeciwnika tura wraca do gracza (o ile gra nie skończona)
         $turn = 'player';
 
         $this->repo->save($game);

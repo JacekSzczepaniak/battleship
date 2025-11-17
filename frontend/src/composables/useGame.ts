@@ -8,6 +8,8 @@ export function useGame() {
     const width = ref<number>(10);
     const height = ref<number>(10);
     const playerGrid = ref<Array<Array<'empty'|'ship'|'hit'|'miss'>>>([]);
+    // Overlay trafień/pudeł przeciwnika na planszy gracza
+    const playerUnderFireOverlay = ref<Array<Array<'none'|'opp-hit'|'opp-miss'>>>([]);
     const enemyFogGrid = ref<Array<Array<'empty'|'hit'|'miss'>>>([]);
     const turn = ref<GameViewDTO['turn']>('player');
     const status = ref<GameViewDTO['status']>('pending');
@@ -18,6 +20,10 @@ export function useGame() {
     const toast = ref<string>('');
     const toastType = ref<'info'|'warn'|'error'>('info');
     const duplicates = ref<number>(0);
+    // NOWE:
+    const lastShot = ref<{ x: number; y: number; result: ShotResultDTO['result'] } | null>(null);
+    const sunkCells = ref<Array<[number, number]>>([]);
+
 
     function buildEmptyGrid(w: number, h: number, fill: 'empty'|'miss'|'hit'|'ship' = 'empty') {
         return Array.from({ length: h }, () => Array.from({ length: w }, () => fill));
@@ -38,20 +44,56 @@ export function useGame() {
         }
         playerGrid.value = pg;
 
+        // overlay trafień/pudeł przeciwnika na planszy gracza
+        const ov = Array.from({ length: dto.board.h }, () => Array.from({ length: dto.board.w }, () => 'none' as 'none'|'opp-hit'|'opp-miss'));
+        if (dto.playerUnderFireGrid) {
+            for (const [x,y] of dto.playerUnderFireGrid.hits) {
+                if (ov[y] && typeof ov[y][x] !== 'undefined') ov[y][x] = 'opp-hit';
+            }
+            for (const [x,y] of dto.playerUnderFireGrid.misses) {
+                if (ov[y] && typeof ov[y][x] !== 'undefined') ov[y][x] = 'opp-miss';
+            }
+        }
+        playerUnderFireOverlay.value = ov;
+
+        // enemy fog grid from hits/misses/sunk
+        // const eg = buildEmptyGrid(dto.board.w, dto.board.h, 'empty');
+        // for (const [x, y] of dto.enemyFogGrid.hits) {
+        //     if (eg[y] && typeof eg[y][x] !== 'undefined') eg[y][x] = 'hit';
+        // }
+        // for (const [x, y] of dto.enemyFogGrid.misses) {
+        //     if (eg[y] && typeof eg[y][x] !== 'undefined') eg[y][x] = 'miss';
+        // }
+        // for (const sunk of dto.enemyFogGrid.sunk) {
+        //     for (const [x, y] of sunk.cells) {
+        //         if (eg[y] && typeof eg[y][x] !== 'undefined') eg[y][x] = 'hit';
+        //     }
+        // }
+        // enemyFogGrid.value = eg;
+
         // enemy fog grid from hits/misses/sunk
         const eg = buildEmptyGrid(dto.board.w, dto.board.h, 'empty');
+        const sunk: Array<[number, number]> = [];
+
         for (const [x, y] of dto.enemyFogGrid.hits) {
             if (eg[y] && typeof eg[y][x] !== 'undefined') eg[y][x] = 'hit';
         }
         for (const [x, y] of dto.enemyFogGrid.misses) {
             if (eg[y] && typeof eg[y][x] !== 'undefined') eg[y][x] = 'miss';
         }
-        for (const sunk of dto.enemyFogGrid.sunk) {
-            for (const [x, y] of sunk.cells) {
-                if (eg[y] && typeof eg[y][x] !== 'undefined') eg[y][x] = 'hit';
+        for (const sunkShip of dto.enemyFogGrid.sunk) {
+            for (const [x, y] of sunkShip.cells) {
+                if (eg[y] && typeof eg[y][x] !== 'undefined') {
+                    eg[y][x] = 'hit';
+                    sunk.push([x, y]);
+                }
             }
         }
+
         enemyFogGrid.value = eg;
+        sunkCells.value = sunk;
+
+
         turn.value = dto.turn;
         status.value = dto.status;
         finished.value = dto.finished;
@@ -117,6 +159,21 @@ export function useGame() {
             if (enemyFogGrid.value[y] && typeof enemyFogGrid.value[y][x] !== 'undefined') {
                 enemyFogGrid.value[y][x] = res.result === 'miss' ? 'miss' : 'hit';
             }
+            if (res.result === 'hit' || res.result === 'miss') {
+                lastShot.value = { x, y, result: res.result };
+
+                // Po krótkim czasie wyczyść, żeby animacja była jednorazowa
+                setTimeout(() => {
+                    if (
+                        lastShot.value &&
+                        lastShot.value.x === x &&
+                        lastShot.value.y === y &&
+                        lastShot.value.result === res.result
+                    ) {
+                        lastShot.value = null;
+                    }
+                }, 400);
+            }
             if (res.result === 'duplicate') {
                 duplicates.value += 1;
                 showToast('Duplikat: to pole było już ostrzelane.', 'warn', 2200);
@@ -156,6 +213,7 @@ export function useGame() {
     const hitsCount = computed(() => enemyFogGrid.value.flat().filter(c => c === 'hit').length);
     const missesCount = computed(() => enemyFogGrid.value.flat().filter(c => c === 'miss').length);
     const duplicatesCount = computed(() => duplicates.value);
+    const opponentHitsCount = computed(() => playerUnderFireOverlay.value.flat().filter(c => c === 'opp-hit').length);
     const disabled = computed(() => loading.value || shooting.value || turn.value !== 'player' || status.value === 'won' || status.value === 'lost');
 
     function showToast(message: string, type: 'info'|'warn'|'error' = 'info', ms = 2000) {
@@ -165,11 +223,12 @@ export function useGame() {
     }
 
     return {
-        gameId, size, playerGrid, enemyFogGrid, turn, status, finished,
+        gameId, size, playerGrid, playerUnderFireOverlay, enemyFogGrid, turn, status, finished,
         loading, error, start, refresh, shot, disabled,
         // stats
-        shotsCount, hitsCount, missesCount, duplicatesCount,
+        shotsCount, hitsCount, missesCount, duplicatesCount, opponentHitsCount,
         // toast
         toast, toastType,
+        lastShot, sunkCells,
     };
 }

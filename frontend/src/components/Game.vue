@@ -1,11 +1,54 @@
 <script setup lang="ts">
 import GameGameBoard from './GameBoard.vue';
 import { useGame } from '../composables/useGame';
-import { watch } from 'vue'
+import { watch, computed, unref } from 'vue'
 import { useRouter } from 'vue-router'
 
 const g = useGame();
 const router = useRouter();
+
+// Połącz siatkę gracza z overlayem strzałów przeciwnika (opp-hit/opp-miss)
+const mergedPlayerGrid = computed(() => {
+    const base = unref(g.playerGrid) as unknown as string[][];
+    const ov = unref(g.playerUnderFireOverlay) as unknown as (('none'|'opp-hit'|'opp-miss')[])[];
+    if (!Array.isArray(base) || !Array.isArray(ov) || base.length !== ov.length) return base as any;
+    return base.map((row, y) => row.map((cell, x) => {
+        const o = ov?.[y]?.[x] ?? 'none';
+        if (o === 'none') return cell as string;
+        // złącz klasy, aby widoczny był statek i overlay
+        return `${cell} ${o}`.trim();
+    }));
+});
+
+const enemyAnimatedGrid = computed(() => {
+    const base = unref(g.enemyFogGrid) as unknown as string[][];
+    const ls = unref(g.lastShot) as { x: number; y: number; result: string } | null;
+    const sunk = unref(g.sunkCells) as Array<[number, number]> | null | undefined;
+
+    if (!Array.isArray(base)) return base as any;
+
+    return base.map((row, y) => row.map((cell, x) => {
+        let classes = cell as string;
+
+        // Zatopione statki – stała klasa 'sink'
+        if (Array.isArray(sunk) && sunk.some(([sx, sy]) => sx === x && sy === y)) {
+            classes += ' sink';
+        }
+
+        // Ostatni strzał – krótkotrwała animacja
+        if (ls && ls.x === x && ls.y === y) {
+            if (ls.result === 'hit') {
+                classes += ' hit anim';
+            } else if (ls.result === 'miss') {
+                classes += ' miss anim';
+            }
+        }
+
+        return classes.trim();
+    }));
+});
+
+
 
 function handleShot(x: number, y: number) {
     // Uwaga: w <script setup> wartości z composable nie są auto‑odwijane poza template
@@ -24,6 +67,36 @@ watch(() => g.status, (nv) => {
     try { console.log('[Game.vue] status →', nv) } catch {}
 });
 
+// Diagnostyka: loguj punkty overlayu przeciwnika i zmergowane klasy w pierwszych wierszach
+watch(() => g.playerUnderFireOverlay, (ov) => {
+    try {
+        const v = (ov as any)?.value ?? ov;
+        const hits = [] as string[];
+        const misses = [] as string[];
+        for (let y=0; y<Math.min(v?.length ?? 0, 3); y++) {
+            for (let x=0; x<Math.min(v?.[y]?.length ?? 0, 10); x++) {
+                if (v[y][x] === 'opp-hit') hits.push(`${x},${y}`);
+                if (v[y][x] === 'opp-miss') misses.push(`${x},${y}`);
+            }
+        }
+        console.debug('[Game.vue] overlay sample hits:', hits, 'misses:', misses);
+    } catch {}
+}, { deep: true });
+
+watch(mergedPlayerGrid, (mg) => {
+    try {
+        const row0 = mg?.[0]?.slice?.(0, 10) ?? [];
+        console.debug('[Game.vue] merged row0 classes:', row0);
+    } catch {}
+}, { deep: true });
+
+watch(enemyAnimatedGrid, (grid) => {
+    try {
+        const row0 = grid?.[0]?.slice?.(0, 10) ?? [];
+        console.debug('[enemyAnimatedGrid] row0:', row0);
+    } catch {}
+}, { deep: true });
+
 function newGame() {
     router.push({ name: 'home' })
 }
@@ -39,12 +112,14 @@ function newGame() {
     <div class="boards">
         <div>
             <h3>Twoja plansza</h3>
-            <GameGameBoard :grid="g.playerGrid" :disabled="true" />
+            <!-- Pozostawiamy aktywną (niezablokowaną), aby overlay był w pełni czytelny -->
+            <GameGameBoard :grid="mergedPlayerGrid" :disabled="false" />
         </div>
 
         <div>
             <h3>Przeciwnik</h3>
-            <GameGameBoard :grid="g.enemyFogGrid" :onCellClick="handleShot" :disabled="g.disabled" />
+<!--            <GameGameBoard :grid="g.enemyFogGrid" :onCellClick="handleShot" :disabled="g.disabled" />-->
+            <GameGameBoard :grid="enemyAnimatedGrid" :onCellClick="handleShot" :disabled="g.disabled" />
             <div v-if="g.loading">Ładowanie…</div>
             <div v-if="g.error" style="color:crimson">{{ g.error }}</div>
             <div class="hud">
@@ -54,11 +129,14 @@ function newGame() {
                     <span class="pill hit">Trafienia: <strong>{{ g.hitsCount }}</strong></span>
                     <span class="pill miss">Pudła: <strong>{{ g.missesCount }}</strong></span>
                     <span class="pill dup">Duplikaty: <strong>{{ g.duplicatesCount }}</strong></span>
+                    <span class="pill opp">Trafienia przeciwnika: <strong>{{ g.opponentHitsCount }}</strong></span>
                 </div>
                 <div class="legend">
                     <span class="item"><span class="box ship"></span> Statek (Twoja plansza)</span>
                     <span class="item"><span class="box hit"></span> Trafienie</span>
                     <span class="item"><span class="box miss"></span> Pudło</span>
+                    <span class="item"><span class="box opp-hit"></span> Trafienie przeciwnika</span>
+                    <span class="item"><span class="box opp-miss"></span> Pudło przeciwnika</span>
                 </div>
                 <div v-if="g.toast" class="toast" :class="g.toastType">{{ g.toast }}</div>
             </div>
@@ -83,12 +161,15 @@ function newGame() {
 .pill.hit { background: #fee2e2; color: #7a0a0a; }
 .pill.miss { background: #e0f2fe; color: #0c4a6e; }
 .pill.dup { background: #f1f5f9; color: #334155; }
+.pill.opp { background: #fde68a; color: #7c2d12; }
 .legend { display:flex; flex-wrap:wrap; gap:.6rem; align-items:center; margin-top:.25rem; color:#334155; }
 .legend .item { display:flex; gap:.35rem; align-items:center; }
 .legend .box { width:16px; height:16px; border:1px solid #cbd5e1; border-radius:2px; display:inline-block; }
 .legend .box.ship { background:#94a3b8; }
 .legend .box.hit { background:#ef4444; border-color:#ef4444; }
 .legend .box.miss { background:#bfdbfe; border-color:#bfdbfe; }
+.legend .box.opp-hit { background: transparent; border-color:#7a0a0a; box-shadow: inset 0 0 0 2px #7a0a0a; }
+.legend .box.opp-miss { background: transparent; border-color:#0c4a6e; box-shadow: inset 0 0 0 2px #0c4a6e; }
 .toast { display:inline-block; padding:.3rem .6rem; border-radius:6px; border:1px solid #cbd5e1; background:#f8fafc; color:#0f172a; }
 .toast.warn { background:#fff7ed; border-color:#fed7aa; color:#7c2d12; }
 .toast.error { background:#fee2e2; border-color:#fecaca; color:#7f1d1d; }

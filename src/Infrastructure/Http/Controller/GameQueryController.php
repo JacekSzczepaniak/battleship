@@ -31,6 +31,7 @@ final class GameQueryController
 
         $size = $game->ruleset()->boardSize();
         $shots = method_exists($game, 'shotsWithResults') ? $game->shotsWithResults() : [];
+        $oppShots = method_exists($game, 'opponentShotsWithResults') ? $game->opponentShotsWithResults() : [];
 
         // hits/misses sets
         $hits = [];
@@ -68,10 +69,14 @@ final class GameQueryController
             }
         }
 
-        // finished if all ships sunk
+        // finished if all ships sunk (win) lub status domeny raportuje koniec
         $finished = false;
         if (!empty($fleet)) {
             $finished = count($sunk) === count($fleet);
+        }
+        // domenowy status może być Won/Lost – wtedy finished na pewno true
+        if (in_array($game->status()->value, ['won','lost'], true)) {
+            $finished = true;
         }
 
         // player fleet export (same format as POST /fleet payload items)
@@ -96,6 +101,11 @@ final class GameQueryController
                 'hits' => $hits,
                 'misses' => $misses,
                 'sunk' => $sunk,
+            ],
+            // overlay trafień/pudeł przeciwnika na planszy gracza
+            'playerUnderFireGrid' => [
+                'hits' => array_values(array_map(static fn(array $s) => [$s['x'],$s['y']], array_filter($oppShots, static fn(array $s) => in_array($s['result'], ['hit','sunk'], true)))) ,
+                'misses' => array_values(array_map(static fn(array $s) => [$s['x'],$s['y']], array_filter($oppShots, static fn(array $s) => $s['result'] === 'miss'))),
             ],
             'shotsCount' => count($shots),
             'finished' => $finished,

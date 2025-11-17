@@ -19,6 +19,11 @@ export interface GameViewDTO {
     turn: 'player' | 'opponent' | string;
     playerFleet: PlayerFleetItem[];
     enemyFogGrid: EnemyFogGridView;
+    // overlay trafień/pudeł przeciwnika na planszy gracza
+    playerUnderFireGrid?: {
+        hits: [number, number][];
+        misses: [number, number][];
+    };
     shotsCount: number;
     finished: boolean;
 }

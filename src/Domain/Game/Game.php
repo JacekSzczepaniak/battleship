@@ -7,19 +7,41 @@ use App\Domain\Shared\GameId;
 final class Game
 {
     private GameStatus $status = GameStatus::Pending;
-    private ?Board $board = null;
+    private ?Board $board = null; // plansza gracza
     /** @var array<string,bool> */
     private array $shots = [];
     /** @var array<string,bool> */
     private array $hits = [];
 
     /** @var Ship[]|null */
-    private ?array $fleet = null;
+    private ?array $fleet = null; // flota gracza
+
+    // Flota przeciwnika i jego plansza (na potrzeby strzałów gracza)
+    private ?Board $opponentBoard = null;
+    /** @var Ship[]|null */
+    private ?array $opponentFleet = null;
 
     // Iteration 1: minimalne meta gry (na razie jako proste stringi)
     private string $mode = 'standard';      // 'standard' | 'nonstandard'
     private string $opponent = 'mock';      // 'mock' | 'ai' | 'pvp'
     private string $turn = 'player';        // 'player' | 'opponent'
+
+    /**
+     * Strzały przeciwnika na planszę gracza (keys "x:y"), lustrzana struktura do $shots/$hits.
+     * Używane przez mock AI i do projekcji overlayu na planszy gracza.
+     * @var array<string,bool>
+     */
+    private array $opponentShots = [];
+    /** @var array<string,bool> */
+    private array $opponentHits = [];
+
+    // AI (heurystyka v1)
+    private string $aiMode = 'hunt'; // 'hunt' | 'target'
+    /** @var array<int, array{x:int,y:int}> */
+    private array $aiHitsStreak = [];
+    private ?string $aiDirection = null; // 'h' | 'v' | null
+    /** @var array<int, array{x:int,y:int}> */
+    private array $aiQueue = [];
 
     public function __construct(
         private GameId $id,
@@ -149,14 +171,51 @@ final class Game
     }
 
     /**
+     * Ustawia flotę przeciwnika (walidowana jak flota gracza) i buduje planszę przeciwnika.
+     * @param Ship[] $ships
+     */
+    public function placeOpponentFleet(array $ships): void
+    {
+        if (null !== $this->opponentFleet) {
+            throw new \DomainException('Opponent fleet already placed');
+        }
+
+        $board = new Board($this->ruleset->boardSize());
+        $board->placeMany($ships);
+
+        $this->opponentFleet = $ships;
+        $this->opponentBoard = $board;
+    }
+
+    /**
+     * Używane przy odtwarzaniu ze snapshotu (bez walidacji biznesowej poza budową planszy).
+     * @param Ship[] $ships
+     */
+    public function setOpponentFleetFromSnapshot(array $ships): void
+    {
+        $this->opponentFleet = $ships;
+        $board = new Board($this->ruleset->boardSize());
+        $board->placeMany($ships);
+        $this->opponentBoard = $board;
+    }
+
+    /** @return Ship[]|null */
+    public function opponentFleet(): ?array
+    {
+        return $this->opponentFleet;
+    }
+
+    /**
      * Fires a shot and returns ShotResult.
      *
      * Throws DomainException only when the fleet is not placed.
      */
     public function fireShot(Coordinate $c): ShotResult
     {
-        if (null === $this->board) {
-            throw new \DomainException('Fleet not placed');
+        // Wsteczna kompatybilność: jeśli nie ustawiono opponentBoard, strzelaj w board gracza
+        $targetBoard = $this->opponentBoard ?? $this->board;
+        if (null === $targetBoard) {
+            throw new \DomainException('Opponent fleet not placed');
         }
         $key = $c->x.':'.$c->y;
         if (isset($this->shots[$key])) {
@@ -165,7 +224,7 @@ final class Game
         $this->shots[$key] = true;
 
         $hitShip = null;
-        foreach ($this->board->ships() as $ship) {
+        foreach ($targetBoard->ships() as $ship) {
             foreach ($this->cellsFor($ship) as $cellKey) {
                 if ($cellKey === $key) {
                     $hitShip = $ship;
@@ -190,7 +249,7 @@ final class Game
 
         // check if all ships are sunk (win)
         $allHit = true;
-        foreach ($this->board->ships() as $s) {
+        foreach ($targetBoard->ships() as $s) {
             foreach ($this->cellsFor($s) as $cellKey) {
                 if (!isset($this->hits[$cellKey])) {
                     $allHit = false;
@@ -204,6 +263,229 @@ final class Game
         }
 
         return $sunk ? ShotResult::Sunk : ShotResult::Hit;
+    }
+
+    /**
+     * Wykonuje strzał przeciwnika na planszy gracza i zwraca wynik jako string: hit|miss|sunk|duplicate.
+     * Gdy wszystkie komórki floty gracza trafione przez przeciwnika – ustawia status Lost.
+     */
+    public function fireOpponentShot(Coordinate $c): string
+    {
+        if (null === $this->board) {
+            throw new \DomainException('Fleet not placed');
+        }
+
+        $key = $c->x.':'.$c->y;
+        if (isset($this->opponentShots[$key])) {
+            return 'duplicate';
+        }
+        $this->opponentShots[$key] = true;
+
+        $hitShip = null;
+        foreach ($this->board->ships() as $ship) {
+            foreach ($this->cellsFor($ship) as $cellKey) {
+                if ($cellKey === $key) {
+                    $hitShip = $ship;
+                    $this->opponentHits[$key] = true;
+                    break 2;
+                }
+            }
+        }
+
+        if (null === $hitShip) {
+            return 'miss';
+        }
+
+        // czy zatopiony ten statek (przez przeciwnika)
+        $sunk = true;
+        foreach ($this->cellsFor($hitShip) as $cellKey) {
+            if (!isset($this->opponentHits[$cellKey])) {
+                $sunk = false;
+                break;
+            }
+        }
+
+        // czy wszystkie statki gracza trafione przez przeciwnika → przegrana
+        $allOpponentHit = true;
+        foreach ($this->board->ships() as $s) {
+            foreach ($this->cellsFor($s) as $cellKey) {
+                if (!isset($this->opponentHits[$cellKey])) {
+                    $allOpponentHit = false;
+                    break 2;
+                }
+            }
+        }
+        if ($allOpponentHit) {
+            $this->status = GameStatus::Lost;
+        }
+
+        $result = $sunk ? 'sunk' : 'hit';
+
+        // Aktualizacja stanu AI
+        $this->onAiAfterShot($c, $result);
+
+        return $result;
+    }
+
+    /** Wybiera następny cel przeciwnika wg heurystyki (hunt/target). */
+    public function chooseOpponentTarget(): Coordinate
+    {
+        $size = $this->ruleset->boardSize();
+
+        // TARGET: korzystaj z kolejki kandydatów (czyszcząc z nieprawidłowych pozycji)
+        if ($this->aiMode === 'target') {
+            while (!empty($this->aiQueue)) {
+                $cand = array_shift($this->aiQueue);
+                if ($cand === null) break;
+                if ($this->isWithin($cand['x'], $cand['y'], $size->width, $size->height) && !$this->isOpponentShotTaken($cand['x'], $cand['y'])) {
+                    return new Coordinate($cand['x'], $cand['y']);
+                }
+            }
+            // jeśli kolejka pusta → wróć do hunt
+            $this->aiMode = 'hunt';
+            $this->aiDirection = null;
+            $this->aiHitsStreak = [];
+        }
+
+        // HUNT: checkerboard (najpierw jedno „kolorowisko”), potem drugie
+        $phases = [0, 1];
+        foreach ($phases as $phase) {
+            for ($yy = 0; $yy < $size->height; ++$yy) {
+                for ($xx = 0; $xx < $size->width; ++$xx) {
+                    if ((($xx + $yy) & 1) !== $phase) {
+                        continue; // najpierw pola o (x+y)%2 === phase
+                    }
+                    if (!$this->isOpponentShotTaken($xx, $yy)) {
+                        return new Coordinate($xx, $yy);
+                    }
+                }
+            }
+        }
+
+        // awaryjnie (wszystko ostrzelane) – zwróć 0,0
+        return new Coordinate(0, 0);
+    }
+
+    /** Ustawia stan AI ze snapshotu. */
+    public function setAiStateFromSnapshot(array $state): void
+    {
+        $mode = $state['mode'] ?? 'hunt';
+        $direction = $state['direction'] ?? null;
+        $hits = $state['hitsStreak'] ?? [];
+        $queue = $state['queue'] ?? [];
+
+        $this->aiMode = in_array($mode, ['hunt','target'], true) ? $mode : 'hunt';
+        $this->aiDirection = in_array($direction, ['h','v'], true) ? $direction : null;
+        $this->aiHitsStreak = [];
+        foreach ($hits as $h) {
+            if (isset($h['x'], $h['y'])) $this->aiHitsStreak[] = ['x' => (int)$h['x'], 'y' => (int)$h['y']];
+        }
+        $this->aiQueue = [];
+        foreach ($queue as $q) {
+            if (isset($q['x'], $q['y'])) $this->aiQueue[] = ['x' => (int)$q['x'], 'y' => (int)$q['y']];
+        }
+    }
+
+    /** Zwraca stan AI do snapshotu. */
+    public function aiStateToArray(): array
+    {
+        return [
+            'mode' => $this->aiMode,
+            'direction' => $this->aiDirection,
+            'hitsStreak' => $this->aiHitsStreak,
+            'queue' => $this->aiQueue,
+        ];
+    }
+
+    private function isOpponentShotTaken(int $x, int $y): bool
+    {
+        return isset($this->opponentShots[$x.':'.$y]);
+    }
+
+    private function isWithin(int $x, int $y, int $w, int $h): bool
+    {
+        return $x >= 0 && $y >= 0 && $x < $w && $y < $h;
+    }
+
+    /** Aktualizuje stan AI po wyniku strzału przeciwnika. */
+    private function onAiAfterShot(Coordinate $c, string $result): void
+    {
+        $size = $this->ruleset->boardSize();
+
+        if ($result === 'miss' || $result === 'duplicate') {
+            // przy pudle: zostaw tryb; kolejka oczyści się w chooseOpponentTarget()
+            return;
+        }
+
+        if ($result === 'sunk') {
+            // reset po zatopieniu
+            $this->aiMode = 'hunt';
+            $this->aiDirection = null;
+            $this->aiHitsStreak = [];
+            $this->aiQueue = [];
+            return;
+        }
+
+        // HIT: przechodzimy do target i dokładamy kandydatów
+        $this->aiMode = 'target';
+        $this->aiHitsStreak[] = ['x' => $c->x, 'y' => $c->y];
+
+        // ustal kierunek, jeśli mamy co najmniej dwa trafienia w linii
+        if (count($this->aiHitsStreak) >= 2 && $this->aiDirection === null) {
+            $n = count($this->aiHitsStreak);
+            $a = $this->aiHitsStreak[$n-2];
+            $b = $this->aiHitsStreak[$n-1];
+            if ($a['y'] === $b['y']) $this->aiDirection = 'h';
+            elseif ($a['x'] === $b['x']) $this->aiDirection = 'v';
+        }
+
+        // dodaj kandydatów
+        if ($this->aiDirection === null) {
+            // brak kierunku: sąsiedzi N,E,S,W bieżącego trafienia
+            $neigh = [
+                ['x'=>$c->x, 'y'=>$c->y-1], // N
+                ['x'=>$c->x+1, 'y'=>$c->y], // E
+                ['x'=>$c->x, 'y'=>$c->y+1], // S
+                ['x'=>$c->x-1, 'y'=>$c->y], // W
+            ];
+            foreach ($neigh as $p) {
+                if ($this->isWithin($p['x'],$p['y'],$size->width,$size->height) && !$this->isOpponentShotTaken($p['x'],$p['y'])) {
+                    $this->enqueueIfNew($p['x'], $p['y']);
+                }
+            }
+        } else {
+            // mamy kierunek: spróbuj rozszerzyć w obu kierunkach wzdłuż linii trafień
+            $xs = array_column($this->aiHitsStreak, 'x');
+            $ys = array_column($this->aiHitsStreak, 'y');
+            if ($this->aiDirection === 'h') {
+                $y = end($ys);
+                $minX = min($xs); $maxX = max($xs);
+                $cands = [ ['x'=>$minX-1,'y'=>$y], ['x'=>$maxX+1,'y'=>$y] ];
+                foreach ($cands as $p) {
+                    if ($this->isWithin($p['x'],$p['y'],$size->width,$size->height) && !$this->isOpponentShotTaken($p['x'],$p['y'])) {
+                        $this->enqueueIfNew($p['x'], $p['y']);
+                    }
+                }
+            } else { // 'v'
+                $x = end($xs);
+                $minY = min($ys); $maxY = max($ys);
+                $cands = [ ['x'=>$x,'y'=>$minY-1], ['x'=>$x,'y'=>$maxY+1] ];
+                foreach ($cands as $p) {
+                    if ($this->isWithin($p['x'],$p['y'],$size->width,$size->height) && !$this->isOpponentShotTaken($p['x'],$p['y'])) {
+                        $this->enqueueIfNew($p['x'], $p['y']);
+                    }
+                }
+            }
+        }
+    }
+
+    private function enqueueIfNew(int $x, int $y): void
+    {
+        $key = $x.':'.$y;
+        foreach ($this->aiQueue as $q) {
+            if ($q['x'].':'.$q['y'] === $key) return;
+        }
+        $this->aiQueue[] = ['x'=>$x,'y'=>$y];
     }
 
     /** @return list<string> keys 'x:y' of cells occupied by the ship */
@@ -231,6 +513,18 @@ final class Game
         return $out;
     }
 
+    /** @return list<array{x:int,y:int}> */
+    public function opponentShots(): array
+    {
+        $out = [];
+        foreach (array_keys($this->opponentShots) as $k) {
+            [$x,$y] = array_map('intval', explode(':', $k));
+            $out[] = ['x' => $x, 'y' => $y];
+        }
+
+        return $out;
+    }
+
     /** @param array<int, array{x:int,y:int,r?:string}> $shots */
     public function setShotsFromSnapshot(array $shots): void
     {
@@ -246,6 +540,21 @@ final class Game
             $r = $s['r'] ?? null; // 'hit' | 'sunk' | 'miss' | 'duplicate' | null
             if ('hit' === $r || 'sunk' === $r) {
                 $this->hits[$key] = true;
+            }
+        }
+    }
+
+    /** @param array<int, array{x:int,y:int,r?:string}> $shots */
+    public function setOpponentShotsFromSnapshot(array $shots): void
+    {
+        $this->opponentShots = [];
+        $this->opponentHits = [];
+        foreach ($shots as $s) {
+            $key = $s['x'].':'.$s['y'];
+            $this->opponentShots[$key] = true;
+            $r = $s['r'] ?? null;
+            if ('hit' === $r || 'sunk' === $r) {
+                $this->opponentHits[$key] = true;
             }
         }
     }
@@ -267,8 +576,9 @@ final class Game
                 $result = 'hit';
 
                 // if we have a board, determine if that hit sunk a ship
-                if (null !== $this->board) {
-                    foreach ($this->board->ships() as $ship) {
+                $tb = $this->opponentBoard ?? $this->board;
+                if (null !== $tb) {
+                    foreach ($tb->ships() as $ship) {
                         $cells = $this->cellsFor($ship);
                         if (in_array($key, $cells, true)) {
                             $sunk = true;
@@ -285,7 +595,7 @@ final class Game
                 }
             }
 
-            $out[] = ['x' => $x, 'y' => $y, 'result' => $result];
+        $out[] = ['x' => $x, 'y' => $y, 'result' => $result];
         }
 
         return $out;
@@ -293,11 +603,12 @@ final class Game
 
     private function allShipsSunk(): bool
     {
-        if (null === $this->board) {
+        $tb = $this->opponentBoard ?? $this->board;
+        if (null === $tb) {
             return false;
         }
 
-        foreach ($this->board->ships() as $ship) {
+        foreach ($tb->ships() as $ship) {
             foreach ($this->cellsFor($ship) as $cellKey) {
                 if (!isset($this->hits[$cellKey])) {
                     return false;
@@ -306,6 +617,38 @@ final class Game
         }
 
         return true;
+    }
+
+    /** Zwraca listę strzałów przeciwnika z wynikiem. @return list<array{x:int,y:int,result:string}> */
+    public function opponentShotsWithResults(): array
+    {
+        $out = [];
+        foreach (array_keys($this->opponentShots) as $key) {
+            [$x, $y] = array_map('intval', explode(':', $key));
+
+            $result = isset($this->opponentHits[$key]) ? 'hit' : 'miss';
+
+            if (isset($this->opponentHits[$key]) && null !== $this->board) {
+                foreach ($this->board->ships() as $ship) {
+                    $cells = $this->cellsFor($ship);
+                    if (in_array($key, $cells, true)) {
+                        $sunk = true;
+                        foreach ($cells as $cellKey) {
+                            if (!isset($this->opponentHits[$cellKey])) {
+                                $sunk = false;
+                                break;
+                            }
+                        }
+                        $result = $sunk ? 'sunk' : 'hit';
+                        break;
+                    }
+                }
+            }
+
+            $out[] = ['x' => $x, 'y' => $y, 'result' => $result];
+        }
+
+        return $out;
     }
 
     /**

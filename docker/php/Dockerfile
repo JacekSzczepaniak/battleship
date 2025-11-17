@@ -8,11 +8,12 @@ RUN (addgroup -g ${GID} app 2>/dev/null || addgroup app) \
  && (adduser -D -G app -u ${UID} app 2>/dev/null || adduser -D -G app app) \
  && chown -R app:app /var/www
 
-# System deps
+# System deps (w tym narzędzia do kompilacji PECL)
 RUN apk add --no-cache \
     bash git unzip icu-dev libzip-dev oniguruma-dev libpng-dev \
-    libpq-dev postgresql-client autoconf make g++ \
-    && pecl install xdebug || true
+    libpq-dev postgresql-client autoconf make g++ linux-headers $PHPIZE_DEPS \
+    && pecl install xdebug-3.3.2 \
+    && docker-php-ext-enable xdebug
 
 # PHP extensions
 RUN docker-php-ext-configure intl \

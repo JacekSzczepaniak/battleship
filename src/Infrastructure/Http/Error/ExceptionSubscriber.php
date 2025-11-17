@@ -67,6 +67,7 @@ final class ExceptionSubscriber implements EventSubscriberInterface
     {
         return match ($message) {
             'Fleet not placed' => ['FLEET_NOT_PLACED', 422],
+            'Opponent fleet not placed' => ['FLEET_NOT_PLACED', 422],
             'Invalid fleet composition' => ['VALIDATION_ERROR', 400],
             'Fleet already placed' => ['VALIDATION_ERROR', 409],
             default => ['VALIDATION_ERROR', 400],

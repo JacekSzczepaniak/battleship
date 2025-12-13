@@ -70,6 +70,8 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             'Opponent fleet not placed' => ['FLEET_NOT_PLACED', 422],
             'Invalid fleet composition' => ['VALIDATION_ERROR', 400],
             'Fleet already placed' => ['VALIDATION_ERROR', 409],
+            'Not player turn' => ['NOT_PLAYER_TURN', 409],
+            'Game already finished' => ['GAME_ALREADY_FINISHED', 409],
             default => ['VALIDATION_ERROR', 400],
         };
     }

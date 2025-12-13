@@ -4,7 +4,4 @@ services:
   app:
     volumes:
       - ./docker/php/php-xdebug.ini:/usr/local/etc/php/conf.d/99-xdebug.ini:ro
-  database:
-    ports:
-      - "5432"
 ###< doctrine/doctrine-bundle ###

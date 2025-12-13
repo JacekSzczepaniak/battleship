@@ -31,6 +31,17 @@ final class FireShot
             throw new \InvalidArgumentException('Game not found');
         }
 
+        if ($game->isFinished()) {
+            throw new \DomainException('Game already finished');
+        }
+
+        if ($game->turn() !== 'player') {
+            throw new \DomainException('Not player turn');
+        }
+
+        // Gracz wykonuje ruch – oznacz turę przeciwnika, dopóki nie skończymy sekwencji
+        $game->setTurn('opponent');
+
         $out = $game->fireShot(new Coordinate($x, $y));
 
         // Wyliczenia po ruchu gracza
@@ -54,7 +65,8 @@ final class FireShot
         }
 
         // Po ruchu przeciwnika tura wraca do gracza (o ile gra nie skończona)
-        $turn = 'player';
+        $turn = $finished ? 'none' : 'player';
+        $game->setTurn($turn);
 
         $this->repo->save($game);
 

@@ -87,7 +87,12 @@ final class GameSnapshotMapper
     public function toDomain(string $id, array $state): Game
     {
         $ruleset = $this->rulesetFromArray($state['ruleset'] ?? []);
-        $status = GameStatus::from((string) ($state['status'] ?? GameStatus::Pending->value));
+        $statusVal = (string) ($state['status'] ?? GameStatus::Pending->value);
+        try {
+            $status = GameStatus::from($statusVal);
+        } catch (\Throwable) {
+            $status = GameStatus::Pending;
+        }
         $game = Game::fromSnapshot(new GameId($id), $ruleset, $status);
 
         // meta (optional in older snapshots)
@@ -98,7 +103,8 @@ final class GameSnapshotMapper
             $game->setOpponent($state['opponent']);
         }
         if (isset($state['turn']) && is_string($state['turn'])) {
-            $game->setTurn($state['turn']);
+            $turn = $state['turn'];
+            $game->setTurn(in_array($turn, ['player','opponent','none'], true) ? $turn : 'player');
         }
 
         // fleet from snapshot

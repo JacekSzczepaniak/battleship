@@ -6,8 +6,11 @@ GID := $(shell id -g)
 export UID
 export GID
 
-up: ## Uruchom kontenery (build + detach)
-	docker compose up -d --build
+up: ## Uruchom kontenery (bez wymuszania builda)
+	docker compose up -d
+
+build: ## Zbuduj obrazy (gdy zmieni się Dockerfile)
+	docker compose build
 
 down: ## Zatrzymaj i usuń kontenery
 	docker compose down

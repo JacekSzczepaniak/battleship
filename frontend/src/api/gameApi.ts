@@ -12,11 +12,11 @@ export interface PlayerFleetItem { x: number; y: number; o: 'h' | 'v'; l: number
 
 export interface GameViewDTO {
     id: string;
-    status: 'pending' | 'in_progress' | 'won' | 'lost' | 'ready' | 'waiting_for_fleet';
+    status: 'pending' | 'in_progress' | 'won' | 'lost';
     board: { w: number; h: number };
     mode: 'standard' | 'nonstandard' | string;
     opponent: 'mock' | 'ai' | 'pvp' | string;
-    turn: 'player' | 'opponent' | string;
+    turn: 'player' | 'opponent' | 'none';
     playerFleet: PlayerFleetItem[];
     enemyFogGrid: EnemyFogGridView;
     // overlay trafień/pudeł przeciwnika na planszy gracza
@@ -39,7 +39,7 @@ export interface ShotResultDTO {
     finished: boolean;
     win: boolean;
     loss: boolean;
-    turn: 'player' | 'opponent';
+    turn: 'player' | 'opponent' | 'none';
     opponentMoves: { x: number; y: number; result: 'hit' | 'miss' | 'sunk' | 'duplicate' }[];
 }
 

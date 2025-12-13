@@ -75,7 +75,7 @@ final class Game
      */
     public function isFinished(): bool
     {
-        if (GameStatus::Won === $this->status) {
+        if (in_array($this->status, [GameStatus::Won, GameStatus::Lost], true)) {
             return true;
         }
 
@@ -117,6 +117,9 @@ final class Game
 
     public function setTurn(string $turn): void
     {
+        if (!in_array($turn, ['player', 'opponent', 'none'], true)) {
+            throw new \InvalidArgumentException('Invalid turn value');
+        }
         $this->turn = $turn;
     }
 

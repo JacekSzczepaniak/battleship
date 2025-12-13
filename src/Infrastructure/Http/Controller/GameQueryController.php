@@ -69,15 +69,8 @@ final class GameQueryController
             }
         }
 
-        // finished if all ships sunk (win) lub status domeny raportuje koniec
-        $finished = false;
-        if (!empty($fleet)) {
-            $finished = count($sunk) === count($fleet);
-        }
-        // domenowy status może być Won/Lost – wtedy finished na pewno true
-        if (in_array($game->status()->value, ['won','lost'], true)) {
-            $finished = true;
-        }
+        // Finished raportujemy wprost z domeny
+        $finished = $game->isFinished();
 
         // player fleet export (same format as POST /fleet payload items)
         $playerFleet = array_map(static function ($s) {
@@ -89,13 +82,15 @@ final class GameQueryController
             ];
         }, $fleet);
 
+        $turn = $finished ? 'none' : $game->turn();
+
         return new JsonResponse([
             'id' => (string) $game->id(),
             'status' => $game->status()->value,
             'board' => ['w' => $size->width, 'h' => $size->height],
             'mode' => method_exists($game, 'mode') ? $game->mode() : 'standard',
             'opponent' => method_exists($game, 'opponent') ? $game->opponent() : 'mock',
-            'turn' => method_exists($game, 'turn') ? $game->turn() : 'player',
+            'turn' => method_exists($game, 'turn') ? $turn : 'player',
             'playerFleet' => $playerFleet,
             'enemyFogGrid' => [
                 'hits' => $hits,

@@ -20,7 +20,7 @@ final class FunRuleset implements Ruleset
 
     public function airRaidSize(): Area
     {
-        return new Area(new Coordinate(2, 2), 3, 3);
+        return new Area(3, 3);
     }
 
     public function fireTorpedo(): bool

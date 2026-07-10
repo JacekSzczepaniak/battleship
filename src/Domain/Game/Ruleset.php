@@ -12,7 +12,7 @@ interface Ruleset
     public function allowedShips(): array;
 
     /**
-     * @return array<int,int> rozmiar nalotu
+     * Maksymalny pełny rozmiar obszaru nalotu (w komórkach).
      */
     public function airRaidSize(): Area;
 

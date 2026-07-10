@@ -598,40 +598,42 @@ final class Game
         return $results;
     }
 
+    /**
+     * Air raid: ostrzeliwuje prostokąt wokół punktu centralnego.
+     * $area to pół-zasięgi (width → oś x, height → oś y), więc żądany obszar
+     * ma (2*width+1) × (2*height+1) komórek; przy krawędzi jest przycinany do planszy.
+     * Walidacja rozmiaru dotyczy obszaru ŻĄDANEGO (przed przycięciem) względem
+     * limitu z rulesetu (airRaidSize = maksymalny pełny rozmiar w komórkach).
+     *
+     * @return list<array{x:int,y:int,result:string}>
+     */
     public function sendAirRaid(Coordinate $start, Area $area): array
     {
         if (null === $this->board) {
             throw new \DomainException('Fleet not placed');
         }
 
-        //sprawdzam czy start jest na planszy
         $w = $this->ruleset->boardSize()->width;
         $h = $this->ruleset->boardSize()->height;
 
-        $x = $start->x;
-        $y = $start->y;
-
-        if ($x < 0 || $y < 0 || $x >= $w || $y >= $h) {
+        if ($start->x >= $w || $start->y >= $h) {
             throw new \DomainException('Air Raid start outside board');
         }
-        //(5-9)
-        $areaStartX = ($start->x - $area->height) > 0 ? $start->x - $area->height : 1;
-        $areaEndX = ($start->x + $area->height) >= $this->ruleset->boardSize()->height ?
-            $this->ruleset->boardSize()->height - 1 : $start->x + $area->height;
 
-        $areaStartY = ($start->y - $area->width) > 0 ? $start->y - $area->width : 1;
-        $areaEndY = ($start->y + $area->width) >= $this->ruleset->boardSize()->width ?
-            $this->ruleset->boardSize()->width - 1 : $start->y + $area->width;
-
-        if ($areaEndX - $areaStartX > $this->ruleset->airRaidSize()->width
-        || $areaEndY - $areaStartY > $this->ruleset->airRaidSize()->height) {
+        $max = $this->ruleset->airRaidSize();
+        if (2 * $area->width + 1 > $max->width || 2 * $area->height + 1 > $max->height) {
             throw new \DomainException('Air Raid area is oversize');
         }
 
+        $fromX = max(0, $start->x - $area->width);
+        $toX = min($w - 1, $start->x + $area->width);
+        $fromY = max(0, $start->y - $area->height);
+        $toY = min($h - 1, $start->y + $area->height);
+
         $results = [];
 
-        for ($x = $areaStartX; $x <= $areaEndX; ++$x) {
-            for ($y = $areaStartY; $y <= $areaEndY; ++$y) {
+        for ($x = $fromX; $x <= $toX; ++$x) {
+            for ($y = $fromY; $y <= $toY; ++$y) {
                 $r = $this->fireShot(new Coordinate($x, $y));
                 $results[] = ['x' => $x, 'y' => $y, 'result' => $r->value];
             }

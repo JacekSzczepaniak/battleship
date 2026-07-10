@@ -2,12 +2,16 @@
 
 namespace App\Domain\Game;
 
+/**
+ * Rozmiar prostokątnego obszaru. W żądaniu nalotu width/height to pół-zasięgi
+ * od punktu centralnego (0 = pojedynczy wiersz/kolumna); w Ruleset::airRaidSize()
+ * — maksymalny pełny rozmiar obszaru w komórkach.
+ */
 final class Area
 {
-
-    public function __construct(Coordinate $start, public int $width, public int $height)
+    public function __construct(public readonly int $width, public readonly int $height)
     {
-        if ($width < 1 || $height < 1) {
+        if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException('Negative size');
         }
     }

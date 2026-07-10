@@ -9,7 +9,7 @@ use App\Domain\Game\Game;
 use Tests\Support\FleetFactory;
 
 
-//nalot jest dozwolony na obszar 3x3
+//nalot jest dozwolony na obszar max 3x3 (Area = pół-zasięgi od centrum)
 
 it('pozwala przeprowadzić nalot na wybrany obszar', function () {
     $game = Game::create(new FunRuleset(new BoardSize(10, 10)));
@@ -32,7 +32,7 @@ it('pozwala przeprowadzić nalot na wybrany obszar', function () {
         ['x' => 3, 'y' => 2, 'result' => 'miss',],
         ['x' => 3, 'y' => 3, 'result' => 'miss',],
     ],
-        $game->sendAirRaid($centralPoint, new Area($centralPoint, 1, 1))
+        $game->sendAirRaid($centralPoint, new Area(1, 1))
     );
 });
 
@@ -40,19 +40,24 @@ it('pozwala przeprowadzić nalot na wybrany obszar', function () {
 it('pozwala przeprowadzić nalot na wybrany obszar przy narożnikach', function () {
     $game = Game::create(new FunRuleset(new BoardSize(10, 10)));
     $game->placeFleet(FleetFactory::classic10x10()); // ← najważniejsze: pełna, poprawna flota
-    $centralPoint = new Coordinate(1, 1);
 
-    //tablica 2x2
+    // Centrum (1,1): obszar przycięty do 0..2 × 0..2 — wiersz i kolumna 0 WCHODZĄ w nalot.
+    // Trafienia: czteromasztowiec (0,0)-(3,0) i trójmasztowiec (0,2)-(2,2);
+    // (2,2) domyka trójmasztowiec → sunk.
+    $centralPoint = new Coordinate(1, 1);
     self::assertSame(
         [
-            //pierwszy rząd
+            ['x' => 0, 'y' => 0, 'result' => 'hit',],
+            ['x' => 0, 'y' => 1, 'result' => 'miss',],
+            ['x' => 0, 'y' => 2, 'result' => 'hit',],
+            ['x' => 1, 'y' => 0, 'result' => 'hit',],
             ['x' => 1, 'y' => 1, 'result' => 'miss',],
             ['x' => 1, 'y' => 2, 'result' => 'hit',],
-            //drugi
+            ['x' => 2, 'y' => 0, 'result' => 'hit',],
             ['x' => 2, 'y' => 1, 'result' => 'miss',],
-            ['x' => 2, 'y' => 2, 'result' => 'hit',],
+            ['x' => 2, 'y' => 2, 'result' => 'sunk',],
         ],
-        $game->sendAirRaid($centralPoint, new Area($centralPoint, 1, 1))
+        $game->sendAirRaid($centralPoint, new Area(1, 1))
     );
 
     $centralPoint = new Coordinate(9, 5);
@@ -66,7 +71,38 @@ it('pozwala przeprowadzić nalot na wybrany obszar przy narożnikach', function 
             ['x' => 9, 'y' => 5, 'result' => 'miss',],
             ['x' => 9, 'y' => 6, 'result' => 'miss',],
         ],
-        $game->sendAirRaid($centralPoint, new Area($centralPoint, 1, 1))
+        $game->sendAirRaid($centralPoint, new Area(1, 1))
+    );
+});
+
+it('obejmuje pole (0,0) przy nalocie w sam róg planszy', function () {
+    $game = Game::create(new FunRuleset(new BoardSize(10, 10)));
+    $game->placeFleet(FleetFactory::classic10x10());
+
+    self::assertSame(
+        [
+            ['x' => 0, 'y' => 0, 'result' => 'hit',],
+            ['x' => 0, 'y' => 1, 'result' => 'miss',],
+            ['x' => 1, 'y' => 0, 'result' => 'hit',],
+            ['x' => 1, 'y' => 1, 'result' => 'miss',],
+        ],
+        $game->sendAirRaid(new Coordinate(0, 0), new Area(1, 1))
+    );
+});
+
+it('mapuje width na oś x, a height na oś y', function () {
+    $game = Game::create(new FunRuleset(new BoardSize(10, 10)));
+    $game->placeFleet(FleetFactory::classic10x10());
+
+    // height=1 rozciąga obszar w osi y: kolumna x=5, y od 4 do 6.
+    // (5,4) to część dwumasztowca (5,4)-(6,4) → hit; przy zamienionych osiach byłyby same pudła.
+    self::assertSame(
+        [
+            ['x' => 5, 'y' => 4, 'result' => 'hit',],
+            ['x' => 5, 'y' => 5, 'result' => 'miss',],
+            ['x' => 5, 'y' => 6, 'result' => 'miss',],
+        ],
+        $game->sendAirRaid(new Coordinate(5, 5), new Area(0, 1))
     );
 });
 
@@ -74,5 +110,18 @@ it('nie pozwala na zbyt duży nalot', function () {
     $game = Game::create(new FunRuleset(new BoardSize(10, 10)));
     $game->placeFleet(FleetFactory::classic10x10()); // ← najważniejsze: pełna, poprawna flota
     $centralPoint = new Coordinate(5, 5);
-    $game->sendAirRaid($centralPoint, new Area($centralPoint, 3, 3));
+    $game->sendAirRaid($centralPoint, new Area(3, 3));
 })->throws(DomainException::class);
+
+it('nie pozwala na zbyt duży nalot także przy krawędzi (przycięcie nie maskuje rozmiaru)', function () {
+    $game = Game::create(new FunRuleset(new BoardSize(10, 10)));
+    $game->placeFleet(FleetFactory::classic10x10());
+    // żądany obszar 5x5 > limit 3x3, mimo że po przycięciu do planszy byłby mały
+    $game->sendAirRaid(new Coordinate(0, 0), new Area(2, 2));
+})->throws(DomainException::class, 'Air Raid area is oversize');
+
+it('odrzuca start nalotu poza planszą', function () {
+    $game = Game::create(new FunRuleset(new BoardSize(10, 10)));
+    $game->placeFleet(FleetFactory::classic10x10());
+    $game->sendAirRaid(new Coordinate(10, 5), new Area(1, 1));
+})->throws(DomainException::class, 'Air Raid start outside board');

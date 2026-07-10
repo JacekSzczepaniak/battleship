@@ -8,7 +8,12 @@ final class BoardReadModelAdapter implements BoardReadModel
     {
     }
 
-    public function size(): int
+    public function width(): int
+    {
+        return $this->board->size();
+    }
+
+    public function height(): int
     {
         return $this->board->size();
     }

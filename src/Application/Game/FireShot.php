@@ -2,6 +2,7 @@
 
 namespace App\Application\Game;
 
+use App\Domain\Game\AI\HuntTargetAI;
 use App\Domain\Game\Coordinate;
 use App\Domain\Game\GameRepository;
 use App\Domain\Shared\GameId;
@@ -51,15 +52,17 @@ final class FireShot
 
         $opponentMoves = [];
 
-        // Mock przeciwnika (AI v1): 1 strzał synchronicznie, tylko gdy gra nie skończona
+        // Przeciwnik (HuntTargetAI): 1 strzał synchronicznie, tylko gdy gra nie skończona
         if (!$finished) {
-            // wybór celu według logiki AI (hunt/target)
-            $target = $game->chooseOpponentTarget();
+            $ai = HuntTargetAI::fromSnapshot($game->aiState());
+            $target = $ai->nextShot($game->opponentShotsView());
             $oppResult = $game->fireOpponentShot($target);
-            $opponentMoves[] = ['x' => $target->x, 'y' => $target->y, 'result' => $oppResult];
+            $ai->notify($target, $oppResult);
+            $game->setAiState($ai->toSnapshot());
+            $opponentMoves[] = ['x' => $target->x, 'y' => $target->y, 'result' => $oppResult->value];
 
             // Re-ewaluacja zakończenia po ruchu przeciwnika
-            $finished = $finished || 'lost' === $game->status()->value;
+            $finished = 'lost' === $game->status()->value;
             $win = 'won' === $game->status()->value;
             $loss = 'lost' === $game->status()->value;
         }

@@ -75,8 +75,8 @@ final class GameSnapshotMapper
                 : [],
             // opponent fleet snapshot – optional
             'opponentFleet' => $opponentFleet,
-            // AI state (heurystyka v1) – opcjonalnie
-            'ai' => method_exists($game, 'aiStateToArray') ? $game->aiStateToArray() : null,
+            // Stan AI przeciwnika (kształt zna HuntTargetAI) – opcjonalnie
+            'ai' => [] !== $game->aiState() ? $game->aiState() : null,
             // Iteration 1 meta
             'mode' => $game->mode(),
             'opponent' => $game->opponent(),
@@ -234,9 +234,9 @@ final class GameSnapshotMapper
             }
         }
 
-        // AI state from snapshot (optional)
-        if (!empty($state['ai']) && is_array($state['ai']) && method_exists($game, 'setAiStateFromSnapshot')) {
-            $game->setAiStateFromSnapshot($state['ai']);
+        // AI state from snapshot (optional; stary kształt zostanie zignorowany przez HuntTargetAI::fromSnapshot)
+        if (!empty($state['ai']) && is_array($state['ai'])) {
+            $game->setAiState($state['ai']);
         }
 
         return $game;

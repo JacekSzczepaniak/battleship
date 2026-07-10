@@ -36,8 +36,7 @@ final class PlaceFleet
         $game->placeFleet($ships);
 
         // Po rozstawieniu floty gracza – wygeneruj flotę przeciwnika
-//        $env = (string) ($_ENV['APP_ENV'] ?? $_SERVER['APP_ENV'] ?? 'dev');
-        $env = 'dev';
+        $env = (string) ($_ENV['APP_ENV'] ?? $_SERVER['APP_ENV'] ?? 'dev');
         $boardSize = $game->ruleset()->boardSize();
         $opponent = [];
         if ($env === 'test') {

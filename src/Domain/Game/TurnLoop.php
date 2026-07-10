@@ -18,9 +18,9 @@ final class TurnLoop
         $p1View = new BoardReadModelAdapter($this->player2Board);
         $p2View = new BoardReadModelAdapter($this->player1Board);
 
-        // globalny bezpiecznik – nie więcej niż 4 * N^2 strzałów w całej partii
-        $N = max($p1View->size(), $p2View->size());
-        $maxOverallShots = max(1, 4 * $N * $N);
+        // globalny bezpiecznik – nie więcej niż 4 * pola planszy strzałów w całej partii
+        $cells = max($p1View->width() * $p1View->height(), $p2View->width() * $p2View->height());
+        $maxOverallShots = max(1, 4 * $cells);
         $overall = 0;
 
         $turn = 1;
@@ -28,7 +28,7 @@ final class TurnLoop
             if ($turn === 1) {
                 // Tura gracza 1 – strzela dopóki trafia (Hit/Sunk)
                 $shotsThisTurn = 0;
-                $maxThisTurn = $p1View->size() * $p1View->size(); // bezpiecznik tury
+                $maxThisTurn = $p1View->width() * $p1View->height(); // bezpiecznik tury
                 do {
                     $c = $this->player1->nextShot($p1View);
                     $res = $this->player2Board->shoot($c);
@@ -50,10 +50,9 @@ final class TurnLoop
 
                 $turn = 2;
             } else {
-                // ... existing code ...
                 // Tura gracza 2 – strzela dopóki trafia (Hit/Sunk)
                 $shotsThisTurn = 0;
-                $maxThisTurn = $p2View->size() * $p2View->size(); // bezpiecznik tury
+                $maxThisTurn = $p2View->width() * $p2View->height(); // bezpiecznik tury
                 do {
                     $c = $this->player2->nextShot($p2View);
                     $res = $this->player1Board->shoot($c);

@@ -10,13 +10,14 @@ final class RandomShooter implements Shooter
     public function nextShot(BoardReadModel $board): Coordinate
     {
         do {
-            $x = random_int(0, $board->size() - 1);
-            $y = random_int(0, $board->size() - 1);
+            $x = random_int(0, $board->width() - 1);
+            $y = random_int(0, $board->height() - 1);
             $c = new Coordinate($x, $y);
-            $k = $x . ':' . $y;
+            $k = $x.':'.$y;
         } while (($this->tried[$k] ?? false) || $board->wasTried($c));
 
         $this->tried[$k] = true;
+
         return $c;
     }
 

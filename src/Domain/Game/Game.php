@@ -35,13 +35,12 @@ final class Game
     /** @var array<string,bool> */
     private array $opponentHits = [];
 
-    // AI (heurystyka v1)
-    private string $aiMode = 'hunt'; // 'hunt' | 'target'
-    /** @var array<int, array{x:int,y:int}> */
-    private array $aiHitsStreak = [];
-    private ?string $aiDirection = null; // 'h' | 'v' | null
-    /** @var array<int, array{x:int,y:int}> */
-    private array $aiQueue = [];
+    /**
+     * Nieprzezroczysty stan AI przeciwnika (kształt zna wyłącznie implementacja AI).
+     * Game tylko przechowuje go między requestami na potrzeby snapshotu.
+     * @var array<string,mixed>
+     */
+    private array $aiState = [];
 
     public function __construct(
         private GameId $id,
@@ -269,10 +268,10 @@ final class Game
     }
 
     /**
-     * Wykonuje strzał przeciwnika na planszy gracza i zwraca wynik jako string: hit|miss|sunk|duplicate.
+     * Wykonuje strzał przeciwnika na planszy gracza i zwraca wynik.
      * Gdy wszystkie komórki floty gracza trafione przez przeciwnika – ustawia status Lost.
      */
-    public function fireOpponentShot(Coordinate $c): string
+    public function fireOpponentShot(Coordinate $c): ShotResult
     {
         if (null === $this->board) {
             throw new \DomainException('Fleet not placed');
@@ -280,7 +279,7 @@ final class Game
 
         $key = $c->x.':'.$c->y;
         if (isset($this->opponentShots[$key])) {
-            return 'duplicate';
+            return ShotResult::Duplicate;
         }
         $this->opponentShots[$key] = true;
 
@@ -296,7 +295,7 @@ final class Game
         }
 
         if (null === $hitShip) {
-            return 'miss';
+            return ShotResult::Miss;
         }
 
         // czy zatopiony ten statek (przez przeciwnika)
@@ -322,173 +321,30 @@ final class Game
             $this->status = GameStatus::Lost;
         }
 
-        $result = $sunk ? 'sunk' : 'hit';
-
-        // Aktualizacja stanu AI
-        $this->onAiAfterShot($c, $result);
-
-        return $result;
+        return $sunk ? ShotResult::Sunk : ShotResult::Hit;
     }
 
-    /** Wybiera następny cel przeciwnika wg heurystyki (hunt/target). */
-    public function chooseOpponentTarget(): Coordinate
+    /**
+     * Widok planszy gracza z perspektywy AI przeciwnika: rozmiar + pola już ostrzelane.
+     * Nie odsłania pozycji statków.
+     */
+    public function opponentShotsView(): BoardReadModel
     {
         $size = $this->ruleset->boardSize();
 
-        // TARGET: korzystaj z kolejki kandydatów (czyszcząc z nieprawidłowych pozycji)
-        if ($this->aiMode === 'target') {
-            while (!empty($this->aiQueue)) {
-                $cand = array_shift($this->aiQueue);
-                if ($cand === null) break;
-                if ($this->isWithin($cand['x'], $cand['y'], $size->width, $size->height) && !$this->isOpponentShotTaken($cand['x'], $cand['y'])) {
-                    return new Coordinate($cand['x'], $cand['y']);
-                }
-            }
-            // jeśli kolejka pusta → wróć do hunt
-            $this->aiMode = 'hunt';
-            $this->aiDirection = null;
-            $this->aiHitsStreak = [];
-        }
-
-        // HUNT: checkerboard (najpierw jedno „kolorowisko”), potem drugie
-        $phases = [0, 1];
-        foreach ($phases as $phase) {
-            for ($yy = 0; $yy < $size->height; ++$yy) {
-                for ($xx = 0; $xx < $size->width; ++$xx) {
-                    if ((($xx + $yy) & 1) !== $phase) {
-                        continue; // najpierw pola o (x+y)%2 === phase
-                    }
-                    if (!$this->isOpponentShotTaken($xx, $yy)) {
-                        return new Coordinate($xx, $yy);
-                    }
-                }
-            }
-        }
-
-        // awaryjnie (wszystko ostrzelane) – zwróć 0,0
-        return new Coordinate(0, 0);
+        return new ShotsTakenView($size->width, $size->height, $this->opponentShots);
     }
 
-    /** Ustawia stan AI ze snapshotu. */
-    public function setAiStateFromSnapshot(array $state): void
+    /** @return array<string,mixed> */
+    public function aiState(): array
     {
-        $mode = $state['mode'] ?? 'hunt';
-        $direction = $state['direction'] ?? null;
-        $hits = $state['hitsStreak'] ?? [];
-        $queue = $state['queue'] ?? [];
-
-        $this->aiMode = in_array($mode, ['hunt','target'], true) ? $mode : 'hunt';
-        $this->aiDirection = in_array($direction, ['h','v'], true) ? $direction : null;
-        $this->aiHitsStreak = [];
-        foreach ($hits as $h) {
-            if (isset($h['x'], $h['y'])) $this->aiHitsStreak[] = ['x' => (int)$h['x'], 'y' => (int)$h['y']];
-        }
-        $this->aiQueue = [];
-        foreach ($queue as $q) {
-            if (isset($q['x'], $q['y'])) $this->aiQueue[] = ['x' => (int)$q['x'], 'y' => (int)$q['y']];
-        }
+        return $this->aiState;
     }
 
-    /** Zwraca stan AI do snapshotu. */
-    public function aiStateToArray(): array
+    /** @param array<string,mixed> $state */
+    public function setAiState(array $state): void
     {
-        return [
-            'mode' => $this->aiMode,
-            'direction' => $this->aiDirection,
-            'hitsStreak' => $this->aiHitsStreak,
-            'queue' => $this->aiQueue,
-        ];
-    }
-
-    private function isOpponentShotTaken(int $x, int $y): bool
-    {
-        return isset($this->opponentShots[$x.':'.$y]);
-    }
-
-    private function isWithin(int $x, int $y, int $w, int $h): bool
-    {
-        return $x >= 0 && $y >= 0 && $x < $w && $y < $h;
-    }
-
-    /** Aktualizuje stan AI po wyniku strzału przeciwnika. */
-    private function onAiAfterShot(Coordinate $c, string $result): void
-    {
-        $size = $this->ruleset->boardSize();
-
-        if ($result === 'miss' || $result === 'duplicate') {
-            // przy pudle: zostaw tryb; kolejka oczyści się w chooseOpponentTarget()
-            return;
-        }
-
-        if ($result === 'sunk') {
-            // reset po zatopieniu
-            $this->aiMode = 'hunt';
-            $this->aiDirection = null;
-            $this->aiHitsStreak = [];
-            $this->aiQueue = [];
-            return;
-        }
-
-        // HIT: przechodzimy do target i dokładamy kandydatów
-        $this->aiMode = 'target';
-        $this->aiHitsStreak[] = ['x' => $c->x, 'y' => $c->y];
-
-        // ustal kierunek, jeśli mamy co najmniej dwa trafienia w linii
-        if (count($this->aiHitsStreak) >= 2 && $this->aiDirection === null) {
-            $n = count($this->aiHitsStreak);
-            $a = $this->aiHitsStreak[$n-2];
-            $b = $this->aiHitsStreak[$n-1];
-            if ($a['y'] === $b['y']) $this->aiDirection = 'h';
-            elseif ($a['x'] === $b['x']) $this->aiDirection = 'v';
-        }
-
-        // dodaj kandydatów
-        if ($this->aiDirection === null) {
-            // brak kierunku: sąsiedzi N,E,S,W bieżącego trafienia
-            $neigh = [
-                ['x'=>$c->x, 'y'=>$c->y-1], // N
-                ['x'=>$c->x+1, 'y'=>$c->y], // E
-                ['x'=>$c->x, 'y'=>$c->y+1], // S
-                ['x'=>$c->x-1, 'y'=>$c->y], // W
-            ];
-            foreach ($neigh as $p) {
-                if ($this->isWithin($p['x'],$p['y'],$size->width,$size->height) && !$this->isOpponentShotTaken($p['x'],$p['y'])) {
-                    $this->enqueueIfNew($p['x'], $p['y']);
-                }
-            }
-        } else {
-            // mamy kierunek: spróbuj rozszerzyć w obu kierunkach wzdłuż linii trafień
-            $xs = array_column($this->aiHitsStreak, 'x');
-            $ys = array_column($this->aiHitsStreak, 'y');
-            if ($this->aiDirection === 'h') {
-                $y = end($ys);
-                $minX = min($xs); $maxX = max($xs);
-                $cands = [ ['x'=>$minX-1,'y'=>$y], ['x'=>$maxX+1,'y'=>$y] ];
-                foreach ($cands as $p) {
-                    if ($this->isWithin($p['x'],$p['y'],$size->width,$size->height) && !$this->isOpponentShotTaken($p['x'],$p['y'])) {
-                        $this->enqueueIfNew($p['x'], $p['y']);
-                    }
-                }
-            } else { // 'v'
-                $x = end($xs);
-                $minY = min($ys); $maxY = max($ys);
-                $cands = [ ['x'=>$x,'y'=>$minY-1], ['x'=>$x,'y'=>$maxY+1] ];
-                foreach ($cands as $p) {
-                    if ($this->isWithin($p['x'],$p['y'],$size->width,$size->height) && !$this->isOpponentShotTaken($p['x'],$p['y'])) {
-                        $this->enqueueIfNew($p['x'], $p['y']);
-                    }
-                }
-            }
-        }
-    }
-
-    private function enqueueIfNew(int $x, int $y): void
-    {
-        $key = $x.':'.$y;
-        foreach ($this->aiQueue as $q) {
-            if ($q['x'].':'.$q['y'] === $key) return;
-        }
-        $this->aiQueue[] = ['x'=>$x,'y'=>$y];
+        $this->aiState = $state;
     }
 
     /** @return list<string> keys 'x:y' of cells occupied by the ship */
@@ -701,7 +557,6 @@ final class Game
         return $results;
     }
 
-    // ... existing code ...
     /**
      * Sonar ping: reveals occupancy info for the center and up to $radius cells
      * in each cardinal direction (cross shape). It does not modify shots/hits.

@@ -19,3 +19,11 @@ services:
     # Infrastructure bindings
 #    App\Application\Ports\GameRepository: '@App\Infrastructure\Persistence\Doctrine\DoctrineGameRepository'
     App\Domain\Game\GameRepository: '@App\Infrastructure\Persistence\Doctrine\DoctrineGameRepository'
+
+    # Domain ports
+    App\Domain\Game\FleetGenerator: '@App\Domain\Game\RandomFleetGenerator'
+
+# Testy funkcjonalne wymagają przewidywalnej floty przeciwnika
+when@test:
+    services:
+        App\Domain\Game\FleetGenerator: '@App\Domain\Game\DeterministicFleetGenerator'

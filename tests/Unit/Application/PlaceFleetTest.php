@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Application\Game\CreateGame;
 use App\Application\Game\PlaceFleet;
+use App\Domain\Game\DeterministicFleetGenerator;
 use App\Infrastructure\Persistence\InMemory\InMemoryGameRepository;
 
 it('PlaceFleet zapisuje poprawnie rozstawioną flotę', function () {
@@ -11,7 +12,7 @@ it('PlaceFleet zapisuje poprawnie rozstawioną flotę', function () {
     $create = new CreateGame($repo);
     $game = $create->handle(12, 10);
 
-    $handler = new PlaceFleet($repo);
+    $handler = new PlaceFleet($repo, new DeterministicFleetGenerator());
     $ships = [
         ['x' => 0, 'y' => 0, 'o' => 'H', 'l' => 4],
         ['x' => 0, 'y' => 2, 'o' => 'H', 'l' => 3],
@@ -30,4 +31,6 @@ it('PlaceFleet zapisuje poprawnie rozstawioną flotę', function () {
     $reloaded = $repo->get($game->id());
     expect($reloaded)->not->toBeNull();
     expect($reloaded->fleet())->not->toBeNull();
+    // flota przeciwnika generowana automatycznie po rozstawieniu floty gracza
+    expect($reloaded->opponentFleet())->not->toBeNull();
 });

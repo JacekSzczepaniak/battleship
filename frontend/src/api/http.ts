@@ -12,8 +12,6 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const url = `${BASE_URL}${path}`;
-    // Logi diagnostyczne do konsoli przeglądarki
-    try { console.log('[http] →', init?.method ?? 'GET', url, { init }); } catch {}
 
     const res = await fetch(url, {
         headers: { 'Content-Type': 'application/json' },
@@ -36,7 +34,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         throw new ApiError(message, res.status, data);
     }
 
-    try { console.log('[http] ←', res.status, url, { data }); } catch {}
     return data as T;
 }
 

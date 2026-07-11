@@ -1,6 +1,6 @@
 <!-- GameBoard.vue -->
 <script setup lang="ts">
-import {watch, computed, isRef, unref} from 'vue'
+import {computed, isRef, unref} from 'vue'
 
 const props = defineProps<{
     // Dopuszczamy, że przyjdzie Ref<CellState[][]> lub zwykła tablica
@@ -25,15 +25,6 @@ function handleClick(x: number, y: number) {
         props.onCellClick(x, y);
     }
 }
-
-// Debug: loguj kształt siatki przy każdej zmianie
-watch(() => [normalizedGrid.value, normalizedDisabled.value], ([g, d]) => {
-    try {
-        // eslint-disable-next-line no-console
-        console.debug('[GameBoard] grid rows:', g?.length ?? 0, 'row lens:', Array.isArray(g) ? g.map(r => Array.isArray(r) ? r.length : -1) : [], 'disabled:', d);
-    } catch (_) { /* ignore */
-    }
-}, {deep: true, immediate: true})
 </script>
 
 <template>

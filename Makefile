@@ -42,8 +42,8 @@ pkg-dev: ## Doinstaluj pakiety deweloperskie (phpunit, pest, phpstan, cs-fixer, 
 migrate: ## Wykonaj migracje w env=dev
 	docker compose exec app php bin/console doctrine:migrations:migrate --no-interaction
 
-stan: ## Uruchom PHPStan (toleruj błędy wyjścia)
-	docker compose exec app ./vendor/bin/phpstan analyze || true
+stan: ## Uruchom PHPStan (konfiguracja w phpstan.neon)
+	docker compose exec app ./vendor/bin/phpstan analyze
 
 cs-fix: ## Uruchom PHP-CS-Fixer (bez cache, toleruj błędy)
 	docker compose exec app ./vendor/bin/php-cs-fixer fix --using-cache=no || true

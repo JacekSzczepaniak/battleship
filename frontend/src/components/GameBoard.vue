@@ -8,6 +8,8 @@ const props = defineProps<{
     // Dopuszczamy boolean lub Ref<boolean>
     disabled?: unknown;
     onCellClick?: (x: number, y: number) => void;
+    onCellHover?: (x: number, y: number) => void;
+    onBoardLeave?: () => void;
 }>();
 
 // Przyjmujemy dowolne klasy komórek (np. 'ship', 'hit', 'miss', 'opp-hit', 'opp-miss')
@@ -29,7 +31,8 @@ function handleClick(x: number, y: number) {
 
 <template>
     <div class="grid" :class="{ disabled: normalizedDisabled }"
-         :style="{ gridTemplateRows: `repeat(${normalizedGrid?.length || 0}, 30px)` }">
+         :style="{ gridTemplateRows: `repeat(${normalizedGrid?.length || 0}, 30px)` }"
+         @mouseleave="props.onBoardLeave?.()">
         <div
             v-for="(row, y) in normalizedGrid"
             :key="y"
@@ -43,6 +46,7 @@ function handleClick(x: number, y: number) {
                 :class="cell"
                 :title="typeof cell === 'string' && (cell.includes('opp-hit') || cell.includes('opp-miss')) ? (cell.includes('opp-hit') ? 'Trafienie przeciwnika' : 'Pudło przeciwnika') : ''"
                 @click="handleClick(x, y)"
+                @mouseenter="props.onCellHover?.(x, y)"
             />
         </div>
     </div>
@@ -169,21 +173,24 @@ function handleClick(x: number, y: number) {
 }
 
 /* ===================== */
-/* ZATOPIENIE (opcjonalnie) */
+/* ZATOPIENIE            */
 /* ===================== */
 
+/* Ciemna czerwień + jasny krzyżyk — jednoznacznie różne od trafienia (czerwień)
+   i od szarego statku na planszy gracza */
 .cell.sink {
-    animation: sinkPulse 600ms ease-out infinite alternate;
-    background: #6b7280; /* ciemniejszy szary */
+    background-color: #7f1d1d;
+    background-image:
+        linear-gradient(45deg, transparent 42%, #fecaca 42%, #fecaca 58%, transparent 58%),
+        linear-gradient(-45deg, transparent 42%, #fecaca 42%, #fecaca 58%, transparent 58%);
 }
 
-@keyframes sinkPulse {
-    0% {
-        filter: brightness(100%);
-    }
-    100% {
-        filter: brightness(70%);
-    }
+/* ===================== */
+/* PODGLĄD ZASIĘGU BRONI */
+/* ===================== */
+
+.cell.preview {
+    box-shadow: inset 0 0 0 3px rgba(31, 111, 235, 0.55);
 }
 
 </style>

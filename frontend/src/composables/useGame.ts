@@ -117,6 +117,8 @@ export function useGame() {
             && status.value !== 'won' && status.value !== 'lost';
     }
 
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
     async function start() {
         loading.value = true;
         error.value = '';
@@ -197,6 +199,15 @@ export function useGame() {
         try {
             shooting.value = true;
             const res = await fireTorpedo(gameId.value, x, y, torpedoDirection.value);
+            // animacja przejścia: odsłaniaj tor komórka po komórce
+            for (const cell of res.results) {
+                if (cell.result !== 'duplicate' && enemyFogGrid.value[cell.y]?.[cell.x] !== undefined) {
+                    enemyFogGrid.value[cell.y][cell.x] = cell.result === 'miss' ? 'miss' : 'hit';
+                }
+                lastShot.value = { x: cell.x, y: cell.y, result: cell.result };
+                await sleep(90);
+            }
+            lastShot.value = null;
             applyTurnOutcome(res);
             await refresh();
         } catch (e: any) {
@@ -212,10 +223,21 @@ export function useGame() {
         try {
             shooting.value = true;
             const res = await sonarPing(gameId.value, x, y);
-            // dopisz skan (nadpisując wcześniejsze wpisy dla tych samych pól)
+            // animacja: odsłaniaj skan od środka na zewnątrz
+            const ordered = [...res.results].sort(
+                (a, b) => (Math.abs(a.x - x) + Math.abs(a.y - y)) - (Math.abs(b.x - x) + Math.abs(b.y - y))
+            );
             const merged = new Map(sonarMarks.value.map(c => [`${c.x}:${c.y}`, c]));
-            for (const c of res.results) merged.set(`${c.x}:${c.y}`, c);
-            sonarMarks.value = [...merged.values()];
+            let lastDistance = -1;
+            for (const c of ordered) {
+                const distance = Math.abs(c.x - x) + Math.abs(c.y - y);
+                if (distance !== lastDistance) {
+                    await sleep(140);
+                    lastDistance = distance;
+                }
+                merged.set(`${c.x}:${c.y}`, c);
+                sonarMarks.value = [...merged.values()];
+            }
             await refresh(); // licznik użyć
         } catch (e: any) {
             showToast(e?.message ?? 'Sonar nie zadziałał', 'warn', 2500);
@@ -277,7 +299,7 @@ export function useGame() {
     }
 
     return {
-        gameId, size, playerGrid, playerUnderFireOverlay, enemyFogGrid, turn, status, finished,
+        gameId, size, width, height, playerGrid, playerUnderFireOverlay, enemyFogGrid, turn, status, finished,
         loading, error, start, refresh, shot, attack, disabled,
         // tryb fun
         ruleset, weapons, weaponMode, torpedoDirection, sonarMarks,

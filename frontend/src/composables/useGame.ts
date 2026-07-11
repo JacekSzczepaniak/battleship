@@ -2,15 +2,19 @@ import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { getGame, fireShot, type GameViewDTO, type ShotResultDTO } from '../api/gameApi.ts';
 
+export type PlayerCell = 'empty'|'ship'|'hit'|'miss';
+export type EnemyCell = 'empty'|'hit'|'miss';
+export type OverlayCell = 'none'|'opp-hit'|'opp-miss';
+
 export function useGame() {
     const route = useRoute();
     const gameId = ref<string>(String(route.params.id ?? ''));
     const width = ref<number>(10);
     const height = ref<number>(10);
-    const playerGrid = ref<Array<Array<'empty'|'ship'|'hit'|'miss'>>>([]);
+    const playerGrid = ref<PlayerCell[][]>([]);
     // Overlay trafień/pudeł przeciwnika na planszy gracza
-    const playerUnderFireOverlay = ref<Array<Array<'none'|'opp-hit'|'opp-miss'>>>([]);
-    const enemyFogGrid = ref<Array<Array<'empty'|'hit'|'miss'>>>([]);
+    const playerUnderFireOverlay = ref<OverlayCell[][]>([]);
+    const enemyFogGrid = ref<EnemyCell[][]>([]);
     const turn = ref<GameViewDTO['turn']>('player');
     const status = ref<GameViewDTO['status']>('pending');
     const finished = ref<boolean>(false);
@@ -25,7 +29,7 @@ export function useGame() {
     const sunkCells = ref<Array<[number, number]>>([]);
 
 
-    function buildEmptyGrid(w: number, h: number, fill: 'empty'|'miss'|'hit'|'ship' = 'empty') {
+    function buildEmptyGrid<T extends string>(w: number, h: number, fill: T): T[][] {
         return Array.from({ length: h }, () => Array.from({ length: w }, () => fill));
     }
 
@@ -33,7 +37,7 @@ export function useGame() {
         width.value = dto.board.w;
         height.value = dto.board.h;
         // player grid with ships
-        const pg = buildEmptyGrid(dto.board.w, dto.board.h, 'empty');
+        const pg = buildEmptyGrid<PlayerCell>(dto.board.w, dto.board.h, 'empty');
         for (const s of dto.playerFleet) {
             const o = (s.o as unknown as string).toLowerCase() as 'h'|'v';
             for (let i = 0; i < s.l; i++) {
@@ -45,7 +49,7 @@ export function useGame() {
         playerGrid.value = pg;
 
         // overlay trafień/pudeł przeciwnika na planszy gracza
-        const ov = Array.from({ length: dto.board.h }, () => Array.from({ length: dto.board.w }, () => 'none' as 'none'|'opp-hit'|'opp-miss'));
+        const ov = buildEmptyGrid<OverlayCell>(dto.board.w, dto.board.h, 'none');
         if (dto.playerUnderFireGrid) {
             for (const [x,y] of dto.playerUnderFireGrid.hits) {
                 if (ov[y] && typeof ov[y][x] !== 'undefined') ov[y][x] = 'opp-hit';
@@ -57,7 +61,7 @@ export function useGame() {
         playerUnderFireOverlay.value = ov;
 
         // enemy fog grid from hits/misses/sunk
-        const eg = buildEmptyGrid(dto.board.w, dto.board.h, 'empty');
+        const eg = buildEmptyGrid<EnemyCell>(dto.board.w, dto.board.h, 'empty');
         const sunk: Array<[number, number]> = [];
 
         for (const [x, y] of dto.enemyFogGrid.hits) {

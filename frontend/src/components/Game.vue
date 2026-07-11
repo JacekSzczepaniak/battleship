@@ -9,6 +9,7 @@ import { useRouter } from 'vue-router'
 const {
     status, finished, turn, loading, error, disabled, attack, width, height,
     ruleset, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells,
+    noteMarks, toggleNote,
     shotsCount, hitsCount, missesCount, duplicatesCount, opponentHitsCount,
     toast, toastType,
     playerGrid, playerUnderFireOverlay, enemyFogGrid, lastShot, sunkCells,
@@ -104,6 +105,11 @@ const enemyAnimatedGrid = computed<string[][]>(() => {
             classes += sonar.get(`${x}:${y}`) ? ' sonar-ship' : ' sonar-water';
         }
 
+        // Notatka gracza „tu pusto" (tylko nieostrzelane pola)
+        if (cell === 'empty' && noteMarks.value.has(`${x}:${y}`)) {
+            classes += ' note';
+        }
+
         // Podgląd zasięgu broni pod kursorem
         if (previewCells.value.has(`${x}:${y}`)) {
             classes += ' preview';
@@ -187,7 +193,8 @@ function newGame() {
             <GameGameBoard :grid="enemyAnimatedGrid" :disabled="disabled"
                            :onCellClick="weaponMode === 'torpedo' ? undefined : handleShot"
                            :onCellHover="weaponMode === 'torpedo' ? undefined : handleHover"
-                           :onBoardLeave="handleBoardLeave" />
+                           :onBoardLeave="handleBoardLeave"
+                           :onCellRightClick="toggleNote" />
 
             <!-- Panel broni specjalnych (tylko tryb fun) -->
             <div v-if="ruleset === 'fun' && weapons" class="weapons">
@@ -251,6 +258,7 @@ function newGame() {
                     <span class="item"><span class="box miss"></span> Pudło</span>
                     <span class="item"><span class="box opp-hit"></span> Trafienie przeciwnika</span>
                     <span class="item"><span class="box opp-miss"></span> Pudło przeciwnika</span>
+                    <span class="item"><span class="box note"></span> Notatka „pusto" (PPM)</span>
                     <template v-if="ruleset === 'fun'">
                         <span class="item"><span class="box sonar-ship"></span> Sonar: statek</span>
                         <span class="item"><span class="box sonar-water"></span> Sonar: woda</span>
@@ -295,6 +303,7 @@ function newGame() {
 .legend .box.opp-miss { background: transparent; border-color:#0c4a6e; box-shadow: inset 0 0 0 2px #0c4a6e; }
 .legend .box.sonar-ship { background: #fef3c7; border-color:#d97706; box-shadow: inset 0 0 0 2px #d97706; }
 .legend .box.sonar-water { background: #f0f9ff; border-color:#7dd3fc; }
+.legend .box.note { background-image: repeating-linear-gradient(45deg, rgba(100,116,139,.45) 0 2px, transparent 2px 5px); }
 .weapons { display:flex; gap:.4rem; margin-top:.6rem; flex-wrap:wrap; }
 .wbtn { padding:.3rem .6rem; border:1px solid #cbd5e1; border-radius:6px; background:#f8fafc; cursor:pointer; }
 .wbtn.active { background:#1f6feb; color:#fff; border-color:#1f6feb; }

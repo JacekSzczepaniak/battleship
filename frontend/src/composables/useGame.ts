@@ -44,6 +44,22 @@ export function useGame() {
     const sonarMarks = ref<SonarCell[]>([]);
     // Flota gracza (do wyznaczania wyrzutni torped)
     const playerFleet = ref<PlayerFleetItem[]>([]);
+    // Notatki gracza a'la saper: „tu nic nie może być" — szkic po stronie klienta,
+    // nie kosztuje tury, klucze "x:y"
+    const noteMarks = ref<Set<string>>(new Set());
+
+    function toggleNote(x: number, y: number) {
+        // notatka ma sens tylko na nieostrzelanym polu
+        if (enemyFogGrid.value[y]?.[x] !== 'empty') return;
+        const key = `${x}:${y}`;
+        const next = new Set(noteMarks.value);
+        if (next.has(key)) {
+            next.delete(key);
+        } else {
+            next.add(key);
+        }
+        noteMarks.value = next;
+    }
 
 
     function buildEmptyGrid<T extends string>(w: number, h: number, fill: T): T[][] {
@@ -336,6 +352,8 @@ export function useGame() {
         loading, error, start, refresh, shot, attack, disabled,
         // tryb fun
         ruleset, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells,
+        // notatki (saper-style)
+        noteMarks, toggleNote,
         // stats
         shotsCount, hitsCount, missesCount, duplicatesCount, opponentHitsCount,
         // toast

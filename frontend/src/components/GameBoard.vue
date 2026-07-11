@@ -10,6 +10,7 @@ const props = defineProps<{
     onCellClick?: (x: number, y: number) => void;
     onCellHover?: (x: number, y: number) => void;
     onBoardLeave?: () => void;
+    onCellRightClick?: (x: number, y: number) => void;
 }>();
 
 // Przyjmujemy dowolne klasy komórek (np. 'ship', 'hit', 'miss', 'opp-hit', 'opp-miss')
@@ -47,6 +48,7 @@ function handleClick(x: number, y: number) {
                 :title="typeof cell === 'string' && (cell.includes('opp-hit') || cell.includes('opp-miss')) ? (cell.includes('opp-hit') ? 'Trafienie przeciwnika' : 'Pudło przeciwnika') : ''"
                 @click="handleClick(x, y)"
                 @mouseenter="props.onCellHover?.(x, y)"
+                @contextmenu.prevent="props.onCellRightClick?.(x, y)"
             />
         </div>
     </div>
@@ -197,6 +199,15 @@ function handleClick(x: number, y: number) {
 .cell.launch {
     box-shadow: inset 0 0 0 3px #16a34a;
     cursor: pointer;
+}
+
+/* Notatka gracza a'la saper: „tu nic nie może być" (PPM) */
+.cell.note {
+    background-image: repeating-linear-gradient(
+        45deg,
+        rgba(100, 116, 139, 0.45) 0 2px,
+        transparent 2px 7px
+    );
 }
 
 </style>

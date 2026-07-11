@@ -19,8 +19,10 @@ services:
     # Infrastructure bindings
 #    App\Application\Ports\GameRepository: '@App\Infrastructure\Persistence\Doctrine\DoctrineGameRepository'
     App\Domain\Game\GameRepository: '@App\Infrastructure\Persistence\Doctrine\DoctrineGameRepository'
+    App\Domain\Expedition\ProfileRepository: '@App\Infrastructure\Persistence\Doctrine\DoctrineProfileRepository'
 
     # Domain ports
+    App\Domain\Expedition\IslandCatalog: '@App\Domain\Expedition\StaticIslandCatalog'
     App\Domain\Game\FleetGenerator: '@App\Domain\Game\RandomFleetGenerator'
     App\Application\Game\WeaponUseDecider: '@App\Application\Game\RandomWeaponUseDecider'
 

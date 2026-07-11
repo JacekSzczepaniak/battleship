@@ -89,6 +89,11 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             return ['TORPEDO_LAUNCH_INVALID', 422];
         }
 
+        // Wyprawa: wyspa zamknięta rangą (komunikat niesie wymaganą rangę)
+        if (str_starts_with($message, 'Island locked')) {
+            return ['ISLAND_LOCKED', 403];
+        }
+
         return match ($message) {
             'Fleet not placed' => ['FLEET_NOT_PLACED', 422],
             'Opponent fleet not placed' => ['FLEET_NOT_PLACED', 422],
@@ -96,6 +101,10 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             'Fleet already placed' => ['VALIDATION_ERROR', 409],
             'Not player turn' => ['NOT_PLAYER_TURN', 409],
             'Game already finished' => ['GAME_ALREADY_FINISHED', 409],
+            'Profile not found' => ['PROFILE_NOT_FOUND', 404],
+            'Island not found' => ['ISLAND_NOT_FOUND', 404],
+            'Battle not registered for this profile' => ['BATTLE_NOT_REGISTERED', 404],
+            'Battle not finished yet' => ['BATTLE_NOT_FINISHED', 409],
             default => ['VALIDATION_ERROR', 400],
         };
     }

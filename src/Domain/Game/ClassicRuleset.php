@@ -2,6 +2,8 @@
 
 namespace App\Domain\Game;
 
+use App\Domain\Game\Weapon\WeaponSpecs;
+
 final class ClassicRuleset implements Ruleset
 {
     public function __construct(private BoardSize $size = new BoardSize(10, 10))
@@ -24,13 +26,8 @@ final class ClassicRuleset implements Ruleset
         return [4 => 1, 3 => 2, 2 => 3, 1 => 4];
     }
 
-    public function airRaidSize(): Area
+    public function weapons(): WeaponSpecs
     {
-        throw new \DomainException('Not accepted in classic ruleset');
-    }
-
-    public function weaponLimits(): array
-    {
-        return ['torpedo' => 0, 'sonar' => 0, 'airRaid' => 0, 'torpedoDiagonal' => 0];
+        return WeaponSpecs::none();
     }
 }

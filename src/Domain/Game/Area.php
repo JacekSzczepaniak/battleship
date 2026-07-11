@@ -4,7 +4,7 @@ namespace App\Domain\Game;
 
 /**
  * Rozmiar prostokątnego obszaru. W żądaniu nalotu width/height to pół-zasięgi
- * od punktu centralnego (0 = pojedynczy wiersz/kolumna); w Ruleset::airRaidSize()
+ * od punktu centralnego (0 = pojedynczy wiersz/kolumna); w AirRaidSpec::maxArea
  * — maksymalny pełny rozmiar obszaru w komórkach.
  */
 final class Area

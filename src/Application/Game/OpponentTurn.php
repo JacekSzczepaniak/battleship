@@ -18,7 +18,7 @@ use App\Domain\Game\ShotResult;
  *   (jak u gracza nie zużywa akcji ofensywnej),
  * - torpeda: z pozycji własnego niezatopionego statku, w linię z największą
  *   liczbą nieostrzelanych pól,
- * - nalot: w najgęstszy nieostrzelany obszar 3×3.
+ * - nalot: w najgęstszy nieostrzelany obszar (rozmiar maksymalny z rulesetu).
  * Bronie tylko w trybie hunt (przy dobijaniu zwykły strzał jest skuteczniejszy),
  * z losową częstością — AI nie może być przewidywalne.
  */
@@ -31,7 +31,7 @@ final class OpponentTurn
     /** Torpeda tylko, gdy linia ma co najmniej tyle nieostrzelanych pól. */
     private const TORPEDO_MIN_UNTRIED = 5;
 
-    /** Nalot tylko, gdy obszar 3×3 ma co najmniej tyle nieostrzelanych pól. */
+    /** Nalot tylko, gdy obszar nalotu ma co najmniej tyle nieostrzelanych pól. */
     private const AIR_RAID_MIN_UNTRIED = 6;
 
     public function __construct(private readonly WeaponUseDecider $decider = new RandomWeaponUseDecider())
@@ -81,7 +81,7 @@ final class OpponentTurn
 
         // 1) Zwiad: sonar w trybie hunt (nie zużywa akcji ofensywnej)
         if ($huntMode && $this->hasUses($weapons, 'sonar') && $this->decide(self::SONAR_CHANCE)) {
-            $center = $this->bestSonarCenter($view);
+            $center = $this->bestSonarCenter($view, $game->ruleset()->weapons()->sonar->radius);
             if (null !== $center) {
                 $detected = [];
                 foreach ($game->opponentSonarPing($center) as $cell) {
@@ -109,9 +109,10 @@ final class OpponentTurn
         }
 
         if ($huntMode && $this->hasUses($weapons, 'airRaid') && $this->decide(self::AIR_RAID_CHANCE)) {
-            $center = $this->bestAirRaidCenter($view);
+            [$halfX, $halfY] = $this->airRaidHalfExtents($game);
+            $center = $this->bestAirRaidCenter($view, $halfX, $halfY);
             if (null !== $center) {
-                $results = $game->sendOpponentAirRaid($center, new Area(1, 1));
+                $results = $game->sendOpponentAirRaid($center, new Area($halfX, $halfY));
                 $this->notifyAll($ai, $results);
 
                 return ['moves' => $results, 'torpedoLaunch' => null];
@@ -148,14 +149,14 @@ final class OpponentTurn
     }
 
     /** Środek krzyża sonaru maksymalizujący nieostrzelane pola. */
-    private function bestSonarCenter(BoardReadModel $view): ?Coordinate
+    private function bestSonarCenter(BoardReadModel $view, int $radius): ?Coordinate
     {
         $best = null;
         $bestScore = 0;
 
         for ($y = 0; $y < $view->height(); ++$y) {
             for ($x = 0; $x < $view->width(); ++$x) {
-                $score = $this->countUntried($view, $this->sonarCross($view, $x, $y));
+                $score = $this->countUntried($view, $this->sonarCross($x, $y, $radius));
                 if ($score > $bestScore) {
                     $bestScore = $score;
                     $best = new Coordinate($x, $y);
@@ -205,8 +206,8 @@ final class OpponentTurn
         return $best;
     }
 
-    /** Centrum nalotu 3×3 maksymalizujące nieostrzelane pola; null poniżej progu. */
-    private function bestAirRaidCenter(BoardReadModel $view): ?Coordinate
+    /** Centrum nalotu maksymalizujące nieostrzelane pola; null poniżej progu. */
+    private function bestAirRaidCenter(BoardReadModel $view, int $halfX, int $halfY): ?Coordinate
     {
         $best = null;
         $bestScore = self::AIR_RAID_MIN_UNTRIED - 1;
@@ -214,8 +215,8 @@ final class OpponentTurn
         for ($y = 0; $y < $view->height(); ++$y) {
             for ($x = 0; $x < $view->width(); ++$x) {
                 $cells = [];
-                for ($dx = -1; $dx <= 1; ++$dx) {
-                    for ($dy = -1; $dy <= 1; ++$dy) {
+                for ($dx = -$halfX; $dx <= $halfX; ++$dx) {
+                    for ($dy = -$halfY; $dy <= $halfY; ++$dy) {
                         $cells[] = [$x + $dx, $y + $dy];
                     }
                 }
@@ -230,11 +231,23 @@ final class OpponentTurn
         return $best;
     }
 
-    /** @return list<array{0:int,1:int}> komórki krzyża sonaru (promień 3) */
-    private function sonarCross(BoardReadModel $view, int $x, int $y): array
+    /**
+     * Pół-zasięgi maksymalnego nalotu z rulesetu (pełny rozmiar → half-extents).
+     *
+     * @return array{0:int, 1:int}
+     */
+    private function airRaidHalfExtents(Game $game): array
+    {
+        $max = $game->ruleset()->weapons()->airRaid->maxArea;
+
+        return [intdiv(max(0, $max->width - 1), 2), intdiv(max(0, $max->height - 1), 2)];
+    }
+
+    /** @return list<array{0:int,1:int}> komórki krzyża sonaru o zadanym promieniu */
+    private function sonarCross(int $x, int $y, int $radius): array
     {
         $cells = [[$x, $y]];
-        for ($i = 1; $i <= 3; ++$i) {
+        for ($i = 1; $i <= $radius; ++$i) {
             $cells[] = [$x, $y - $i];
             $cells[] = [$x + $i, $y];
             $cells[] = [$x, $y + $i];

@@ -25,6 +25,7 @@ final class ExceptionSubscriber implements EventSubscriberInterface
         // ApiException — użyj danych z wyjątku
         if ($e instanceof ApiException) {
             $event->setResponse($this->jsonError($e->getMessage(), $e->apiCode(), $e->httpStatus()));
+
             return;
         }
 
@@ -33,6 +34,7 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             $message = $e->getMessage() ?: 'Domain error';
             [$code, $status] = $this->mapDomainMessage($message);
             $event->setResponse($this->jsonError($message, $code, $status));
+
             return;
         }
 
@@ -42,14 +44,17 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             $norm = strtolower($message);
             if (str_contains($norm, 'not found')) {
                 $event->setResponse($this->jsonError('Game not found', 'GAME_NOT_FOUND', 404));
+
                 return;
             }
             if (str_contains($norm, 'invalid game id') || str_contains($norm, 'uuid')) {
                 $event->setResponse($this->jsonError('Invalid game id', 'INVALID_GAME_ID', 400));
+
                 return;
             }
 
             $event->setResponse($this->jsonError($message, 'VALIDATION_ERROR', 400));
+
             return;
         }
 

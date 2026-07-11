@@ -1,6 +1,5 @@
 <?php
 
-
 declare(strict_types=1);
 
 namespace Tests\Domain\Game\AI;
@@ -32,7 +31,7 @@ final class HuntTargetAITest extends TestCase
 
             public function wasTried(Coordinate $c): bool
             {
-                return $this->tried[$c->x . ':' . $c->y] ?? false;
+                return $this->tried[$c->x.':'.$c->y] ?? false;
             }
         };
     }
@@ -43,13 +42,13 @@ final class HuntTargetAITest extends TestCase
         $board = $this->readModel(10);
 
         $seen = [];
-        for ($i = 0; $i < 100; $i++) {
+        for ($i = 0; $i < 100; ++$i) {
             $c = $ai->nextShot($board);
             self::assertGreaterThanOrEqual(0, $c->x);
             self::assertGreaterThanOrEqual(0, $c->y);
             self::assertLessThan(10, $c->x);
             self::assertLessThan(10, $c->y);
-            $k = $c->x . ':' . $c->y;
+            $k = $c->x.':'.$c->y;
             self::assertFalse(isset($seen[$k]), "Duplicate coordinate generated: $k");
             $seen[$k] = true;
             // symulujemy MISS, żeby AI szukało dalej
@@ -71,9 +70,9 @@ final class HuntTargetAITest extends TestCase
             '3:2' => true, '1:2' => true, '2:3' => true, '2:1' => true,
         ];
         $seen = [];
-        for ($i = 0; $i < 4; $i++) {
+        for ($i = 0; $i < 4; ++$i) {
             $c = $ai->nextShot($board);
-            $k = $c->x . ':' . $c->y;
+            $k = $c->x.':'.$c->y;
             $seen[$k] = true;
             // nie powiadamiamy – chcemy wyssać kolejkę kandydatów
         }
@@ -95,9 +94,9 @@ final class HuntTargetAITest extends TestCase
         $ai->notify($second, ShotResult::Hit);
 
         $candidates = [];
-        for ($i = 0; $i < 4; $i++) {
+        for ($i = 0; $i < 4; ++$i) {
             $c = $ai->nextShot($board);
-            $candidates[$c->x . ':' . $c->y] = true;
+            $candidates[$c->x.':'.$c->y] = true;
             // nie powiadamiamy, aby przejrzeć wszystkie bieżące kandydaty
         }
 
@@ -126,7 +125,7 @@ final class HuntTargetAITest extends TestCase
         $board = $this->readModel(10);
 
         // Zbierz kilka strzałów – suma x+y powinna być parzysta (offset 0)
-        for ($i = 0; $i < 20; $i++) {
+        for ($i = 0; $i < 20; ++$i) {
             $c = $ai->nextShot($board);
             self::assertSame(0, ($c->x + $c->y) % 2, 'Expected checkerboard parity 0');
             $ai->notify($c, ShotResult::Miss);
@@ -138,7 +137,7 @@ final class HuntTargetAITest extends TestCase
         $ai = new HuntTargetAI(checkerboardMinSize: null);
         $board = $this->readModel(12, height: 10);
 
-        for ($i = 0; $i < 60; $i++) {
+        for ($i = 0; $i < 60; ++$i) {
             $c = $ai->nextShot($board);
             self::assertLessThan(12, $c->x);
             self::assertLessThan(10, $c->y);
@@ -157,9 +156,9 @@ final class HuntTargetAITest extends TestCase
 
         // Odtworzone AI powinno kontynuować dobijanie: 4 sąsiadów trafienia
         $expected = ['5:4' => true, '3:4' => true, '4:5' => true, '4:3' => true];
-        for ($i = 0; $i < 4; $i++) {
+        for ($i = 0; $i < 4; ++$i) {
             $c = $restored->nextShot($board);
-            $k = $c->x . ':' . $c->y;
+            $k = $c->x.':'.$c->y;
             self::assertArrayHasKey($k, $expected, "Unexpected candidate $k after restore");
             unset($expected[$k]);
         }
@@ -178,9 +177,9 @@ final class HuntTargetAITest extends TestCase
         $board = $this->readModel(3, $tried, height: 3);
 
         $seen = [];
-        for ($i = 0; $i < 6; $i++) { // 9 pól - 3 ostrzelane w granicach planszy = 6 wolnych
+        for ($i = 0; $i < 6; ++$i) { // 9 pól - 3 ostrzelane w granicach planszy = 6 wolnych
             $c = $ai->nextShot($board);
-            $k = $c->x . ':' . $c->y;
+            $k = $c->x.':'.$c->y;
             self::assertArrayNotHasKey($k, $tried, "AI repeated an already tried cell: $k");
             self::assertArrayNotHasKey($k, $seen, "AI repeated its own shot: $k");
             $seen[$k] = true;
@@ -197,17 +196,17 @@ final class HuntTargetAITest extends TestCase
         $ai->notify(new Coordinate(0, 0), ShotResult::Hit);
 
         $allowed = ['1:0' => true, '0:1' => true];
-        for ($i = 0; $i < 2; $i++) {
+        for ($i = 0; $i < 2; ++$i) {
             $c = $ai->nextShot($board);
-            self::assertArrayHasKey($c->x . ':' . $c->y, $allowed);
+            self::assertArrayHasKey($c->x.':'.$c->y, $allowed);
         }
     }
 
     public function testThrowsWhenBoardExhausted(): void
     {
         $tried = [];
-        for ($x = 0; $x < 2; $x++) {
-            for ($y = 0; $y < 2; $y++) {
+        for ($x = 0; $x < 2; ++$x) {
+            for ($y = 0; $y < 2; ++$y) {
                 $tried["$x:$y"] = true;
             }
         }

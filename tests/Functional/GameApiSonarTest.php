@@ -1,6 +1,5 @@
 <?php
 
-
 declare(strict_types=1);
 
 namespace Tests\Functional;
@@ -60,7 +59,7 @@ final class GameApiSonarTest extends WebTestCase
         // Map results to "x:y" => occupied
         $byKey = [];
         foreach ($results as $r) {
-            $byKey[$r['x'] . ':' . $r['y']] = (bool)$r['occupied'];
+            $byKey[$r['x'].':'.$r['y']] = (bool) $r['occupied'];
         }
 
         // Expected scanned coordinates within bounds for radius=3 from (0,0)
@@ -102,7 +101,7 @@ final class GameApiSonarTest extends WebTestCase
         $id = json_decode($client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR)['id'];
 
         // place classic fleet
-        $fleet = \Tests\Support\FleetFactory::classic10x10Array();
+        $fleet = FleetFactory::classic10x10Array();
         $client->request(
             'POST',
             "/api/games/$id/fleet",
@@ -125,6 +124,6 @@ final class GameApiSonarTest extends WebTestCase
         self::assertCount(1, $results);
         self::assertSame(0, $results[0]['x']);
         self::assertSame(6, $results[0]['y']);
-        self::assertTrue((bool)$results[0]['occupied']); // single ship at (0,6)
+        self::assertTrue((bool) $results[0]['occupied']); // single ship at (0,6)
     }
 }

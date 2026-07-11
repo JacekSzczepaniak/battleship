@@ -93,7 +93,7 @@ final class GameSnapshotMapper
         }
         if (isset($state['turn']) && is_string($state['turn'])) {
             $turn = $state['turn'];
-            $game->setTurn(in_array($turn, ['player','opponent','none'], true) ? $turn : 'player');
+            $game->setTurn(in_array($turn, ['player', 'opponent', 'none'], true) ? $turn : 'player');
         }
 
         // fleet from snapshot
@@ -154,7 +154,7 @@ final class GameSnapshotMapper
                     );
                 }
             }
-            if ($ships !== []) {
+            if ([] !== $ships) {
                 $game->setOpponentFleetFromSnapshot($ships);
             }
         }

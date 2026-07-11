@@ -5,10 +5,10 @@ namespace App\Domain\Game;
 final class TurnLoop
 {
     public function __construct(
-        private Shooter     $player1,         // np. HumanShooter albo drugi AI
+        private Shooter $player1,         // np. HumanShooter albo drugi AI
         private TargetBoard $player2Board, // plansza przeciwnika P2
-        private Shooter     $player2,          // AI
-        private TargetBoard $player1Board  // plansza P1
+        private Shooter $player2,          // AI
+        private TargetBoard $player1Board,  // plansza P1
     ) {
     }
 
@@ -25,7 +25,7 @@ final class TurnLoop
 
         $turn = 1;
         while (true) {
-            if ($turn === 1) {
+            if (1 === $turn) {
                 // Tura gracza 1 – strzela dopóki trafia (Hit/Sunk)
                 $shotsThisTurn = 0;
                 $maxThisTurn = $p1View->width() * $p1View->height(); // bezpiecznik tury
@@ -38,15 +38,15 @@ final class TurnLoop
                         return 1;
                     }
 
-                    $shotsThisTurn++;
-                    $overall++;
+                    ++$shotsThisTurn;
+                    ++$overall;
                     if ($shotsThisTurn >= $maxThisTurn) {
                         break;
                     }
                     if ($overall >= $maxOverallShots) {
                         throw new \RuntimeException('TurnLoop safety triggered: too many shots overall');
                     }
-                } while ($res === ShotResult::Hit || $res === ShotResult::Sunk);
+                } while (ShotResult::Hit === $res || ShotResult::Sunk === $res);
 
                 $turn = 2;
             } else {
@@ -62,15 +62,15 @@ final class TurnLoop
                         return 2;
                     }
 
-                    $shotsThisTurn++;
-                    $overall++;
+                    ++$shotsThisTurn;
+                    ++$overall;
                     if ($shotsThisTurn >= $maxThisTurn) {
                         break;
                     }
                     if ($overall >= $maxOverallShots) {
                         throw new \RuntimeException('TurnLoop safety triggered: too many shots overall');
                     }
-                } while ($res === ShotResult::Hit || $res === ShotResult::Sunk);
+                } while (ShotResult::Hit === $res || ShotResult::Sunk === $res);
 
                 $turn = 1;
             }

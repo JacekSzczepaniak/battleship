@@ -28,5 +28,4 @@ final class ClassicRuleset implements Ruleset
     {
         throw new \DomainException('Not accepted in classic ruleset');
     }
-
 }

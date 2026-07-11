@@ -29,6 +29,7 @@ final class Game
     /**
      * Strzały przeciwnika na planszę gracza (keys "x:y"), lustrzana struktura do $shots/$hits.
      * Używane przez mock AI i do projekcji overlayu na planszy gracza.
+     *
      * @var array<string,bool>
      */
     private array $opponentShots = [];
@@ -38,6 +39,7 @@ final class Game
     /**
      * Nieprzezroczysty stan AI przeciwnika (kształt zna wyłącznie implementacja AI).
      * Game tylko przechowuje go między requestami na potrzeby snapshotu.
+     *
      * @var array<string,mixed>
      */
     private array $aiState = [];
@@ -174,6 +176,7 @@ final class Game
 
     /**
      * Ustawia flotę przeciwnika (walidowana jak flota gracza) i buduje planszę przeciwnika.
+     *
      * @param Ship[] $ships
      */
     public function placeOpponentFleet(array $ships): void
@@ -191,6 +194,7 @@ final class Game
 
     /**
      * Używane przy odtwarzaniu ze snapshotu (bez walidacji biznesowej poza budową planszy).
+     *
      * @param Ship[] $ships
      */
     public function setOpponentFleetFromSnapshot(array $ships): void
@@ -454,7 +458,7 @@ final class Game
                 }
             }
 
-        $out[] = ['x' => $x, 'y' => $y, 'result' => $result];
+            $out[] = ['x' => $x, 'y' => $y, 'result' => $result];
         }
 
         return $out;

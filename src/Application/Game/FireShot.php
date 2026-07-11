@@ -36,7 +36,7 @@ final class FireShot
             throw new \DomainException('Game already finished');
         }
 
-        if ($game->turn() !== 'player') {
+        if ('player' !== $game->turn()) {
             throw new \DomainException('Not player turn');
         }
 

@@ -39,6 +39,7 @@ final class RandomFleetGenerator implements FleetGenerator
      * (duże statki najtrudniej upchnąć, więc idą pierwsze).
      *
      * @param array<int,int> $allowedShips
+     *
      * @return list<int>
      */
     private function lengthsFrom(array $allowedShips): array
@@ -56,6 +57,7 @@ final class RandomFleetGenerator implements FleetGenerator
 
     /**
      * @param list<int> $lengths
+     *
      * @return Ship[]|null null, gdy układu nie udało się domknąć
      */
     private function tryPlaceFleet(array $lengths, BoardSize $size): ?array

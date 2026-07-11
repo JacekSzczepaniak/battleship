@@ -1,6 +1,5 @@
 <?php
 
-
 declare(strict_types=1);
 
 namespace Tests\Unit;
@@ -24,7 +23,7 @@ final class GameSonarPingTest extends TestCase
         // Map to quick lookup
         $byKey = [];
         foreach ($results as $r) {
-            $byKey[$r['x'] . ':' . $r['y']] = (bool)$r['occupied'];
+            $byKey[$r['x'].':'.$r['y']] = (bool) $r['occupied'];
         }
 
         // Only in-bounds cells from (0,0) with radius=3 (cross)

@@ -49,7 +49,7 @@ final class GameQueryController
         $sunk = [];
         $hitSet = [];
         foreach ($hits as $h) {
-            $hitSet[$h[0] . ':' . $h[1]] = true;
+            $hitSet[$h[0].':'.$h[1]] = true;
         }
 
         $fleet = $game->fleet() ?? [];
@@ -99,8 +99,8 @@ final class GameQueryController
             ],
             // overlay trafień/pudeł przeciwnika na planszy gracza
             'playerUnderFireGrid' => [
-                'hits' => array_values(array_map(static fn(array $s) => [$s['x'],$s['y']], array_filter($oppShots, static fn(array $s) => in_array($s['result'], ['hit','sunk'], true)))) ,
-                'misses' => array_values(array_map(static fn(array $s) => [$s['x'],$s['y']], array_filter($oppShots, static fn(array $s) => $s['result'] === 'miss'))),
+                'hits' => array_values(array_map(static fn (array $s) => [$s['x'], $s['y']], array_filter($oppShots, static fn (array $s) => in_array($s['result'], ['hit', 'sunk'], true)))),
+                'misses' => array_values(array_map(static fn (array $s) => [$s['x'], $s['y']], array_filter($oppShots, static fn (array $s) => 'miss' === $s['result']))),
             ],
             'shotsCount' => count($shots),
             'finished' => $finished,

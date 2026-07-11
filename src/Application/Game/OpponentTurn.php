@@ -34,12 +34,7 @@ final class OpponentTurn
     /** Nalot tylko, gdy obszar 3×3 ma co najmniej tyle nieostrzelanych pól. */
     private const AIR_RAID_MIN_UNTRIED = 6;
 
-    /**
-     * @param (\Closure(int): bool)|null $decider decyzja "czy użyć" dla podanego
-     *                                            procentu szansy; null = losowo
-     *                                            (wstrzykiwane w testach)
-     */
-    public function __construct(private readonly ?\Closure $decider = null)
+    public function __construct(private readonly WeaponUseDecider $decider = new RandomWeaponUseDecider())
     {
     }
 
@@ -140,11 +135,7 @@ final class OpponentTurn
 
     private function decide(int $percent): bool
     {
-        if (null !== $this->decider) {
-            return ($this->decider)($percent);
-        }
-
-        return random_int(1, 100) <= $percent;
+        return $this->decider->decide($percent);
     }
 
     /** Środek krzyża sonaru maksymalizujący nieostrzelane pola. */

@@ -1,6 +1,5 @@
 <?php
 
-
 namespace App\Infrastructure\Http\Controller;
 
 use App\Application\Game\FireTorpedo;

@@ -5,6 +5,27 @@ on:
     pull_request:
 
 jobs:
+    static-analysis:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup PHP
+              uses: shivammathur/setup-php@v2
+              with:
+                  php-version: '8.3'
+                  coverage: none
+
+            - name: Install dependencies
+              run: composer install --no-interaction --no-progress --prefer-dist
+
+            - name: PHPStan
+              run: ./vendor/bin/phpstan analyze --no-progress
+
+            - name: PHP-CS-Fixer (dry-run)
+              run: ./vendor/bin/php-cs-fixer fix --dry-run --diff --using-cache=no
+
     tests:
         runs-on: ubuntu-latest
 
@@ -41,25 +62,7 @@ jobs:
 
             - name: Install dependencies
               run: composer install --no-interaction --no-progress --prefer-dist
-            - name: Debug network
-              run: |
-                  echo "=== DATABASE_URL ==="
-                  echo "$DATABASE_URL"
-                  echo
-                  echo "=== TEST_DATABASE_URL ==="
-                  echo "$TEST_DATABASE_URL"
-                  echo
-                  echo "=== /etc/hosts ==="
-                  cat /etc/hosts
-                  echo
-                  echo "=== getent hosts postgres ==="
-                  getent hosts postgres || echo "Host 'postgres' not found"
-                  echo
-                  echo "=== nslookup postgres ==="
-                  nslookup postgres || echo "nslookup failed"
-                  echo
-                  echo "=== ping postgres ==="
-                  ping -c 3 postgres || echo "ping failed"
+
             - name: Wait for Postgres to be healthy
               run: |
                   for i in {1..30}; do
@@ -72,18 +75,7 @@ jobs:
                   done
               env:
                   PGPASSWORD: statki
-            - name: Show PHP-visible envs for DB
-              run: |
-                  php -r 'echo "PHP getenv DATABASE_URL: ", getenv("DATABASE_URL") ?: "(null)", PHP_EOL;'
-                  php -r 'echo "PHP getenv TEST_DATABASE_URL: ", getenv("TEST_DATABASE_URL") ?: "(null)", PHP_EOL;'
-            - name: Patch phpunit.xml(.dist) DSNs to 127.0.0.1 (if present)
-              run: |
-                  for f in phpunit.xml phpunit.xml.dist; do
-                    if [ -f "$f" ]; then
-                      echo "Patching $f"
-                      sed -E -i 's/@postgres/@127.0.0.1/g' "$f"
-                    fi
-                  done
+
             - name: Create database
               run: php bin/console doctrine:database:create --if-not-exists --env=test
 

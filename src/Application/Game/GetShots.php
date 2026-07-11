@@ -25,7 +25,7 @@ final class GetShots
         // Collect hit cells (hit or sunk)
         $hitSet = [];
         foreach ($shots as $s) {
-            if ($s['result'] === 'hit' || $s['result'] === 'sunk') {
+            if ('hit' === $s['result'] || 'sunk' === $s['result']) {
                 $hitSet[$s['x'].':'.$s['y']] = true;
             }
         }

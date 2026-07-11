@@ -1,6 +1,5 @@
 <?php
 
-
 namespace App\Domain\Game;
 
 enum Direction: string

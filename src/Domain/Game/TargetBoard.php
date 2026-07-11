@@ -6,7 +6,10 @@ namespace App\Domain\Game;
 interface TargetBoard
 {
     public function size(): int;
+
     public function shoot(Coordinate $c): ShotResult;       // MISS/HIT/SUNK
+
     public function isDefeated(): bool;                     // czy wszystkie statki zatopione
+
     public function wasTried(Coordinate $c): bool;          // dla AI
 }

@@ -1,13 +1,12 @@
 <?php
 
-
 declare(strict_types=1);
 
 namespace Tests\Unit;
 
-use App\Domain\Game\FunRuleset;
 use App\Domain\Game\Coordinate;
 use App\Domain\Game\Direction;
+use App\Domain\Game\FunRuleset;
 use App\Domain\Game\Game;
 use PHPUnit\Framework\TestCase;
 use Tests\Support\FleetFactory;

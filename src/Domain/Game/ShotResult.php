@@ -10,5 +10,4 @@ enum ShotResult: string
     case Hit = 'hit';
     case Sunk = 'sunk';
     case Duplicate = 'duplicate';
-
 }

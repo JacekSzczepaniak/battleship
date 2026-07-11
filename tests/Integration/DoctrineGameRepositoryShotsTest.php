@@ -8,7 +8,6 @@ use App\Domain\Game\ClassicRuleset;
 use App\Domain\Game\Coordinate;
 use App\Domain\Game\Game;
 use App\Domain\Game\GameRepository;
-use App\Domain\Game\Orientation;
 use App\Domain\Shared\GameId;
 use App\Kernel;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;

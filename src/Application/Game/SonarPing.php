@@ -1,6 +1,5 @@
 <?php
 
-
 namespace App\Application\Game;
 
 use App\Domain\Game\Coordinate;

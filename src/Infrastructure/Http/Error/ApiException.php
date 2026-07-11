@@ -10,7 +10,7 @@ final class ApiException extends \RuntimeException
         string $message,
         private readonly string $apiCode,
         private readonly int $httpStatus = 400,
-        ?\Throwable $previous = null
+        ?\Throwable $previous = null,
     ) {
         parent::__construct($message, 0, $previous);
     }

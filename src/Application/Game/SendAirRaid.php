@@ -24,6 +24,7 @@ final class SendAirRaid
         $results = $game->sendAirRaid($centralPoint, new Area($width, $height));
 
         $this->repo->save($game);
+
         return $results;
     }
 }

@@ -4,8 +4,8 @@ namespace App\Infrastructure\Http\Controller;
 
 use App\Application\Game\SendAirRaid;
 use App\Infrastructure\Http\Error\ApiException;
-use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Uid\Uuid;
 
@@ -41,8 +41,7 @@ final class SendAirRaidController
         $list = ($this->sendAirRaid)($id, $x, $y, $width, $height);
 
         return new JsonResponse([
-            'result' => $list, //list of {x,y,result?}
+            'result' => $list, // list of {x,y,result?}
         ]);
-
     }
 }

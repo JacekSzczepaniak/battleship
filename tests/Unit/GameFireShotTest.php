@@ -8,7 +8,6 @@ use App\Domain\Game\Coordinate;
 use App\Domain\Game\Game;
 use Tests\Support\FleetFactory;
 
-
 it('miss / hit / sunk oraz blokada duplikatów', function () {
     $game = Game::create(new ClassicRuleset(new BoardSize(10, 10)));
     $game->placeFleet(FleetFactory::classic10x10()); // ← najważniejsze: pełna, poprawna flota

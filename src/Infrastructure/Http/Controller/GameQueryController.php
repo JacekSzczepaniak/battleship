@@ -7,7 +7,7 @@ use App\Domain\Game\Orientation;
 use App\Domain\Shared\GameId;
 use App\Infrastructure\Http\Error\ApiException;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Uid\Uuid;
 
 #[Route('/api/games')]
@@ -30,8 +30,8 @@ final class GameQueryController
         }
 
         $size = $game->ruleset()->boardSize();
-        $shots = method_exists($game, 'shotsWithResults') ? $game->shotsWithResults() : [];
-        $oppShots = method_exists($game, 'opponentShotsWithResults') ? $game->opponentShotsWithResults() : [];
+        $shots = $game->shotsWithResults();
+        $oppShots = $game->opponentShotsWithResults();
 
         // hits/misses sets
         $hits = [];
@@ -49,7 +49,7 @@ final class GameQueryController
         $sunk = [];
         $hitSet = [];
         foreach ($hits as $h) {
-            $hitSet[$h[0] . ':' . $h[1]] = true;
+            $hitSet[$h[0].':'.$h[1]] = true;
         }
 
         $fleet = $game->fleet() ?? [];
@@ -88,9 +88,9 @@ final class GameQueryController
             'id' => (string) $game->id(),
             'status' => $game->status()->value,
             'board' => ['w' => $size->width, 'h' => $size->height],
-            'mode' => method_exists($game, 'mode') ? $game->mode() : 'standard',
-            'opponent' => method_exists($game, 'opponent') ? $game->opponent() : 'mock',
-            'turn' => method_exists($game, 'turn') ? $turn : 'player',
+            'mode' => $game->mode(),
+            'opponent' => $game->opponent(),
+            'turn' => $turn,
             'playerFleet' => $playerFleet,
             'enemyFogGrid' => [
                 'hits' => $hits,
@@ -99,8 +99,8 @@ final class GameQueryController
             ],
             // overlay trafień/pudeł przeciwnika na planszy gracza
             'playerUnderFireGrid' => [
-                'hits' => array_values(array_map(static fn(array $s) => [$s['x'],$s['y']], array_filter($oppShots, static fn(array $s) => in_array($s['result'], ['hit','sunk'], true)))) ,
-                'misses' => array_values(array_map(static fn(array $s) => [$s['x'],$s['y']], array_filter($oppShots, static fn(array $s) => $s['result'] === 'miss'))),
+                'hits' => array_values(array_map(static fn (array $s) => [$s['x'], $s['y']], array_filter($oppShots, static fn (array $s) => in_array($s['result'], ['hit', 'sunk'], true)))),
+                'misses' => array_values(array_map(static fn (array $s) => [$s['x'], $s['y']], array_filter($oppShots, static fn (array $s) => 'miss' === $s['result']))),
             ],
             'shotsCount' => count($shots),
             'finished' => $finished,

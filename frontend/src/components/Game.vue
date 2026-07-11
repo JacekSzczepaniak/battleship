@@ -8,7 +8,7 @@ import { useRouter } from 'vue-router'
 // automatycznie (zagnieżdżone w zwykłym obiekcie NIE są odpakowywane).
 const {
     status, finished, turn, loading, error, disabled, attack, width, height,
-    ruleset, weapons, weaponMode, torpedoDirection, sonarMarks,
+    ruleset, weapons, weaponMode, torpedoDirection, sonarMarks, launchableCells,
     shotsCount, hitsCount, missesCount, duplicatesCount, opponentHitsCount,
     toast, toastType,
     playerGrid, playerUnderFireOverlay, enemyFogGrid, lastShot, sunkCells,
@@ -74,10 +74,17 @@ const mergedPlayerGrid = computed<string[][]>(() => {
     const ov = playerUnderFireOverlay.value;
     if (base.length !== ov.length) return base;
     return base.map((row, y) => row.map((cell, x) => {
+        let classes: string = cell;
         const o = ov[y]?.[x] ?? 'none';
-        if (o === 'none') return cell as string;
-        // złącz klasy, aby widoczny był statek i overlay
-        return `${cell} ${o}`.trim();
+        if (o !== 'none') {
+            // złącz klasy, aby widoczny był statek i overlay
+            classes += ` ${o}`;
+        }
+        // tryb torpedy: podświetl legalne wyrzutnie (niezatopione statki)
+        if (weaponMode.value === 'torpedo' && launchableCells.value.has(`${x}:${y}`)) {
+            classes += ' launch';
+        }
+        return classes.trim();
     }));
 });
 
@@ -129,7 +136,7 @@ function selectWeapon(mode: 'shot' | 'torpedo' | 'sonar' | 'airraid') {
 
 const weaponHint = computed(() => {
     switch (weaponMode.value) {
-        case 'torpedo': return 'Kliknij pole startowe torpedy — popłynie w wybranym kierunku do krawędzi.';
+        case 'torpedo': return 'Kliknij WŁASNY niezatopiony statek (podświetlony na Twojej planszy) — torpeda popłynie z jego pozycji w wybranym kierunku.';
         case 'sonar': return 'Kliknij centrum skanu — sonar sprawdzi krzyż o promieniu 3.';
         case 'airraid': return 'Kliknij centrum nalotu — ostrzał obszaru 3×3.';
         default: return '';
@@ -151,14 +158,20 @@ function newGame() {
     <div class="boards">
         <div>
             <h3>Twoja plansza</h3>
-            <!-- Pozostawiamy aktywną (niezablokowaną), aby overlay był w pełni czytelny -->
-            <GameGameBoard :grid="mergedPlayerGrid" :disabled="false" />
+            <!-- Pozostawiamy aktywną (niezablokowaną), aby overlay był w pełni czytelny;
+                 w trybie torpedy to TU wybiera się wyrzutnię -->
+            <GameGameBoard :grid="mergedPlayerGrid" :disabled="false"
+                           :onCellClick="weaponMode === 'torpedo' ? handleShot : undefined"
+                           :onCellHover="weaponMode === 'torpedo' ? handleHover : undefined"
+                           :onBoardLeave="handleBoardLeave" />
         </div>
 
         <div>
             <h3>Przeciwnik</h3>
-            <GameGameBoard :grid="enemyAnimatedGrid" :onCellClick="handleShot" :disabled="disabled"
-                           :onCellHover="handleHover" :onBoardLeave="handleBoardLeave" />
+            <GameGameBoard :grid="enemyAnimatedGrid" :disabled="disabled"
+                           :onCellClick="weaponMode === 'torpedo' ? undefined : handleShot"
+                           :onCellHover="weaponMode === 'torpedo' ? undefined : handleHover"
+                           :onBoardLeave="handleBoardLeave" />
 
             <!-- Panel broni specjalnych (tylko tryb fun) -->
             <div v-if="ruleset === 'fun' && weapons" class="weapons">

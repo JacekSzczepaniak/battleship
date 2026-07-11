@@ -3,7 +3,7 @@ import { useRoute } from 'vue-router';
 import {
     getGame, fireShot, fireTorpedo, sonarPing, sendAirRaid,
     type GameViewDTO, type ShotResultDTO, type RulesetName, type WeaponsState,
-    type TorpedoDirection, type TurnOutcomeDTO, type SonarCell,
+    type TorpedoDirection, type TurnOutcomeDTO, type SonarCell, type PlayerFleetItem,
 } from '../api/gameApi.ts';
 
 export type WeaponMode = 'shot' | 'torpedo' | 'sonar' | 'airraid';
@@ -41,6 +41,8 @@ export function useGame() {
     const torpedoDirection = ref<TorpedoDirection>('E');
     // Wyniki sonaru — tylko po stronie klienta (backend nie zapisuje skanów)
     const sonarMarks = ref<SonarCell[]>([]);
+    // Flota gracza (do wyznaczania wyrzutni torped)
+    const playerFleet = ref<PlayerFleetItem[]>([]);
 
 
     function buildEmptyGrid<T extends string>(w: number, h: number, fill: T): T[][] {
@@ -102,7 +104,31 @@ export function useGame() {
         finished.value = dto.finished;
         ruleset.value = dto.ruleset ?? 'classic';
         weapons.value = dto.weapons ?? null;
+        playerFleet.value = dto.playerFleet ?? [];
     }
+
+    /**
+     * Komórki własnych NIEZATOPIONYCH statków — legalne wyrzutnie torped
+     * (reguła domenowa: torpeda startuje z żywego statku gracza).
+     */
+    const launchableCells = computed<Set<string>>(() => {
+        const set = new Set<string>();
+        const ov = playerUnderFireOverlay.value;
+        for (const s of playerFleet.value) {
+            const cells: Array<[number, number]> = [];
+            let sunk = true;
+            for (let i = 0; i < s.l; i++) {
+                const x = s.x + ((s.o as string).toLowerCase() === 'h' ? i : 0);
+                const y = s.y + ((s.o as string).toLowerCase() === 'v' ? i : 0);
+                cells.push([x, y]);
+                if (ov[y]?.[x] !== 'opp-hit') sunk = false;
+            }
+            if (!sunk) {
+                for (const [x, y] of cells) set.add(`${x}:${y}`);
+            }
+        }
+        return set;
+    });
 
     function applyTurnOutcome(o: TurnOutcomeDTO) {
         turn.value = o.turn;
@@ -302,7 +328,7 @@ export function useGame() {
         gameId, size, width, height, playerGrid, playerUnderFireOverlay, enemyFogGrid, turn, status, finished,
         loading, error, start, refresh, shot, attack, disabled,
         // tryb fun
-        ruleset, weapons, weaponMode, torpedoDirection, sonarMarks,
+        ruleset, weapons, weaponMode, torpedoDirection, sonarMarks, launchableCells,
         // stats
         shotsCount, hitsCount, missesCount, duplicatesCount, opponentHitsCount,
         // toast

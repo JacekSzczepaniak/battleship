@@ -37,7 +37,7 @@ final class GameApiFunModeTest extends WebTestCase
         self::assertSame(['used' => 0, 'limit' => 1], $view['weapons']['airRaid']);
 
         // torpedo: full turn — results + AI response + turn back to player
-        $client->request('POST', "/api/games/$id/torpedo", server: ['CONTENT_TYPE' => 'application/json'], content: json_encode(['x' => 0, 'y' => 5, 'direction' => 'E']));
+        $client->request('POST', "/api/games/$id/torpedo", server: ['CONTENT_TYPE' => 'application/json'], content: json_encode(['x' => 0, 'y' => 0, 'direction' => 'E']));
         self::assertResponseIsSuccessful();
         $torpedo = json_decode($client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
         self::assertCount(10, $torpedo['results']);
@@ -66,6 +66,12 @@ final class GameApiFunModeTest extends WebTestCase
         $view = json_decode($client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
         self::assertSame(['used' => 1, 'limit' => 1], $view['weapons']['airRaid']);
         self::assertSame(['used' => 1, 'limit' => 3], $view['weapons']['sonar']);
+
+        // torpeda z wody → 422 TORPEDO_LAUNCH_INVALID (start musi być na niezatopionym statku)
+        $client->request('POST', "/api/games/$id/torpedo", server: ['CONTENT_TYPE' => 'application/json'], content: json_encode(['x' => 4, 'y' => 4, 'direction' => 'E']));
+        self::assertResponseStatusCodeSame(422);
+        $err = json_decode($client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('TORPEDO_LAUNCH_INVALID', $err['error']['code']);
     }
 
     public function testWeaponsRejectedInClassicGame(): void
@@ -79,7 +85,7 @@ final class GameApiFunModeTest extends WebTestCase
         self::assertResponseIsSuccessful();
 
         // classic → torpeda niedostępna (422 z ExceptionSubscriber)
-        $client->request('POST', "/api/games/$id/torpedo", server: ['CONTENT_TYPE' => 'application/json'], content: json_encode(['x' => 0, 'y' => 5, 'direction' => 'E']));
+        $client->request('POST', "/api/games/$id/torpedo", server: ['CONTENT_TYPE' => 'application/json'], content: json_encode(['x' => 0, 'y' => 0, 'direction' => 'E']));
         self::assertResponseStatusCodeSame(422);
 
         // classic → sonar niedostępny

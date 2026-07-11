@@ -193,4 +193,10 @@ function handleClick(x: number, y: number) {
     box-shadow: inset 0 0 0 3px rgba(31, 111, 235, 0.55);
 }
 
+/* Wyrzutnia torpedy: własny niezatopiony statek (tryb torpedy) */
+.cell.launch {
+    box-shadow: inset 0 0 0 3px #16a34a;
+    cursor: pointer;
+}
+
 </style>

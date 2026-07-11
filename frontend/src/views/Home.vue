@@ -27,6 +27,12 @@
         </button>
 
         <p v-if="error" class="err">{{ error }}</p>
+
+        <section class="expedition-teaser">
+            <h2>⚓ Wyprawa</h2>
+            <p>Od rozbitka do admirała: zdobywaj wyspy, XP i kolejne rangi.</p>
+            <router-link class="btn" :to="{ name: 'expedition' }">Wypłyń na wyprawę</router-link>
+        </section>
     </main>
 </template>
 
@@ -60,7 +66,10 @@ h1 { margin-bottom: 0.5rem; }
 .mode { margin: 0.75rem 0 1rem; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 6px; display: inline-flex; flex-direction: column; gap: 0.35rem; }
 .mode legend { padding: 0 0.3rem; color: #475569; font-size: 0.9rem; }
 .mode label { cursor: pointer; }
-.btn { padding: 0.5rem 1rem; background: #1f6feb; color: #fff; border: 0; border-radius: 4px; cursor: pointer; }
+.btn { padding: 0.5rem 1rem; background: #1f6feb; color: #fff; border: 0; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; }
 .btn[disabled] { opacity: 0.7; cursor: default; }
 .err { color: crimson; margin-top: 0.5rem; }
+.expedition-teaser { margin-top: 1.5rem; padding: 0.75rem 1rem; border: 1px solid #cbd5e1; border-radius: 8px; max-width: 28rem; }
+.expedition-teaser h2 { margin: 0 0 0.3rem; font-size: 1.05rem; }
+.expedition-teaser p { margin: 0 0 0.6rem; color: #475569; }
 </style>

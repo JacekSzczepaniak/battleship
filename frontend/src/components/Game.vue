@@ -7,7 +7,8 @@ import { useRouter } from 'vue-router'
 // Destrukturyzacja: ref-y stają się top-level, więc template odpakowuje je
 // automatycznie (zagnieżdżone w zwykłym obiekcie NIE są odpakowywane).
 const {
-    status, finished, turn, loading, error, disabled, shot,
+    status, finished, turn, loading, error, disabled, attack,
+    ruleset, weapons, weaponMode, torpedoDirection, sonarMarks,
     shotsCount, hitsCount, missesCount, duplicatesCount, opponentHitsCount,
     toast, toastType,
     playerGrid, playerUnderFireOverlay, enemyFogGrid, lastShot, sunkCells,
@@ -30,9 +31,15 @@ const mergedPlayerGrid = computed<string[][]>(() => {
 const enemyAnimatedGrid = computed<string[][]>(() => {
     const ls = lastShot.value;
     const sunk = sunkCells.value;
+    const sonar = new Map(sonarMarks.value.map(c => [`${c.x}:${c.y}`, c.occupied]));
 
     return enemyFogGrid.value.map((row, y) => row.map((cell, x) => {
         let classes: string = cell;
+
+        // Skan sonaru — tylko na polach jeszcze nieostrzelanych
+        if (cell === 'empty' && sonar.has(`${x}:${y}`)) {
+            classes += sonar.get(`${x}:${y}`) ? ' sonar-ship' : ' sonar-water';
+        }
 
         // Zatopione statki – stała klasa 'sink'
         if (sunk.some(([sx, sy]) => sx === x && sy === y)) {
@@ -54,9 +61,22 @@ const enemyAnimatedGrid = computed<string[][]>(() => {
 
 function handleShot(x: number, y: number) {
     if (!disabled.value) {
-        shot(x, y);
+        attack(x, y);
     }
 }
+
+function selectWeapon(mode: 'shot' | 'torpedo' | 'sonar' | 'airraid') {
+    weaponMode.value = mode;
+}
+
+const weaponHint = computed(() => {
+    switch (weaponMode.value) {
+        case 'torpedo': return 'Kliknij pole startowe torpedy — popłynie w wybranym kierunku do krawędzi.';
+        case 'sonar': return 'Kliknij centrum skanu — sonar sprawdzi krzyż o promieniu 3.';
+        case 'airraid': return 'Kliknij centrum nalotu — ostrzał obszaru 3×3.';
+        default: return '';
+    }
+});
 
 function newGame() {
     router.push({ name: 'home' })
@@ -80,6 +100,37 @@ function newGame() {
         <div>
             <h3>Przeciwnik</h3>
             <GameGameBoard :grid="enemyAnimatedGrid" :onCellClick="handleShot" :disabled="disabled" />
+
+            <!-- Panel broni specjalnych (tylko tryb fun) -->
+            <div v-if="ruleset === 'fun' && weapons" class="weapons">
+                <button class="wbtn" :class="{ active: weaponMode === 'shot' }" @click="selectWeapon('shot')">
+                    🎯 Strzał
+                </button>
+                <button class="wbtn" :class="{ active: weaponMode === 'torpedo' }"
+                        :disabled="weapons.torpedo.used >= weapons.torpedo.limit"
+                        @click="selectWeapon('torpedo')">
+                    🚀 Torpeda {{ weapons.torpedo.limit - weapons.torpedo.used }}/{{ weapons.torpedo.limit }}
+                </button>
+                <button class="wbtn" :class="{ active: weaponMode === 'sonar' }"
+                        :disabled="weapons.sonar.used >= weapons.sonar.limit"
+                        @click="selectWeapon('sonar')">
+                    📡 Sonar {{ weapons.sonar.limit - weapons.sonar.used }}/{{ weapons.sonar.limit }}
+                </button>
+                <button class="wbtn" :class="{ active: weaponMode === 'airraid' }"
+                        :disabled="weapons.airRaid.used >= weapons.airRaid.limit"
+                        @click="selectWeapon('airraid')">
+                    ✈️ Nalot {{ weapons.airRaid.limit - weapons.airRaid.used }}/{{ weapons.airRaid.limit }}
+                </button>
+            </div>
+            <div v-if="ruleset === 'fun' && weaponMode === 'torpedo'" class="weapon-opts">
+                Kierunek:
+                <label><input type="radio" value="N" v-model="torpedoDirection" /> ↑ N</label>
+                <label><input type="radio" value="E" v-model="torpedoDirection" /> → E</label>
+                <label><input type="radio" value="S" v-model="torpedoDirection" /> ↓ S</label>
+                <label><input type="radio" value="W" v-model="torpedoDirection" /> ← W</label>
+            </div>
+            <div v-if="weaponHint" class="weapon-hint">{{ weaponHint }}</div>
+
             <div v-if="loading">Ładowanie…</div>
             <div v-if="error" style="color:crimson">{{ error }}</div>
             <div class="hud">
@@ -97,6 +148,10 @@ function newGame() {
                     <span class="item"><span class="box miss"></span> Pudło</span>
                     <span class="item"><span class="box opp-hit"></span> Trafienie przeciwnika</span>
                     <span class="item"><span class="box opp-miss"></span> Pudło przeciwnika</span>
+                    <template v-if="ruleset === 'fun'">
+                        <span class="item"><span class="box sonar-ship"></span> Sonar: statek</span>
+                        <span class="item"><span class="box sonar-water"></span> Sonar: woda</span>
+                    </template>
                 </div>
                 <div v-if="toast" class="toast" :class="toastType">{{ toast }}</div>
             </div>
@@ -130,6 +185,14 @@ function newGame() {
 .legend .box.miss { background:#bfdbfe; border-color:#bfdbfe; }
 .legend .box.opp-hit { background: transparent; border-color:#7a0a0a; box-shadow: inset 0 0 0 2px #7a0a0a; }
 .legend .box.opp-miss { background: transparent; border-color:#0c4a6e; box-shadow: inset 0 0 0 2px #0c4a6e; }
+.legend .box.sonar-ship { background: #fef3c7; border-color:#d97706; box-shadow: inset 0 0 0 2px #d97706; }
+.legend .box.sonar-water { background: #f0f9ff; border-color:#7dd3fc; }
+.weapons { display:flex; gap:.4rem; margin-top:.6rem; flex-wrap:wrap; }
+.wbtn { padding:.3rem .6rem; border:1px solid #cbd5e1; border-radius:6px; background:#f8fafc; cursor:pointer; }
+.wbtn.active { background:#1f6feb; color:#fff; border-color:#1f6feb; }
+.wbtn[disabled] { opacity:.45; cursor:not-allowed; }
+.weapon-opts { margin-top:.35rem; display:flex; gap:.6rem; align-items:center; color:#334155; }
+.weapon-hint { margin-top:.3rem; font-size:.9rem; color:#475569; }
 .toast { display:inline-block; padding:.3rem .6rem; border-radius:6px; border:1px solid #cbd5e1; background:#f8fafc; color:#0f172a; }
 .toast.warn { background:#fff7ed; border-color:#fed7aa; color:#7c2d12; }
 .toast.error { background:#fee2e2; border-color:#fecaca; color:#7f1d1d; }

@@ -1,6 +1,12 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
-import { getGame, fireShot, type GameViewDTO, type ShotResultDTO } from '../api/gameApi.ts';
+import {
+    getGame, fireShot, fireTorpedo, sonarPing, sendAirRaid,
+    type GameViewDTO, type ShotResultDTO, type RulesetName, type WeaponsState,
+    type TorpedoDirection, type TurnOutcomeDTO, type SonarCell,
+} from '../api/gameApi.ts';
+
+export type WeaponMode = 'shot' | 'torpedo' | 'sonar' | 'airraid';
 
 export type PlayerCell = 'empty'|'ship'|'hit'|'miss';
 export type EnemyCell = 'empty'|'hit'|'miss';
@@ -27,6 +33,14 @@ export function useGame() {
     // NOWE:
     const lastShot = ref<{ x: number; y: number; result: ShotResultDTO['result'] } | null>(null);
     const sunkCells = ref<Array<[number, number]>>([]);
+
+    // Tryb fun: bronie specjalne
+    const ruleset = ref<RulesetName>('classic');
+    const weapons = ref<WeaponsState | null>(null);
+    const weaponMode = ref<WeaponMode>('shot');
+    const torpedoDirection = ref<TorpedoDirection>('E');
+    // Wyniki sonaru — tylko po stronie klienta (backend nie zapisuje skanów)
+    const sonarMarks = ref<SonarCell[]>([]);
 
 
     function buildEmptyGrid<T extends string>(w: number, h: number, fill: T): T[][] {
@@ -86,6 +100,21 @@ export function useGame() {
         turn.value = dto.turn;
         status.value = dto.status;
         finished.value = dto.finished;
+        ruleset.value = dto.ruleset ?? 'classic';
+        weapons.value = dto.weapons ?? null;
+    }
+
+    function applyTurnOutcome(o: TurnOutcomeDTO) {
+        turn.value = o.turn;
+        if (o.finished) {
+            status.value = o.win ? 'won' : (o.loss ? 'lost' : status.value);
+            finished.value = true;
+        }
+    }
+
+    function canAct(): boolean {
+        return !!gameId.value && turn.value === 'player' && !shooting.value
+            && status.value !== 'won' && status.value !== 'lost';
     }
 
     async function start() {
@@ -163,6 +192,64 @@ export function useGame() {
         }
     }
 
+    async function torpedoAt(x: number, y: number) {
+        if (!canAct()) return;
+        try {
+            shooting.value = true;
+            const res = await fireTorpedo(gameId.value, x, y, torpedoDirection.value);
+            applyTurnOutcome(res);
+            await refresh();
+        } catch (e: any) {
+            showToast(e?.message ?? 'Torpeda nie wypaliła', 'warn', 2500);
+        } finally {
+            shooting.value = false;
+            weaponMode.value = 'shot';
+        }
+    }
+
+    async function sonarAt(x: number, y: number) {
+        if (!canAct()) return;
+        try {
+            shooting.value = true;
+            const res = await sonarPing(gameId.value, x, y);
+            // dopisz skan (nadpisując wcześniejsze wpisy dla tych samych pól)
+            const merged = new Map(sonarMarks.value.map(c => [`${c.x}:${c.y}`, c]));
+            for (const c of res.results) merged.set(`${c.x}:${c.y}`, c);
+            sonarMarks.value = [...merged.values()];
+            await refresh(); // licznik użyć
+        } catch (e: any) {
+            showToast(e?.message ?? 'Sonar nie zadziałał', 'warn', 2500);
+        } finally {
+            shooting.value = false;
+            weaponMode.value = 'shot';
+        }
+    }
+
+    async function airRaidAt(x: number, y: number) {
+        if (!canAct()) return;
+        try {
+            shooting.value = true;
+            const res = await sendAirRaid(gameId.value, x, y);
+            applyTurnOutcome(res);
+            await refresh();
+        } catch (e: any) {
+            showToast(e?.message ?? 'Nalot się nie powiódł', 'warn', 2500);
+        } finally {
+            shooting.value = false;
+            weaponMode.value = 'shot';
+        }
+    }
+
+    /** Jeden punkt wejścia dla kliknięcia w planszę przeciwnika — wg aktywnego trybu. */
+    async function attack(x: number, y: number) {
+        switch (weaponMode.value) {
+            case 'torpedo': return torpedoAt(x, y);
+            case 'sonar': return sonarAt(x, y);
+            case 'airraid': return airRaidAt(x, y);
+            default: return shot(x, y);
+        }
+    }
+
     onMounted(start);
 
     const size = computed(() => Math.max(width.value, height.value));
@@ -191,7 +278,9 @@ export function useGame() {
 
     return {
         gameId, size, playerGrid, playerUnderFireOverlay, enemyFogGrid, turn, status, finished,
-        loading, error, start, refresh, shot, disabled,
+        loading, error, start, refresh, shot, attack, disabled,
+        // tryb fun
+        ruleset, weapons, weaponMode, torpedoDirection, sonarMarks,
         // stats
         shotsCount, hitsCount, missesCount, duplicatesCount, opponentHitsCount,
         // toast

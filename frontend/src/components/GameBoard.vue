@@ -83,6 +83,17 @@ function handleClick(x: number, y: number) {
     background: lightblue;
 }
 
+/* Skan sonaru (tryb fun, plansza przeciwnika) */
+.cell.sonar-ship {
+    background: #fef3c7;
+    box-shadow: inset 0 0 0 2px #d97706;
+}
+
+.cell.sonar-water {
+    background: #f0f9ff;
+    background-image: radial-gradient(circle at 50% 50%, rgba(125, 211, 252, 0.6) 20%, transparent 21%);
+}
+
 /* Overlay trafień/pudeł przeciwnika (na planszy gracza) */
 .cell.opp-hit {
     position: relative;

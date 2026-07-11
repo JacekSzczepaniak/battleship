@@ -138,6 +138,14 @@ export function useGame() {
             status.value = o.win ? 'won' : (o.loss ? 'lost' : status.value);
             finished.value = true;
         }
+        // torpeda AI zdradza wyrzutnię — oznacz jak wykryty sonarem statek
+        if (o.opponentTorpedoLaunch) {
+            const { x, y } = o.opponentTorpedoLaunch;
+            const merged = new Map(sonarMarks.value.map(c => [`${c.x}:${c.y}`, c]));
+            merged.set(`${x}:${y}`, { x, y, occupied: true });
+            sonarMarks.value = [...merged.values()];
+            showToast('📡 Namierzono wyrzutnię torpedy przeciwnika!', 'info', 3000);
+        }
     }
 
     function canAct(): boolean {

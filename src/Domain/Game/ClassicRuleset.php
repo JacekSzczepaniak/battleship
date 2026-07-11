@@ -31,6 +31,6 @@ final class ClassicRuleset implements Ruleset
 
     public function weaponLimits(): array
     {
-        return ['torpedo' => 0, 'sonar' => 0, 'airRaid' => 0];
+        return ['torpedo' => 0, 'sonar' => 0, 'airRaid' => 0, 'torpedoDiagonal' => 0];
     }
 }

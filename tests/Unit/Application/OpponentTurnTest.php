@@ -45,6 +45,7 @@ it('AI robi zwykły strzał, gdy losowanie odmawia użycia broni', function () {
         'torpedo' => ['used' => 0, 'limit' => 2],
         'sonar' => ['used' => 0, 'limit' => 3],
         'airRaid' => ['used' => 0, 'limit' => 1],
+        'torpedoDiagonal' => ['used' => 0, 'limit' => 1],
     ]);
 });
 
@@ -75,6 +76,22 @@ it('AI odpala torpedę z niezatopionego statku w linię z nieostrzelanymi polami
     expect(count($out['opponentMoves']))->toBeGreaterThanOrEqual(5);
     // wszystkie strzały torpedy wylądowały na planszy gracza
     expect($game->opponentShots())->toHaveCount(count($out['opponentMoves']));
+    // koszt torpedy: AI zdradza wyrzutnię
+    expect($out['opponentTorpedoLaunch'])->not->toBeNull();
+});
+
+it('reveal wyrzutni: torpeda gracza podpowiada AI, gdzie stoi jego statek', function () {
+    $repo = new App\Infrastructure\Persistence\InMemory\InMemoryGameRepository();
+    $game = funGameWithBothFleets();
+    $game->setTurn('player');
+    $repo->save($game);
+
+    $handler = new App\Application\Game\FireTorpedo($repo, new OpponentTurn(decider(fn (int $pct) => false)));
+    // torpeda gracza z trójmasztowca (0,2) — AI (bez własnych broni) dobija wyrzutnię
+    $out = $handler((string) $game->id(), 0, 2, App\Domain\Game\Direction::E);
+
+    expect($out['opponentMoves'])->toHaveCount(1);
+    expect($out['opponentMoves'][0])->toMatchArray(['x' => 0, 'y' => 2, 'result' => 'hit']);
 });
 
 it('AI używa nalotu, gdy torpeda niedostępna', function () {

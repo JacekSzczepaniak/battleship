@@ -30,6 +30,7 @@ final class FunRuleset implements Ruleset
 
     public function weaponLimits(): array
     {
-        return ['torpedo' => 2, 'sonar' => 3, 'airRaid' => 1];
+        // torpedoDiagonal = ile z torped może płynąć po przekątnej (podzbiór limitu torpedo)
+        return ['torpedo' => 2, 'sonar' => 3, 'airRaid' => 1, 'torpedoDiagonal' => 1];
     }
 }

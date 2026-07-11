@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import GameGameBoard from './GameBoard.vue';
 import { useGame } from '../composables/useGame';
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 // Destrukturyzacja: ref-y stają się top-level, więc template odpakowuje je
@@ -30,7 +30,10 @@ const previewCells = computed<Set<string>>(() => {
 
     switch (weaponMode.value) {
         case 'torpedo': {
-            const [dx, dy] = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] }[torpedoDirection.value];
+            const [dx, dy] = {
+                N: [0, -1], NE: [1, -1], E: [1, 0], SE: [1, 1],
+                S: [0, 1], SW: [-1, 1], W: [-1, 0], NW: [-1, -1],
+            }[torpedoDirection.value];
             let cx = hc.x, cy = hc.y;
             while (cx >= 0 && cy >= 0 && cx < w && cy < h) {
                 set.add(`${cx}:${cy}`);
@@ -134,6 +137,19 @@ function selectWeapon(mode: 'shot' | 'torpedo' | 'sonar' | 'airraid') {
     weaponMode.value = mode;
 }
 
+// Torpeda ukośna: osobny limit (zwiad — nie trafi jednego statku dwa razy)
+const diagonalAvailable = computed(() => {
+    const d = weapons.value?.torpedoDiagonal;
+    return !!d && d.used < d.limit;
+});
+
+const DIAGONALS = ['NE', 'SE', 'SW', 'NW'];
+watch([diagonalAvailable, torpedoDirection], () => {
+    if (!diagonalAvailable.value && DIAGONALS.includes(torpedoDirection.value)) {
+        torpedoDirection.value = 'E';
+    }
+});
+
 const weaponHint = computed(() => {
     switch (weaponMode.value) {
         case 'torpedo': return 'Kliknij WŁASNY niezatopiony statek (podświetlony na Twojej planszy) — torpeda popłynie z jego pozycji w wybranym kierunku.';
@@ -197,9 +213,14 @@ function newGame() {
             <div v-if="ruleset === 'fun' && weaponMode === 'torpedo'" class="weapon-opts">
                 Kierunek:
                 <label><input type="radio" value="N" v-model="torpedoDirection" /> ↑ N</label>
+                <label><input type="radio" value="NE" v-model="torpedoDirection" :disabled="!diagonalAvailable" /> ↗ NE</label>
                 <label><input type="radio" value="E" v-model="torpedoDirection" /> → E</label>
+                <label><input type="radio" value="SE" v-model="torpedoDirection" :disabled="!diagonalAvailable" /> ↘ SE</label>
                 <label><input type="radio" value="S" v-model="torpedoDirection" /> ↓ S</label>
+                <label><input type="radio" value="SW" v-model="torpedoDirection" :disabled="!diagonalAvailable" /> ↙ SW</label>
                 <label><input type="radio" value="W" v-model="torpedoDirection" /> ← W</label>
+                <label><input type="radio" value="NW" v-model="torpedoDirection" :disabled="!diagonalAvailable" /> ↖ NW</label>
+                <span v-if="!diagonalAvailable" class="diag-hint">(ukośna zużyta)</span>
             </div>
             <div v-if="weaponHint" class="weapon-hint">{{ weaponHint }}</div>
 
@@ -278,6 +299,8 @@ function newGame() {
 .weapon-opts { margin-top:.35rem; display:flex; gap:.6rem; align-items:center; color:#334155; }
 .weapon-hint { margin-top:.3rem; font-size:.9rem; color:#475569; }
 .ai-arsenal { font-size:.9rem; color:#475569; }
+.diag-hint { font-size:.85rem; color:#94a3b8; }
+.weapon-opts label:has(input:disabled) { opacity:.45; }
 .toast { display:inline-block; padding:.3rem .6rem; border-radius:6px; border:1px solid #cbd5e1; background:#f8fafc; color:#0f172a; }
 .toast.warn { background:#fff7ed; border-color:#fed7aa; color:#7c2d12; }
 .toast.error { background:#fee2e2; border-color:#fecaca; color:#7f1d1d; }

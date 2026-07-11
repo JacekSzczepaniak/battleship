@@ -34,17 +34,21 @@ final class OpponentTurn
     /** Nalot tylko, gdy obszar 3×3 ma co najmniej tyle nieostrzelanych pól. */
     private const AIR_RAID_MIN_UNTRIED = 6;
 
+    /** Wyrzutnia torpedy AI z ostatniej akcji — do ujawnienia graczowi. */
+    private ?Coordinate $torpedoLaunch = null;
+
     public function __construct(private readonly WeaponUseDecider $decider = new RandomWeaponUseDecider())
     {
     }
 
     /**
-     * @return array{finished:bool, win:bool, loss:bool, turn:string, opponentMoves:list<array{x:int,y:int,result:string}>}
+     * @return array{finished:bool, win:bool, loss:bool, turn:string, opponentMoves:list<array{x:int,y:int,result:string}>, opponentTorpedoLaunch: array{x:int,y:int}|null}
      */
     public function respond(Game $game): array
     {
         $finished = $game->isFinished();
         $opponentMoves = [];
+        $this->torpedoLaunch = null;
 
         if (!$finished) {
             $ai = HuntTargetAI::fromSnapshot($game->aiState());
@@ -64,6 +68,10 @@ final class OpponentTurn
             'loss' => 'lost' === $game->status()->value,
             'turn' => $turn,
             'opponentMoves' => $opponentMoves,
+            // koszt torpedy: zdradza wyrzutnię — gracz widzi, skąd strzelono
+            'opponentTorpedoLaunch' => null !== $this->torpedoLaunch
+                ? ['x' => $this->torpedoLaunch->x, 'y' => $this->torpedoLaunch->y]
+                : null,
         ];
     }
 
@@ -92,11 +100,12 @@ final class OpponentTurn
 
         // 2) Akcja ofensywna: torpeda / nalot (tylko hunt) albo zwykły strzał
         if ($huntMode && $this->hasUses($weapons, 'torpedo') && $this->decide(self::TORPEDO_CHANCE)) {
-            $run = $this->bestTorpedoRun($game, $view);
+            $run = $this->bestTorpedoRun($game, $view, $this->hasUses($weapons, 'torpedoDiagonal'));
             if (null !== $run) {
                 [$start, $direction] = $run;
                 $results = $game->fireOpponentTorpedo($start, $direction);
                 $this->notifyAll($ai, $results);
+                $this->torpedoLaunch = $start;
 
                 return $results;
             }
@@ -163,19 +172,17 @@ final class OpponentTurn
      *
      * @return array{0: Coordinate, 1: Direction}|null
      */
-    private function bestTorpedoRun(Game $game, BoardReadModel $view): ?array
+    private function bestTorpedoRun(Game $game, BoardReadModel $view, bool $diagonalAllowed): ?array
     {
         $best = null;
         $bestScore = self::TORPEDO_MIN_UNTRIED - 1;
 
         foreach ($game->opponentLaunchableCells() as $cell) {
             foreach (Direction::cases() as $direction) {
-                [$dx, $dy] = match ($direction) {
-                    Direction::N => [0, -1],
-                    Direction::S => [0, 1],
-                    Direction::E => [1, 0],
-                    Direction::W => [-1, 0],
-                };
+                if ($direction->isDiagonal() && !$diagonalAllowed) {
+                    continue;
+                }
+                [$dx, $dy] = $direction->vector();
 
                 $score = 0;
                 $cx = $cell['x'];

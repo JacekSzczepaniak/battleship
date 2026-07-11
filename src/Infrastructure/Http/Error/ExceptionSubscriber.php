@@ -85,8 +85,12 @@ final class ExceptionSubscriber implements EventSubscriberInterface
         if (str_ends_with($message, 'limit reached')) {
             return ['WEAPON_LIMIT_REACHED', 422];
         }
-        if ('Torpedo must be launched from an unsunk ship' === $message) {
+        if (str_starts_with($message, 'Torpedo must be launched')) {
             return ['TORPEDO_LAUNCH_INVALID', 422];
+        }
+        // Zatopiony nośnik broni (kuter/niszczyciel/lotniskowiec)
+        if ('Sonar requires an unsunk scout ship' === $message || 'Air raid requires an unsunk carrier' === $message) {
+            return ['WEAPON_CARRIER_SUNK', 422];
         }
 
         // Wyprawa: bramki rangowe (komunikaty niosą wymaganą rangę)

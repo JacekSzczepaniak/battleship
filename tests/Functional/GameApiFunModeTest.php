@@ -37,7 +37,7 @@ final class GameApiFunModeTest extends WebTestCase
         self::assertSame(['used' => 0, 'limit' => 1], $view['weapons']['airRaid']);
 
         // torpedo: full turn — results + AI response + turn back to player
-        $client->request('POST', "/api/games/$id/torpedo", server: ['CONTENT_TYPE' => 'application/json'], content: json_encode(['x' => 0, 'y' => 0, 'direction' => 'E']));
+        $client->request('POST', "/api/games/$id/torpedo", server: ['CONTENT_TYPE' => 'application/json'], content: json_encode(['x' => 0, 'y' => 2, 'direction' => 'E']));
         self::assertResponseIsSuccessful();
         $torpedo = json_decode($client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
         self::assertCount(10, $torpedo['results']);
@@ -85,7 +85,7 @@ final class GameApiFunModeTest extends WebTestCase
         self::assertResponseIsSuccessful();
 
         // classic → torpeda niedostępna (422 z ExceptionSubscriber)
-        $client->request('POST', "/api/games/$id/torpedo", server: ['CONTENT_TYPE' => 'application/json'], content: json_encode(['x' => 0, 'y' => 0, 'direction' => 'E']));
+        $client->request('POST', "/api/games/$id/torpedo", server: ['CONTENT_TYPE' => 'application/json'], content: json_encode(['x' => 0, 'y' => 2, 'direction' => 'E']));
         self::assertResponseStatusCodeSame(422);
 
         // classic → sonar niedostępny

@@ -116,12 +116,36 @@ final class BoardSide
         return null !== $ship && !$this->isSunk($ship);
     }
 
+    /** Czy na polu stoi niezatopiony statek o zadanej długości (nośnik broni). */
+    public function hasUnsunkShipOfLengthAt(int $x, int $y, int $length): bool
+    {
+        $ship = $this->shipAtKey($x.':'.$y);
+
+        return null !== $ship && $ship->length === $length && !$this->isSunk($ship);
+    }
+
+    /** Czy strona ma jeszcze niezatopiony statek o zadanej długości. */
+    public function hasUnsunkShipOfLength(int $length): bool
+    {
+        if (!$this->hasFleet()) {
+            return false;
+        }
+        foreach ($this->board->ships() as $ship) {
+            if ($ship->length === $length && !$this->isSunk($ship)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
-     * Komórki wszystkich niezatopionych statków tej strony (legalne wyrzutnie torped).
+     * Komórki niezatopionych statków tej strony; $length zawęża do statków
+     * o danej długości (legalne wyrzutnie torped = niszczyciele).
      *
      * @return list<array{x:int,y:int}>
      */
-    public function unsunkShipCells(): array
+    public function unsunkShipCells(?int $length = null): array
     {
         if (!$this->hasFleet()) {
             return [];
@@ -129,7 +153,7 @@ final class BoardSide
 
         $out = [];
         foreach ($this->board->ships() as $ship) {
-            if ($this->isSunk($ship)) {
+            if ($this->isSunk($ship) || (null !== $length && $ship->length !== $length)) {
                 continue;
             }
             foreach ($ship->cells() as $c) {

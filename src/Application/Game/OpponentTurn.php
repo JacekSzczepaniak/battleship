@@ -79,8 +79,10 @@ final class OpponentTurn
         $huntMode = [] === ($game->aiState()['targets'] ?? []);
         $weapons = 'fun' === $game->ruleset()->name() ? $game->opponentWeaponsState() : [];
 
-        // 1) Zwiad: sonar w trybie hunt (nie zużywa akcji ofensywnej)
-        if ($huntMode && $this->hasUses($weapons, 'sonar') && $this->decide(self::SONAR_CHANCE)) {
+        // 1) Zwiad: sonar w trybie hunt (nie zużywa akcji ofensywnej);
+        //    broń wymaga żywego nośnika (kutra) we flocie AI
+        if ($huntMode && $this->hasUses($weapons, 'sonar')
+            && $game->opponentHasWeaponCarrier(Game::SONAR_CARRIER_LENGTH) && $this->decide(self::SONAR_CHANCE)) {
             $center = $this->bestSonarCenter($view, $game->ruleset()->weapons()->sonar->radius);
             if (null !== $center) {
                 $detected = [];
@@ -108,7 +110,8 @@ final class OpponentTurn
             }
         }
 
-        if ($huntMode && $this->hasUses($weapons, 'airRaid') && $this->decide(self::AIR_RAID_CHANCE)) {
+        if ($huntMode && $this->hasUses($weapons, 'airRaid')
+            && $game->opponentHasWeaponCarrier(Game::AIR_RAID_CARRIER_LENGTH) && $this->decide(self::AIR_RAID_CHANCE)) {
             [$halfX, $halfY] = $this->airRaidHalfExtents($game);
             $center = $this->bestAirRaidCenter($view, $halfX, $halfY);
             if (null !== $center) {

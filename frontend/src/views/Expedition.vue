@@ -36,6 +36,7 @@
                 </div>
                 <div class="xp-row">
                     <span>{{ expedition.profile.xp }} XP</span>
+                    <span class="materials">🔩 {{ expedition.profile.materials }}</span>
                     <template v-if="expedition.profile.nextRank">
                         <div class="xp-bar" role="progressbar">
                             <div class="xp-fill" :style="{ width: xpProgress + '%' }"></div>
@@ -47,6 +48,45 @@
                     </template>
                     <span v-else class="muted">najwyższa ranga — morza należą do Ciebie</span>
                 </div>
+            </section>
+
+            <!-- Flota i port -->
+            <section class="card port">
+                <h2>⚓ Flota</h2>
+                <ul class="ships">
+                    <li v-for="ship in expedition.fleet" :key="ship.id" class="ship" :class="{ dmg: ship.damaged }">
+                        <span class="ship-name">{{ SHIP_ICONS[ship.type] }} {{ SHIP_LABELS[ship.type] }}</span>
+                        <template v-if="ship.damaged">
+                            <span class="status">🔧 uszkodzony</span>
+                            <button
+                                class="btn small"
+                                :disabled="busy || repairBlock(ship) !== null"
+                                :title="repairBlock(ship) ?? ''"
+                                @click="onRepair(ship)"
+                            >
+                                Remont ({{ ship.repairCost }} 🔩)
+                            </button>
+                            <span v-if="repairBlock(ship)" class="muted">{{ repairBlock(ship) }}</span>
+                        </template>
+                        <span v-else class="status ok">sprawny</span>
+                    </li>
+                </ul>
+
+                <h3>🏗️ Stocznia <span class="muted">(najlepsza dostępna: poziom {{ bestShipyardLevel }})</span></h3>
+                <ul class="ships">
+                    <li v-for="t in expedition.shipTypes" :key="t.type" class="ship">
+                        <span class="ship-name">{{ SHIP_ICONS[t.type] }} {{ SHIP_LABELS[t.type] }} ({{ t.length }}-masztowiec)</span>
+                        <button
+                            class="btn small"
+                            :disabled="busy || buildBlock(t) !== null"
+                            :title="buildBlock(t) ?? ''"
+                            @click="onBuild(t)"
+                        >
+                            Buduj ({{ t.buildCost }} 🔩)
+                        </button>
+                        <span v-if="buildBlock(t)" class="muted">{{ buildBlock(t) }}</span>
+                    </li>
+                </ul>
             </section>
 
             <!-- Trwająca bitwa -->
@@ -71,8 +111,9 @@
                     </div>
                     <p class="desc">{{ island.description }}</p>
                     <div class="island-meta">
-                        <span>🏆 +{{ island.xpWin }} XP</span>
-                        <span class="muted">porażka: +{{ island.xpLoss }} XP</span>
+                        <span>🏆 +{{ island.xpWin }} XP, +{{ island.materialsWin }} 🔩</span>
+                        <span class="muted">porażka: +{{ island.xpLoss }} XP, +{{ island.materialsLoss }} 🔩</span>
+                        <span class="muted">🏗️ stocznia poz. {{ island.shipyardLevel }} · plansza {{ island.board.w }}×{{ island.board.h }}</span>
                         <span v-if="island.wins || island.losses" class="muted">
                             bilans: {{ island.wins }}W / {{ island.losses }}P
                         </span>
@@ -96,8 +137,9 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
-    createProfile, getExpedition, settleBattle, startIslandBattle,
-    RANK_LABELS, type ExpeditionDTO, type IslandDTO, type RankName,
+    buildShip, createProfile, getExpedition, repairShip, settleBattle, startIslandBattle,
+    RANK_LABELS, SHIP_ICONS, SHIP_LABELS,
+    type ExpeditionDTO, type FleetShipDTO, type IslandDTO, type RankName, type ShipTypeDTO,
 } from '../api/expeditionApi';
 import { ApiError } from '../api/http';
 import {
@@ -125,6 +167,78 @@ const xpProgress = computed(() => {
 
 function rankLabel(rank: RankName): string {
     return RANK_LABELS[rank] ?? rank;
+}
+
+// --- Port: budowa i remont w najlepszej dostępnej stoczni ---
+
+const busy = ref(false);
+
+const RANK_ORDER: RankName[] = ['rozbitek', 'marynarz', 'kapitan', 'admiral'];
+
+function rankAtLeast(rank: RankName, required: RankName): boolean {
+    return RANK_ORDER.indexOf(rank) >= RANK_ORDER.indexOf(required);
+}
+
+/** Odblokowana wyspa ze stocznią o wymaganym poziomie (do budowy/remontu). */
+function shipyardIslandFor(level: number): IslandDTO | null {
+    return expedition.value?.islands.find(i => i.unlocked && i.shipyardLevel >= level) ?? null;
+}
+
+const bestShipyardLevel = computed(() =>
+    Math.max(0, ...(expedition.value?.islands.filter(i => i.unlocked).map(i => i.shipyardLevel) ?? [0]))
+);
+
+/** Powód blokady budowy typu; null = można budować. */
+function buildBlock(t: ShipTypeDTO): string | null {
+    const profile = expedition.value?.profile;
+    if (!profile) return 'wczytywanie…';
+    if (!rankAtLeast(profile.rank, t.requiredRank)) return `wymaga rangi: ${rankLabel(t.requiredRank)}`;
+    if (!shipyardIslandFor(t.requiredShipyardLevel)) return `wymaga stoczni poziomu ${t.requiredShipyardLevel}`;
+    if (profile.materials < t.buildCost) return 'za mało materiałów';
+    return null;
+}
+
+/** Powód blokady remontu statku; null = można remontować. */
+function repairBlock(ship: FleetShipDTO): string | null {
+    const profile = expedition.value?.profile;
+    const type = expedition.value?.shipTypes.find(t => t.type === ship.type);
+    if (!profile || !type) return 'wczytywanie…';
+    if (!shipyardIslandFor(type.requiredShipyardLevel)) return `wymaga stoczni poziomu ${type.requiredShipyardLevel}`;
+    if (profile.materials < ship.repairCost) return 'za mało materiałów';
+    return null;
+}
+
+async function onBuild(t: ShipTypeDTO) {
+    const profileId = getProfileId();
+    const island = shipyardIslandFor(t.requiredShipyardLevel);
+    if (!profileId || !island) return;
+    busy.value = true;
+    error.value = '';
+    try {
+        await buildShip(profileId, island.id, t.type);
+        expedition.value = await getExpedition(profileId);
+    } catch (e: any) {
+        error.value = e?.message ?? 'Budowa nie powiodła się';
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function onRepair(ship: FleetShipDTO) {
+    const profileId = getProfileId();
+    const type = expedition.value?.shipTypes.find(t => t.type === ship.type);
+    const island = shipyardIslandFor(type?.requiredShipyardLevel ?? 1);
+    if (!profileId || !island) return;
+    busy.value = true;
+    error.value = '';
+    try {
+        await repairShip(profileId, island.id, ship.id);
+        expedition.value = await getExpedition(profileId);
+    } catch (e: any) {
+        error.value = e?.message ?? 'Remont nie powiódł się';
+    } finally {
+        busy.value = false;
+    }
 }
 
 onMounted(load);
@@ -221,6 +335,16 @@ h1 { margin-bottom: 0.75rem; }
 .xp-bar { flex: 1 1 140px; min-width: 120px; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
 .xp-fill { height: 100%; background: #1f6feb; transition: width 0.4s ease; }
 .pending { display: flex; gap: 0.75rem; align-items: center; background: #fff7ed; border-color: #fed7aa; }
+.materials { font-weight: 600; color: #92400e; }
+.port h2, .port h3 { margin: 0 0 0.4rem; font-size: 1.05rem; }
+.port h3 { margin-top: 0.8rem; }
+.ships { list-style: none; padding: 0; margin: 0; }
+.ship { display: flex; gap: 0.6rem; align-items: center; padding: 0.25rem 0; flex-wrap: wrap; }
+.ship.dmg .ship-name { opacity: 0.7; }
+.ship-name { min-width: 12rem; }
+.status { font-size: 0.85rem; color: #92400e; }
+.status.ok { color: #15803d; }
+.btn.small { padding: 0.25rem 0.6rem; font-size: 0.85rem; }
 .islands { list-style: none; padding: 0; margin: 0; }
 .island.locked { opacity: 0.6; background: #f8fafc; }
 .island-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; }

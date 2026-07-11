@@ -58,7 +58,15 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             return;
         }
 
-        // Inne wyjątki — INTERNAL_ERROR (tylko komunikat ogólny)
+        // Inne wyjątki — INTERNAL_ERROR (ogólny komunikat dla klienta,
+        // szczegóły do stderr/php-fpm, żeby 500-tki nie znikały bez śladu)
+        error_log(sprintf(
+            'INTERNAL_ERROR: %s: %s @ %s:%d',
+            $e::class,
+            $e->getMessage(),
+            $e->getFile(),
+            $e->getLine()
+        ));
         $event->setResponse($this->jsonError('Internal server error', 'INTERNAL_ERROR', 500));
     }
 
@@ -70,6 +78,14 @@ final class ExceptionSubscriber implements EventSubscriberInterface
     /** @return array{0:string,1:int} [apiCode, httpStatus] */
     private function mapDomainMessage(string $message): array
     {
+        // Bronie specjalne: komunikat zaczyna się od nazwy broni (Torpedo/Sonar/AirRaid …)
+        if (str_ends_with($message, 'not available in this ruleset')) {
+            return ['WEAPON_NOT_AVAILABLE', 422];
+        }
+        if (str_ends_with($message, 'limit reached')) {
+            return ['WEAPON_LIMIT_REACHED', 422];
+        }
+
         return match ($message) {
             'Fleet not placed' => ['FLEET_NOT_PLACED', 422],
             'Opponent fleet not placed' => ['FLEET_NOT_PLACED', 422],

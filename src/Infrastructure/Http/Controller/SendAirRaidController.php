@@ -16,7 +16,7 @@ final class SendAirRaidController
     {
     }
 
-    #[Route('{id}/air-raid', name: 'api_games_air_raid', methods: ['POST'])]
+    #[Route('/{id}/air-raid', name: 'api_games_air_raid', methods: ['POST'])]
     public function __invoke(string $id, Request $request): JsonResponse
     {
         if (!Uuid::isValid($id)) {
@@ -38,10 +38,7 @@ final class SendAirRaidController
         }
 
         // DomainException zostanie obsłużony przez ExceptionSubscriber (422/400)
-        $list = ($this->sendAirRaid)($id, $x, $y, $width, $height);
-
-        return new JsonResponse([
-            'result' => $list, // list of {x,y,result?}
-        ]);
+        // results: list of {x,y,result} + win/loss/finished/turn/opponentMoves
+        return new JsonResponse(($this->sendAirRaid)($id, $x, $y, $width, $height));
     }
 }

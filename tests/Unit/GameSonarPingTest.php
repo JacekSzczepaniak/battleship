@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
-use App\Domain\Game\ClassicRuleset;
 use App\Domain\Game\Coordinate;
+use App\Domain\Game\FunRuleset;
 use App\Domain\Game\Game;
 use PHPUnit\Framework\TestCase;
 use Tests\Support\FleetFactory;
@@ -14,7 +14,7 @@ final class GameSonarPingTest extends TestCase
 {
     public function testSonarCrossFromCornerRespectsBoundsAndReportsOccupancy(): void
     {
-        $rules = new ClassicRuleset();
+        $rules = new FunRuleset();
         $game = Game::create($rules);
         $game->placeFleet(FleetFactory::classic10x10());
 

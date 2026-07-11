@@ -50,10 +50,7 @@ final class FireTorpedoController
         }
 
         // DomainException zostanie zamienione na spójny JSON przez ExceptionSubscriber
-        $list = ($this->fireTorpedo)($id, $x, $y, $direction);
-
-        return new JsonResponse([
-            'results' => $list, // list of {x,y,result}
-        ]);
+        // results: list of {x,y,result} + win/loss/finished/turn/opponentMoves
+        return new JsonResponse(($this->fireTorpedo)($id, $x, $y, $direction));
     }
 }

@@ -8,6 +8,11 @@ final class ClassicRuleset implements Ruleset
     {
     }
 
+    public function name(): string
+    {
+        return 'classic';
+    }
+
     public function boardSize(): BoardSize
     {
         return $this->size;
@@ -24,8 +29,8 @@ final class ClassicRuleset implements Ruleset
         throw new \DomainException('Not accepted in classic ruleset');
     }
 
-    public function fireTorpedo(): bool
+    public function weaponLimits(): array
     {
-        throw new \DomainException('Not accepted in classic ruleset');
+        return ['torpedo' => 0, 'sonar' => 0, 'airRaid' => 0];
     }
 }

@@ -88,6 +88,8 @@ final class GameQueryController
             'id' => (string) $game->id(),
             'status' => $game->status()->value,
             'board' => ['w' => $size->width, 'h' => $size->height],
+            'ruleset' => $game->ruleset()->name(),
+            'weapons' => $game->weaponsState(),
             'mode' => $game->mode(),
             'opponent' => $game->opponent(),
             'turn' => $turn,

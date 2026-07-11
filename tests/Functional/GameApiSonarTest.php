@@ -24,7 +24,7 @@ final class GameApiSonarTest extends WebTestCase
             'POST',
             '/api/games',
             server: ['CONTENT_TYPE' => 'application/json'],
-            content: json_encode(['width' => 10, 'height' => 10], JSON_THROW_ON_ERROR)
+            content: json_encode(['width' => 10, 'height' => 10, 'mode' => 'fun'], JSON_THROW_ON_ERROR)
         );
         self::assertResponseStatusCodeSame(201);
         $id = json_decode($client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR)['id'];
@@ -95,7 +95,7 @@ final class GameApiSonarTest extends WebTestCase
             'POST',
             '/api/games',
             server: ['CONTENT_TYPE' => 'application/json'],
-            content: json_encode(['width' => 10, 'height' => 10], JSON_THROW_ON_ERROR)
+            content: json_encode(['width' => 10, 'height' => 10, 'mode' => 'fun'], JSON_THROW_ON_ERROR)
         );
         self::assertResponseStatusCodeSame(201);
         $id = json_decode($client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR)['id'];

@@ -24,12 +24,18 @@ final class GameController
         $data = json_decode($req->getContent() ?: '{}', true) ?: [];
         $w = $data['width'] ?? null;
         $h = $data['height'] ?? null;
+        $mode = $data['mode'] ?? 'classic';
 
-        $game = $this->createGame->handle($w, $h);
+        if (!in_array($mode, ['classic', 'fun'], true)) {
+            throw new ApiException('Invalid mode: expected classic|fun', 'VALIDATION_ERROR', 400);
+        }
+
+        $game = $this->createGame->handle($w, $h, $mode);
 
         return new JsonResponse([
             'id' => (string) $game->id(),
             'status' => $game->status()->value,
+            'ruleset' => $game->ruleset()->name(),
             'board' => [
                 'w' => $game->ruleset()->boardSize()->width,
                 'h' => $game->ruleset()->boardSize()->height,

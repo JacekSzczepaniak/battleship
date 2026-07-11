@@ -5,6 +5,7 @@ namespace App\Infrastructure\Persistence\Doctrine\Mapper;
 use App\Domain\Game\BoardSize;
 use App\Domain\Game\ClassicRuleset;
 use App\Domain\Game\Coordinate;
+use App\Domain\Game\FunRuleset;
 use App\Domain\Game\Game;
 use App\Domain\Game\GameStatus;
 use App\Domain\Game\Orientation;
@@ -52,7 +53,7 @@ final class GameSnapshotMapper
         return [
             'status' => $game->status()->value,
             'ruleset' => [
-                'type' => 'classic',
+                'type' => $game->ruleset()->name(),
                 'board' => ['w' => $size->width, 'h' => $size->height],
             ],
             'fleet' => $fleet,
@@ -66,6 +67,8 @@ final class GameSnapshotMapper
             'opponentFleet' => $opponentFleet,
             // Stan AI przeciwnika (kształt zna HuntTargetAI) – opcjonalnie
             'ai' => [] !== $game->aiState() ? $game->aiState() : null,
+            // Użycia broni specjalnych (limity trzyma Ruleset)
+            'weapons' => [] !== $game->weaponUses() ? $game->weaponUses() : null,
             // Iteration 1 meta
             'mode' => $game->mode(),
             'opponent' => $game->opponent(),
@@ -166,13 +169,21 @@ final class GameSnapshotMapper
             $game->setAiState($state['ai']);
         }
 
+        // weapon uses from snapshot (optional)
+        if (!empty($state['weapons']) && is_array($state['weapons'])) {
+            $game->setWeaponUsesFromSnapshot($state['weapons']);
+        }
+
         return $game;
     }
 
     private function rulesetFromArray(array $data): Ruleset
     {
         $board = $data['board'] ?? ['w' => 10, 'h' => 10];
+        $size = new BoardSize((int) $board['w'], (int) $board['h']);
 
-        return new ClassicRuleset(new BoardSize((int) $board['w'], (int) $board['h']));
+        return 'fun' === ($data['type'] ?? 'classic')
+            ? new FunRuleset($size)
+            : new ClassicRuleset($size);
     }
 }

@@ -57,6 +57,9 @@ it('pozwala przeprowadzić nalot na wybrany obszar przy narożnikach', function 
         $game->sendAirRaid($centralPoint, new Area(1, 1))
     );
 
+    // limit nalotów to 1 na grę — druga krawędź w świeżej grze
+    $game = Game::create(new FunRuleset(new BoardSize(10, 10)));
+    $game->placeFleet(FleetFactory::classic10x10());
     $centralPoint = new Coordinate(9, 5);
 
     self::assertSame(

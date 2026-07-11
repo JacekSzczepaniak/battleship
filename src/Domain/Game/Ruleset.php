@@ -4,6 +4,9 @@ namespace App\Domain\Game;
 
 interface Ruleset
 {
+    /** Identyfikator wariantu zasad: 'classic' | 'fun' (do snapshotu i API). */
+    public function name(): string;
+
     public function boardSize(): BoardSize;
 
     /**
@@ -16,5 +19,10 @@ interface Ruleset
      */
     public function airRaidSize(): Area;
 
-    public function fireTorpedo(): bool;
+    /**
+     * Limity użyć broni specjalnych na grę; 0 = broń niedostępna w tym wariancie.
+     *
+     * @return array{torpedo:int, sonar:int, airRaid:int}
+     */
+    public function weaponLimits(): array;
 }

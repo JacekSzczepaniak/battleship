@@ -8,6 +8,11 @@ final class FunRuleset implements Ruleset
     {
     }
 
+    public function name(): string
+    {
+        return 'fun';
+    }
+
     public function boardSize(): BoardSize
     {
         return $this->size;
@@ -23,8 +28,8 @@ final class FunRuleset implements Ruleset
         return new Area(3, 3);
     }
 
-    public function fireTorpedo(): bool
+    public function weaponLimits(): array
     {
-        return true;
+        return ['torpedo' => 2, 'sonar' => 3, 'airRaid' => 1];
     }
 }

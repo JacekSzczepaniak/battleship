@@ -27,6 +27,14 @@ final class Game
      */
     private array $aiState = [];
 
+    /**
+     * Liczba użyć broni specjalnych w tej grze (klucze: torpedo|sonar|airRaid).
+     * Limity per grę definiuje Ruleset::weaponLimits(); 0 = broń niedostępna.
+     *
+     * @var array<string,int>
+     */
+    private array $weaponUses = [];
+
     public function __construct(
         private GameId $id,
         private Ruleset $ruleset,
@@ -229,6 +237,53 @@ final class Game
         $this->aiState = $state;
     }
 
+    /**
+     * Stan broni specjalnych: użycia i limity z rulesetu.
+     *
+     * @return array<string, array{used:int, limit:int}>
+     */
+    public function weaponsState(): array
+    {
+        $out = [];
+        foreach ($this->ruleset->weaponLimits() as $weapon => $limit) {
+            $out[$weapon] = ['used' => $this->weaponUses[$weapon] ?? 0, 'limit' => $limit];
+        }
+
+        return $out;
+    }
+
+    /** @return array<string,int> surowe liczniki użyć (do snapshotu) */
+    public function weaponUses(): array
+    {
+        return $this->weaponUses;
+    }
+
+    /** @param array<string,int> $uses */
+    public function setWeaponUsesFromSnapshot(array $uses): void
+    {
+        $this->weaponUses = [];
+        foreach ($uses as $weapon => $count) {
+            $this->weaponUses[(string) $weapon] = max(0, (int) $count);
+        }
+    }
+
+    /**
+     * Zużywa jedno użycie broni; rzuca, gdy broń niedostępna w rulesecie
+     * albo limit na grę wyczerpany.
+     */
+    private function consumeWeapon(string $weapon): void
+    {
+        $limit = $this->ruleset->weaponLimits()[$weapon] ?? 0;
+        if ($limit <= 0) {
+            throw new \DomainException(sprintf('%s not available in this ruleset', ucfirst($weapon)));
+        }
+        $used = $this->weaponUses[$weapon] ?? 0;
+        if ($used >= $limit) {
+            throw new \DomainException(sprintf('%s limit reached', ucfirst($weapon)));
+        }
+        $this->weaponUses[$weapon] = $used + 1;
+    }
+
     /** Strzały gracza. @return list<array{x:int,y:int}> */
     public function shots(): array
     {
@@ -285,14 +340,14 @@ final class Game
             throw new \DomainException('Fleet not placed');
         }
 
-        $this->ruleset->fireTorpedo();
-
         $w = $this->ruleset->boardSize()->width;
         $h = $this->ruleset->boardSize()->height;
 
         if ($start->x >= $w || $start->y >= $h) {
             throw new \DomainException('Torpedo start outside board');
         }
+
+        $this->consumeWeapon('torpedo');
 
         // Direction vector
         [$dx, $dy] = match ($direction) {
@@ -329,6 +384,8 @@ final class Game
         if (!$this->playerSide->hasFleet()) {
             throw new \DomainException('Fleet not placed');
         }
+
+        $this->consumeWeapon('sonar');
 
         $target = $this->targetSide();
 
@@ -386,6 +443,8 @@ final class Game
         if (2 * $area->width + 1 > $max->width || 2 * $area->height + 1 > $max->height) {
             throw new \DomainException('Air Raid area is oversize');
         }
+
+        $this->consumeWeapon('airRaid');
 
         $fromX = max(0, $start->x - $area->width);
         $toX = min($w - 1, $start->x + $area->width);

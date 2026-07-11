@@ -3,7 +3,6 @@
 namespace App\Infrastructure\Http\Controller;
 
 use App\Domain\Game\GameRepository;
-use App\Domain\Game\Orientation;
 use App\Domain\Shared\GameId;
 use App\Infrastructure\Http\Error\ApiException;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -45,22 +44,21 @@ final class GameQueryController
             }
         }
 
-        // sunk ships cells
+        // sunk ships cells — liczone względem floty PRZECIWNIKA (to w nią strzela gracz);
+        // fallback na flotę gracza dla starych gier bez floty przeciwnika
         $sunk = [];
         $hitSet = [];
         foreach ($hits as $h) {
             $hitSet[$h[0].':'.$h[1]] = true;
         }
 
-        $fleet = $game->fleet() ?? [];
-        foreach ($fleet as $ship) {
+        $targetFleet = $game->opponentFleet() ?? $game->fleet() ?? [];
+        foreach ($targetFleet as $ship) {
             $cells = [];
             $allHit = true;
-            for ($i = 0; $i < $ship->length; ++$i) {
-                $x = $ship->start->x + (Orientation::H === $ship->orientation ? $i : 0);
-                $y = $ship->start->y + (Orientation::V === $ship->orientation ? $i : 0);
-                $cells[] = [$x, $y];
-                if (!isset($hitSet["$x:$y"])) {
+            foreach ($ship->cells() as $c) {
+                $cells[] = [$c->x, $c->y];
+                if (!isset($hitSet["{$c->x}:{$c->y}"])) {
                     $allHit = false;
                 }
             }
@@ -80,7 +78,7 @@ final class GameQueryController
                 'o' => $s->orientation->value,
                 'l' => $s->length,
             ];
-        }, $fleet);
+        }, $game->fleet() ?? []);
 
         $turn = $finished ? 'none' : $game->turn();
 

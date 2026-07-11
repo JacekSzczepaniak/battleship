@@ -1,19 +1,72 @@
 <script setup lang="ts">
 import GameGameBoard from './GameBoard.vue';
 import { useGame } from '../composables/useGame';
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 // Destrukturyzacja: ref-y stają się top-level, więc template odpakowuje je
 // automatycznie (zagnieżdżone w zwykłym obiekcie NIE są odpakowywane).
 const {
-    status, finished, turn, loading, error, disabled, attack,
+    status, finished, turn, loading, error, disabled, attack, width, height,
     ruleset, weapons, weaponMode, torpedoDirection, sonarMarks,
     shotsCount, hitsCount, missesCount, duplicatesCount, opponentHitsCount,
     toast, toastType,
     playerGrid, playerUnderFireOverlay, enemyFogGrid, lastShot, sunkCells,
 } = useGame();
 const router = useRouter();
+
+// Podgląd zasięgu aktywnej broni pod kursorem (plansza przeciwnika)
+const hoverCell = ref<{ x: number; y: number } | null>(null);
+
+const previewCells = computed<Set<string>>(() => {
+    const set = new Set<string>();
+    const hc = hoverCell.value;
+    if (!hc || disabled.value) return set;
+    const w = width.value;
+    const h = height.value;
+    const add = (x: number, y: number) => {
+        if (x >= 0 && y >= 0 && x < w && y < h) set.add(`${x}:${y}`);
+    };
+
+    switch (weaponMode.value) {
+        case 'torpedo': {
+            const [dx, dy] = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] }[torpedoDirection.value];
+            let cx = hc.x, cy = hc.y;
+            while (cx >= 0 && cy >= 0 && cx < w && cy < h) {
+                set.add(`${cx}:${cy}`);
+                cx += dx;
+                cy += dy;
+            }
+            break;
+        }
+        case 'sonar':
+            add(hc.x, hc.y);
+            for (let i = 1; i <= 3; i++) {
+                add(hc.x, hc.y - i);
+                add(hc.x + i, hc.y);
+                add(hc.x, hc.y + i);
+                add(hc.x - i, hc.y);
+            }
+            break;
+        case 'airraid':
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dy = -1; dy <= 1; dy++) add(hc.x + dx, hc.y + dy);
+            }
+            break;
+        default:
+            break; // zwykły strzał — bez podglądu
+    }
+
+    return set;
+});
+
+function handleHover(x: number, y: number) {
+    hoverCell.value = { x, y };
+}
+
+function handleBoardLeave() {
+    hoverCell.value = null;
+}
 
 // Połącz siatkę gracza z overlayem strzałów przeciwnika (opp-hit/opp-miss)
 const mergedPlayerGrid = computed<string[][]>(() => {
@@ -39,6 +92,11 @@ const enemyAnimatedGrid = computed<string[][]>(() => {
         // Skan sonaru — tylko na polach jeszcze nieostrzelanych
         if (cell === 'empty' && sonar.has(`${x}:${y}`)) {
             classes += sonar.get(`${x}:${y}`) ? ' sonar-ship' : ' sonar-water';
+        }
+
+        // Podgląd zasięgu broni pod kursorem
+        if (previewCells.value.has(`${x}:${y}`)) {
+            classes += ' preview';
         }
 
         // Zatopione statki – stała klasa 'sink'
@@ -99,7 +157,8 @@ function newGame() {
 
         <div>
             <h3>Przeciwnik</h3>
-            <GameGameBoard :grid="enemyAnimatedGrid" :onCellClick="handleShot" :disabled="disabled" />
+            <GameGameBoard :grid="enemyAnimatedGrid" :onCellClick="handleShot" :disabled="disabled"
+                           :onCellHover="handleHover" :onBoardLeave="handleBoardLeave" />
 
             <!-- Panel broni specjalnych (tylko tryb fun) -->
             <div v-if="ruleset === 'fun' && weapons" class="weapons">
@@ -145,6 +204,7 @@ function newGame() {
                 <div class="legend">
                     <span class="item"><span class="box ship"></span> Statek (Twoja plansza)</span>
                     <span class="item"><span class="box hit"></span> Trafienie</span>
+                    <span class="item"><span class="box sink"></span> Zatopiony</span>
                     <span class="item"><span class="box miss"></span> Pudło</span>
                     <span class="item"><span class="box opp-hit"></span> Trafienie przeciwnika</span>
                     <span class="item"><span class="box opp-miss"></span> Pudło przeciwnika</span>
@@ -182,6 +242,11 @@ function newGame() {
 .legend .box { width:16px; height:16px; border:1px solid #cbd5e1; border-radius:2px; display:inline-block; }
 .legend .box.ship { background:#94a3b8; }
 .legend .box.hit { background:#ef4444; border-color:#ef4444; }
+.legend .box.sink {
+    background:#7f1d1d; border-color:#7f1d1d;
+    background-image: linear-gradient(45deg, transparent 40%, #fecaca 40%, #fecaca 60%, transparent 60%),
+        linear-gradient(-45deg, transparent 40%, #fecaca 40%, #fecaca 60%, transparent 60%);
+}
 .legend .box.miss { background:#bfdbfe; border-color:#bfdbfe; }
 .legend .box.opp-hit { background: transparent; border-color:#7a0a0a; box-shadow: inset 0 0 0 2px #7a0a0a; }
 .legend .box.opp-miss { background: transparent; border-color:#0c4a6e; box-shadow: inset 0 0 0 2px #0c4a6e; }

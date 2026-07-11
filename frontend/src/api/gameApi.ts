@@ -55,9 +55,8 @@ export interface ShotResultDTO {
     opponentMoves: { x: number; y: number; result: 'hit' | 'miss' | 'sunk' | 'duplicate' }[];
 }
 
-export async function createGame(mode: RulesetName = 'classic'): Promise<CreateGameResponse> {
-    // backend przyjmuje opcjonalne width/height/mode
-    return http.post<CreateGameResponse>('/games', { mode });
+export async function createGame(mode: RulesetName = 'classic', size = 10): Promise<CreateGameResponse> {
+    return http.post<CreateGameResponse>('/games', { mode, width: size, height: size });
 }
 
 export async function getGame(id: string): Promise<GameViewDTO> {

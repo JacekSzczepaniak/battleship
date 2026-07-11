@@ -21,8 +21,8 @@
         </div>
       </div>
 
-      <div class="board" role="grid">
-        <div class="row" v-for="y in height" :key="y">
+      <div class="board" role="grid" :style="{ gridTemplateRows: `repeat(${height}, 30px)` }">
+        <div class="row" v-for="y in height" :key="y" :style="{ gridTemplateColumns: `repeat(${width}, 30px)` }">
           <div
             class="cell"
             v-for="x in width"
@@ -54,9 +54,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { placeFleet, type PlayerFleetItem } from '../api/gameApi'
+import { getGame, placeFleet, type PlayerFleetItem } from '../api/gameApi'
 
 const route = useRoute()
 const router = useRouter()
@@ -66,8 +66,19 @@ const loading = ref(false)
 const error = ref('')
 const hint = ref('Kliknij pole, aby postawić kolejny statek. Zmieniaj orientację w toolbarze.')
 
-const width = 10
-const height = 10
+// wymiary planszy z gry (10×10 to tylko start do czasu odpowiedzi API)
+const width = ref(10)
+const height = ref(10)
+
+onMounted(async () => {
+  try {
+    const g = await getGame(id)
+    width.value = g.board.w
+    height.value = g.board.h
+  } catch {
+    // zostają domyślne 10×10; błąd i tak wyjdzie przy zapisie floty
+  }
+})
 
 // Inwentarz klasyczny: 1×4, 2×3, 3×2, 4×1
 const inventory = ref<number[]>([4,3,3,2,2,2,1,1,1,1])
@@ -148,8 +159,8 @@ function isOccupiedOrAdjacent(x: number, y: number): boolean {
 }
 
 function fitsInside(x: number, y: number, len: number, o: 'h'|'v'): boolean {
-  if (o === 'h') return x >= 0 && y >= 0 && x + len - 1 < width && y < height
-  return x >= 0 && y >= 0 && x < width && y + len - 1 < height
+  if (o === 'h') return x >= 0 && y >= 0 && x + len - 1 < width.value && y < height.value
+  return x >= 0 && y >= 0 && x < width.value && y + len - 1 < height.value
 }
 
 function canStartHere(x: number, y: number, len: number, o: 'h'|'v'): boolean {
@@ -233,8 +244,8 @@ function goBack() { router.back() }
 .toolbar .segment { display: flex; gap: .5rem; align-items: center; }
 .pill { display: inline-block; padding: .15rem .4rem; border-radius: 10px; background: #f2f2f2; border: 1px solid #ddd; margin-right: .25rem; }
 
-.board { display: grid; grid-template-rows: repeat(10, 30px); gap: 2px; }
-.row { display: grid; grid-template-columns: repeat(10, 30px); gap: 2px; }
+.board { display: grid; gap: 2px; }
+.row { display: grid; gap: 2px; }
 .cell { width: 30px; height: 30px; border: 1px solid #cbd5e1; background: #f8fafc; cursor: pointer; }
 .cell.ship { background: #94a3b8; }
 .cell.preview { outline: 2px solid #16a34a; outline-offset: -2px; background: #dcfce7; }

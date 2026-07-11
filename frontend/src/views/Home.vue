@@ -15,6 +15,13 @@
             </label>
         </fieldset>
 
+        <fieldset class="mode">
+            <legend>Rozmiar planszy</legend>
+            <label><input type="radio" :value="10" v-model="size" /> 10 × 10 — klasyka</label>
+            <label><input type="radio" :value="12" v-model="size" /> 12 × 12 — więcej wody</label>
+            <label><input type="radio" :value="15" v-model="size" /> 15 × 15 — polowanie</label>
+        </fieldset>
+
         <button class="btn" :disabled="loading" @click="onNewGame">
             {{ loading ? 'Tworzenie…' : 'Nowa gra' }}
         </button>
@@ -32,12 +39,13 @@ const router = useRouter()
 const loading = ref(false)
 const error = ref('')
 const mode = ref<RulesetName>('classic')
+const size = ref(10)
 
 async function onNewGame() {
   loading.value = true
   error.value = ''
   try {
-    const g = await createGame(mode.value)
+    const g = await createGame(mode.value, size.value)
     await router.push({ name: 'place-fleet', params: { id: g.id } })
   } catch (e: any) {
     error.value = e?.message ?? 'Nie udało się utworzyć gry'

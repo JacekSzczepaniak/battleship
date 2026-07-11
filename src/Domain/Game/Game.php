@@ -7,34 +7,17 @@ use App\Domain\Shared\GameId;
 final class Game
 {
     private GameStatus $status = GameStatus::Pending;
-    private ?Board $board = null; // plansza gracza
-    /** @var array<string,bool> */
-    private array $shots = [];
-    /** @var array<string,bool> */
-    private array $hits = [];
 
-    /** @var Ship[]|null */
-    private ?array $fleet = null; // flota gracza
+    /** Strona gracza: jego flota + strzały przeciwnika (AI) w nią oddane. */
+    private BoardSide $playerSide;
 
-    // Flota przeciwnika i jego plansza (na potrzeby strzałów gracza)
-    private ?Board $opponentBoard = null;
-    /** @var Ship[]|null */
-    private ?array $opponentFleet = null;
+    /** Strona przeciwnika: jego flota + strzały gracza w nią oddane. */
+    private BoardSide $opponentSide;
 
     // Iteration 1: minimalne meta gry (na razie jako proste stringi)
     private string $mode = 'standard';      // 'standard' | 'nonstandard'
     private string $opponent = 'mock';      // 'mock' | 'ai' | 'pvp'
     private string $turn = 'player';        // 'player' | 'opponent'
-
-    /**
-     * Strzały przeciwnika na planszę gracza (keys "x:y"), lustrzana struktura do $shots/$hits.
-     * Używane przez mock AI i do projekcji overlayu na planszy gracza.
-     *
-     * @var array<string,bool>
-     */
-    private array $opponentShots = [];
-    /** @var array<string,bool> */
-    private array $opponentHits = [];
 
     /**
      * Nieprzezroczysty stan AI przeciwnika (kształt zna wyłącznie implementacja AI).
@@ -48,6 +31,8 @@ final class Game
         private GameId $id,
         private Ruleset $ruleset,
     ) {
+        $this->playerSide = new BoardSide($ruleset->boardSize());
+        $this->opponentSide = new BoardSide($ruleset->boardSize());
     }
 
     public static function create(Ruleset $ruleset): self
@@ -80,7 +65,7 @@ final class Game
             return true;
         }
 
-        return $this->allShipsSunk();
+        return $this->targetSide()->allShipsHit();
     }
 
     public static function fromSnapshot(GameId $id, Ruleset $ruleset, GameStatus $status): self
@@ -127,7 +112,7 @@ final class Game
     /** @return Ship[]|null */
     public function fleet(): ?array
     {
-        return $this->fleet;
+        return $this->playerSide->fleet();
     }
 
     /**
@@ -137,11 +122,7 @@ final class Game
      */
     public function setFleetFromSnapshot(array $ships): void
     {
-        $this->fleet = $ships;
-        // rebuild the board so fireShot works after loading from repository
-        $board = new Board($this->ruleset->boardSize());
-        $board->placeMany($ships);
-        $this->board = $board;
+        $this->playerSide->setFleetFromSnapshot($ships);
     }
 
     /**
@@ -149,28 +130,12 @@ final class Game
      */
     public function placeFleet(array $ships): void
     {
-        if (null !== $this->fleet) {
+        if ($this->playerSide->hasFleet()) {
             throw new \DomainException('Fleet already placed');
         }
 
-        // validate fleet composition against ruleset
-        $expected = $this->ruleset->allowedShips();
-        $got = [];
-        foreach ($ships as $s) {
-            $got[$s->length] = ($got[$s->length] ?? 0) + 1;
-        }
-        ksort($expected);
-        ksort($got);
-        if ($got !== $expected) {
-            throw new \DomainException('Invalid fleet composition');
-        }
-
-        // validate positions on the board
-        $board = new Board($this->ruleset->boardSize());
-        $board->placeMany($ships);
-
-        $this->fleet = $ships;
-        $this->board = $board;
+        $this->assertFleetComposition($ships);
+        $this->playerSide->placeFleet($ships);
         $this->status = GameStatus::InProgress;
     }
 
@@ -181,15 +146,11 @@ final class Game
      */
     public function placeOpponentFleet(array $ships): void
     {
-        if (null !== $this->opponentFleet) {
+        if ($this->opponentSide->hasFleet()) {
             throw new \DomainException('Opponent fleet already placed');
         }
 
-        $board = new Board($this->ruleset->boardSize());
-        $board->placeMany($ships);
-
-        $this->opponentFleet = $ships;
-        $this->opponentBoard = $board;
+        $this->opponentSide->placeFleet($ships);
     }
 
     /**
@@ -199,133 +160,52 @@ final class Game
      */
     public function setOpponentFleetFromSnapshot(array $ships): void
     {
-        $this->opponentFleet = $ships;
-        $board = new Board($this->ruleset->boardSize());
-        $board->placeMany($ships);
-        $this->opponentBoard = $board;
+        $this->opponentSide->setFleetFromSnapshot($ships);
     }
 
     /** @return Ship[]|null */
     public function opponentFleet(): ?array
     {
-        return $this->opponentFleet;
+        return $this->opponentSide->fleet();
     }
 
     /**
-     * Fires a shot and returns ShotResult.
+     * Strzał gracza w stronę przeciwnika. Gdy wszystkie statki celu trafione — wygrana.
      *
-     * Throws DomainException only when the fleet is not placed.
+     * Throws DomainException when no fleet to shoot at is placed.
      */
     public function fireShot(Coordinate $c): ShotResult
     {
-        // Wsteczna kompatybilność: jeśli nie ustawiono opponentBoard, strzelaj w board gracza
-        $targetBoard = $this->opponentBoard ?? $this->board;
-        if (null === $targetBoard) {
+        $target = $this->targetSide();
+        if (!$target->hasFleet()) {
             throw new \DomainException('Opponent fleet not placed');
         }
-        $key = $c->x.':'.$c->y;
-        if (isset($this->shots[$key])) {
-            return ShotResult::Duplicate;
-        }
-        $this->shots[$key] = true;
 
-        $hitShip = null;
-        foreach ($targetBoard->ships() as $ship) {
-            foreach ($this->cellsFor($ship) as $cellKey) {
-                if ($cellKey === $key) {
-                    $hitShip = $ship;
-                    $this->hits[$key] = true;
-                    break 2;
-                }
-            }
-        }
+        $result = $target->receiveShot($c);
 
-        if (null === $hitShip) {
-            return ShotResult::Miss;
-        }
-
-        // check if the hit ship is sunk
-        $sunk = true;
-        foreach ($this->cellsFor($hitShip) as $cellKey) {
-            if (!isset($this->hits[$cellKey])) {
-                $sunk = false;
-                break;
-            }
-        }
-
-        // check if all ships are sunk (win)
-        $allHit = true;
-        foreach ($targetBoard->ships() as $s) {
-            foreach ($this->cellsFor($s) as $cellKey) {
-                if (!isset($this->hits[$cellKey])) {
-                    $allHit = false;
-                    break 2;
-                }
-            }
-        }
-
-        if ($allHit) {
+        if ($target->allShipsHit()) {
             $this->status = GameStatus::Won;
         }
 
-        return $sunk ? ShotResult::Sunk : ShotResult::Hit;
+        return $result;
     }
 
     /**
-     * Wykonuje strzał przeciwnika na planszy gracza i zwraca wynik.
-     * Gdy wszystkie komórki floty gracza trafione przez przeciwnika – ustawia status Lost.
+     * Strzał przeciwnika (AI) w stronę gracza. Gdy cała flota gracza trafiona — przegrana.
      */
     public function fireOpponentShot(Coordinate $c): ShotResult
     {
-        if (null === $this->board) {
+        if (!$this->playerSide->hasFleet()) {
             throw new \DomainException('Fleet not placed');
         }
 
-        $key = $c->x.':'.$c->y;
-        if (isset($this->opponentShots[$key])) {
-            return ShotResult::Duplicate;
-        }
-        $this->opponentShots[$key] = true;
+        $result = $this->playerSide->receiveShot($c);
 
-        $hitShip = null;
-        foreach ($this->board->ships() as $ship) {
-            foreach ($this->cellsFor($ship) as $cellKey) {
-                if ($cellKey === $key) {
-                    $hitShip = $ship;
-                    $this->opponentHits[$key] = true;
-                    break 2;
-                }
-            }
-        }
-
-        if (null === $hitShip) {
-            return ShotResult::Miss;
-        }
-
-        // czy zatopiony ten statek (przez przeciwnika)
-        $sunk = true;
-        foreach ($this->cellsFor($hitShip) as $cellKey) {
-            if (!isset($this->opponentHits[$cellKey])) {
-                $sunk = false;
-                break;
-            }
-        }
-
-        // czy wszystkie statki gracza trafione przez przeciwnika → przegrana
-        $allOpponentHit = true;
-        foreach ($this->board->ships() as $s) {
-            foreach ($this->cellsFor($s) as $cellKey) {
-                if (!isset($this->opponentHits[$cellKey])) {
-                    $allOpponentHit = false;
-                    break 2;
-                }
-            }
-        }
-        if ($allOpponentHit) {
+        if ($this->playerSide->allShipsHit()) {
             $this->status = GameStatus::Lost;
         }
 
-        return $sunk ? ShotResult::Sunk : ShotResult::Hit;
+        return $result;
     }
 
     /**
@@ -334,9 +214,7 @@ final class Game
      */
     public function opponentShotsView(): BoardReadModel
     {
-        $size = $this->ruleset->boardSize();
-
-        return new ShotsTakenView($size->width, $size->height, $this->opponentShots);
+        return $this->playerSide->shotsView();
     }
 
     /** @return array<string,mixed> */
@@ -351,167 +229,48 @@ final class Game
         $this->aiState = $state;
     }
 
-    /** @return list<string> keys 'x:y' of cells occupied by the ship */
-    private function cellsFor(Ship $ship): array
-    {
-        $cells = [];
-        for ($i = 0; $i < $ship->length; ++$i) {
-            $x = $ship->start->x + (Orientation::H === $ship->orientation ? $i : 0);
-            $y = $ship->start->y + (Orientation::V === $ship->orientation ? $i : 0);
-            $cells[] = $x.':'.$y;
-        }
-
-        return $cells;
-    }
-
-    /** @return list<array{x:int,y:int}> */
+    /** Strzały gracza. @return list<array{x:int,y:int}> */
     public function shots(): array
     {
-        $out = [];
-        foreach (array_keys($this->shots) as $k) {
-            [$x,$y] = array_map('intval', explode(':', $k));
-            $out[] = ['x' => $x, 'y' => $y];
-        }
-
-        return $out;
+        return $this->targetSide()->shotsTaken();
     }
 
-    /** @return list<array{x:int,y:int}> */
+    /** Strzały przeciwnika (AI). @return list<array{x:int,y:int}> */
     public function opponentShots(): array
     {
-        $out = [];
-        foreach (array_keys($this->opponentShots) as $k) {
-            [$x,$y] = array_map('intval', explode(':', $k));
-            $out[] = ['x' => $x, 'y' => $y];
-        }
-
-        return $out;
+        return $this->playerSide->shotsTaken();
     }
 
     /** @param array<int, array{x:int,y:int,r?:string}> $shots */
     public function setShotsFromSnapshot(array $shots): void
     {
-        // in domain: shots = fired positions (bool), hits = successful hits (bool)
-        $this->shots = [];
-        $this->hits = [];
-
-        foreach ($shots as $s) {
-            $key = $s['x'].':'.$s['y'];
-            $this->shots[$key] = true;
-
-            // if snapshot contains result, restore hits
-            $r = $s['r'] ?? null; // 'hit' | 'sunk' | 'miss' | 'duplicate' | null
-            if ('hit' === $r || 'sunk' === $r) {
-                $this->hits[$key] = true;
-            }
-        }
+        $this->targetSide()->setShotsFromSnapshot($shots);
     }
 
     /** @param array<int, array{x:int,y:int,r?:string}> $shots */
     public function setOpponentShotsFromSnapshot(array $shots): void
     {
-        $this->opponentShots = [];
-        $this->opponentHits = [];
-        foreach ($shots as $s) {
-            $key = $s['x'].':'.$s['y'];
-            $this->opponentShots[$key] = true;
-            $r = $s['r'] ?? null;
-            if ('hit' === $r || 'sunk' === $r) {
-                $this->opponentHits[$key] = true;
-            }
-        }
+        $this->playerSide->setShotsFromSnapshot($shots);
     }
 
     /**
-     * Returns shots with calculated result for each shot.
+     * Strzały gracza z wyliczonym wynikiem.
      *
      * @return list<array{x:int,y:int,result:string}>
      */
     public function shotsWithResults(): array
     {
-        $out = [];
-        foreach (array_keys($this->shots) as $key) {
-            [$x, $y] = array_map('intval', explode(':', $key));
-
-            $result = 'miss';
-
-            if (isset($this->hits[$key])) {
-                $result = 'hit';
-
-                // if we have a board, determine if that hit sunk a ship
-                $tb = $this->opponentBoard ?? $this->board;
-                if (null !== $tb) {
-                    foreach ($tb->ships() as $ship) {
-                        $cells = $this->cellsFor($ship);
-                        if (in_array($key, $cells, true)) {
-                            $sunk = true;
-                            foreach ($cells as $cellKey) {
-                                if (!isset($this->hits[$cellKey])) {
-                                    $sunk = false;
-                                    break;
-                                }
-                            }
-                            $result = $sunk ? 'sunk' : 'hit';
-                            break;
-                        }
-                    }
-                }
-            }
-
-            $out[] = ['x' => $x, 'y' => $y, 'result' => $result];
-        }
-
-        return $out;
+        return $this->targetSide()->shotsWithResults();
     }
 
-    private function allShipsSunk(): bool
-    {
-        $tb = $this->opponentBoard ?? $this->board;
-        if (null === $tb) {
-            return false;
-        }
-
-        foreach ($tb->ships() as $ship) {
-            foreach ($this->cellsFor($ship) as $cellKey) {
-                if (!isset($this->hits[$cellKey])) {
-                    return false;
-                }
-            }
-        }
-
-        return true;
-    }
-
-    /** Zwraca listę strzałów przeciwnika z wynikiem. @return list<array{x:int,y:int,result:string}> */
+    /**
+     * Strzały przeciwnika (AI) z wyliczonym wynikiem.
+     *
+     * @return list<array{x:int,y:int,result:string}>
+     */
     public function opponentShotsWithResults(): array
     {
-        $out = [];
-        foreach (array_keys($this->opponentShots) as $key) {
-            [$x, $y] = array_map('intval', explode(':', $key));
-
-            $result = isset($this->opponentHits[$key]) ? 'hit' : 'miss';
-
-            if (isset($this->opponentHits[$key]) && null !== $this->board) {
-                foreach ($this->board->ships() as $ship) {
-                    $cells = $this->cellsFor($ship);
-                    if (in_array($key, $cells, true)) {
-                        $sunk = true;
-                        foreach ($cells as $cellKey) {
-                            if (!isset($this->opponentHits[$cellKey])) {
-                                $sunk = false;
-                                break;
-                            }
-                        }
-                        $result = $sunk ? 'sunk' : 'hit';
-                        break;
-                    }
-                }
-            }
-
-            $out[] = ['x' => $x, 'y' => $y, 'result' => $result];
-        }
-
-        return $out;
+        return $this->playerSide->shotsWithResults();
     }
 
     /**
@@ -522,7 +281,7 @@ final class Game
      */
     public function fireTorpedo(Coordinate $start, Direction $direction): array
     {
-        if (null === $this->board) {
+        if (!$this->playerSide->hasFleet()) {
             throw new \DomainException('Fleet not placed');
         }
 
@@ -531,10 +290,7 @@ final class Game
         $w = $this->ruleset->boardSize()->width;
         $h = $this->ruleset->boardSize()->height;
 
-        $x = $start->x;
-        $y = $start->y;
-
-        if ($x < 0 || $y < 0 || $x >= $w || $y >= $h) {
+        if ($start->x >= $w || $start->y >= $h) {
             throw new \DomainException('Torpedo start outside board');
         }
 
@@ -549,8 +305,8 @@ final class Game
         $results = [];
 
         // Include the start point and each subsequent point until hitting the edge (inclusive)
-        $cx = $x;
-        $cy = $y;
+        $cx = $start->x;
+        $cy = $start->y;
         while ($cx >= 0 && $cy >= 0 && $cx < $w && $cy < $h) {
             $r = $this->fireShot(new Coordinate($cx, $cy));
             $results[] = ['x' => $cx, 'y' => $cy, 'result' => $r->value];
@@ -564,14 +320,17 @@ final class Game
     /**
      * Sonar ping: reveals occupancy info for the center and up to $radius cells
      * in each cardinal direction (cross shape). It does not modify shots/hits.
+     * Skanuje stronę, w którą strzela gracz (przeciwnika; fallback jak fireShot).
      *
      * @return list<array{x:int,y:int,occupied:bool}>
      */
     public function sonarPing(Coordinate $center, int $radius = 3): array
     {
-        if (null === $this->board) {
+        if (!$this->playerSide->hasFleet()) {
             throw new \DomainException('Fleet not placed');
         }
+
+        $target = $this->targetSide();
 
         $w = $this->ruleset->boardSize()->width;
         $h = $this->ruleset->boardSize()->height;
@@ -595,8 +354,7 @@ final class Game
             if (!$inBounds($x, $y)) {
                 continue;
             }
-            $occupied = $this->isShipAt($x, $y);
-            $results[] = ['x' => $x, 'y' => $y, 'occupied' => $occupied];
+            $results[] = ['x' => $x, 'y' => $y, 'occupied' => $target->hasShipAt($x, $y)];
         }
 
         return $results;
@@ -613,7 +371,7 @@ final class Game
      */
     public function sendAirRaid(Coordinate $start, Area $area): array
     {
-        if (null === $this->board) {
+        if (!$this->playerSide->hasFleet()) {
             throw new \DomainException('Fleet not placed');
         }
 
@@ -647,22 +405,26 @@ final class Game
     }
 
     /**
-     * Checks whether any ship occupies the given coordinate.
+     * Strona, w którą strzela gracz: przeciwnik, a gdy jego floty (jeszcze) nie ma —
+     * wstecznie kompatybilny fallback na stronę gracza (starsze testy/snapshoty).
      */
-    private function isShipAt(int $x, int $y): bool
+    private function targetSide(): BoardSide
     {
-        if (null === $this->board) {
-            return false;
-        }
-        $key = $x.':'.$y;
-        foreach ($this->board->ships() as $ship) {
-            foreach ($this->cellsFor($ship) as $cellKey) {
-                if ($cellKey === $key) {
-                    return true;
-                }
-            }
-        }
+        return $this->opponentSide->hasFleet() ? $this->opponentSide : $this->playerSide;
+    }
 
-        return false;
+    /** @param Ship[] $ships */
+    private function assertFleetComposition(array $ships): void
+    {
+        $expected = $this->ruleset->allowedShips();
+        $got = [];
+        foreach ($ships as $s) {
+            $got[$s->length] = ($got[$s->length] ?? 0) + 1;
+        }
+        ksort($expected);
+        ksort($got);
+        if ($got !== $expected) {
+            throw new \DomainException('Invalid fleet composition');
+        }
     }
 }

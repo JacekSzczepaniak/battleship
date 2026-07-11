@@ -213,12 +213,9 @@ export function useGame() {
                 duplicates.value += 1;
                 showToast('Duplikat: to pole było już ostrzelane.', 'warn', 2200);
             }
-            // Ruch przeciwnika można wizualizować na osobnej planszy (na MVP pomijamy)
-            turn.value = res.turn;
-            if (res.finished) {
-                status.value = res.win ? 'won' : (res.loss ? 'lost' : status.value);
-                finished.value = true;
-            }
+            // Tura/koniec gry + ewentualne ujawnienie wyrzutni torpedy AI
+            // (AI może odpalić torpedę także w odpowiedzi na zwykły strzał!)
+            applyTurnOutcome(res);
             // Refetch pełnej projekcji, by zsynchronizować mgłę i stany
             await refresh();
         } catch (e: any) {

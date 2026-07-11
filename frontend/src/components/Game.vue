@@ -210,17 +210,20 @@ function newGame() {
                     ✈️ Nalot {{ weapons.airRaid.limit - weapons.airRaid.used }}/{{ weapons.airRaid.limit }}
                 </button>
             </div>
+            <!-- Kierunek torpedy jako róża wiatrów: 3×3, statek w środku -->
             <div v-if="ruleset === 'fun' && weaponMode === 'torpedo'" class="weapon-opts">
-                Kierunek:
-                <label><input type="radio" value="N" v-model="torpedoDirection" /> ↑ N</label>
-                <label><input type="radio" value="NE" v-model="torpedoDirection" :disabled="!diagonalAvailable" /> ↗ NE</label>
-                <label><input type="radio" value="E" v-model="torpedoDirection" /> → E</label>
-                <label><input type="radio" value="SE" v-model="torpedoDirection" :disabled="!diagonalAvailable" /> ↘ SE</label>
-                <label><input type="radio" value="S" v-model="torpedoDirection" /> ↓ S</label>
-                <label><input type="radio" value="SW" v-model="torpedoDirection" :disabled="!diagonalAvailable" /> ↙ SW</label>
-                <label><input type="radio" value="W" v-model="torpedoDirection" /> ← W</label>
-                <label><input type="radio" value="NW" v-model="torpedoDirection" :disabled="!diagonalAvailable" /> ↖ NW</label>
-                <span v-if="!diagonalAvailable" class="diag-hint">(ukośna zużyta)</span>
+                <div class="rose" title="Kierunek torpedy">
+                    <label class="rose-cell"><input type="radio" value="NW" v-model="torpedoDirection" :disabled="!diagonalAvailable" /><span>↖</span></label>
+                    <label class="rose-cell"><input type="radio" value="N" v-model="torpedoDirection" /><span>↑</span></label>
+                    <label class="rose-cell"><input type="radio" value="NE" v-model="torpedoDirection" :disabled="!diagonalAvailable" /><span>↗</span></label>
+                    <label class="rose-cell"><input type="radio" value="W" v-model="torpedoDirection" /><span>←</span></label>
+                    <div class="rose-center" title="Wyrzutnia — Twój statek">🚢</div>
+                    <label class="rose-cell"><input type="radio" value="E" v-model="torpedoDirection" /><span>→</span></label>
+                    <label class="rose-cell"><input type="radio" value="SW" v-model="torpedoDirection" :disabled="!diagonalAvailable" /><span>↙</span></label>
+                    <label class="rose-cell"><input type="radio" value="S" v-model="torpedoDirection" /><span>↓</span></label>
+                    <label class="rose-cell"><input type="radio" value="SE" v-model="torpedoDirection" :disabled="!diagonalAvailable" /><span>↘</span></label>
+                </div>
+                <span v-if="!diagonalAvailable" class="diag-hint">ukośna zużyta</span>
             </div>
             <div v-if="weaponHint" class="weapon-hint">{{ weaponHint }}</div>
 
@@ -297,6 +300,16 @@ function newGame() {
 .wbtn.active { background:#1f6feb; color:#fff; border-color:#1f6feb; }
 .wbtn[disabled] { opacity:.45; cursor:not-allowed; }
 .weapon-opts { margin-top:.35rem; display:flex; gap:.6rem; align-items:center; color:#334155; }
+.rose { display:grid; grid-template-columns: repeat(3, 34px); grid-auto-rows: 34px; gap:4px; }
+.rose-cell {
+    display:flex; align-items:center; justify-content:center;
+    border:1px solid #cbd5e1; border-radius:6px; background:#f8fafc;
+    cursor:pointer; font-size:1.05rem; color:#334155; user-select:none;
+}
+.rose-cell input { display:none; }
+.rose-cell:has(input:checked) { background:#1f6feb; border-color:#1f6feb; color:#fff; }
+.rose-cell:has(input:disabled) { opacity:.35; cursor:not-allowed; }
+.rose-center { display:flex; align-items:center; justify-content:center; font-size:1.2rem; }
 .weapon-hint { margin-top:.3rem; font-size:.9rem; color:#475569; }
 .ai-arsenal { font-size:.9rem; color:#475569; }
 .diag-hint { font-size:.85rem; color:#94a3b8; }

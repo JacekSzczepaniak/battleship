@@ -3,7 +3,8 @@
 namespace App\Domain\Expedition;
 
 /**
- * Stały katalog wysp plastra A: liniowa trasa 6 wysp, kolejne bramkowane rangą.
+ * Stały katalog wysp plastra A/B: liniowa trasa 6 wysp, kolejne bramkowane
+ * rangą; wczesne wyspy mają mniejsze plansze (krótsze polowanie małą flotą).
  * Docelowo (plaster C) katalog będzie generowany z seeda świata.
  */
 final class StaticIslandCatalog implements IslandCatalog
@@ -22,6 +23,11 @@ final class StaticIslandCatalog implements IslandCatalog
                 mode: 'classic',
                 xpWin: 40,
                 xpLoss: 10,
+                materialsWin: 20,
+                materialsLoss: 5,
+                shipyardLevel: 1,
+                boardWidth: 7,
+                boardHeight: 7,
             ),
             new Island(
                 id: 'mielizny',
@@ -31,6 +37,11 @@ final class StaticIslandCatalog implements IslandCatalog
                 mode: 'classic',
                 xpWin: 50,
                 xpLoss: 12,
+                materialsWin: 25,
+                materialsLoss: 6,
+                shipyardLevel: 1,
+                boardWidth: 8,
+                boardHeight: 8,
             ),
             new Island(
                 id: 'wyspa-sygnalowa',
@@ -40,6 +51,11 @@ final class StaticIslandCatalog implements IslandCatalog
                 mode: 'fun',
                 xpWin: 70,
                 xpLoss: 15,
+                materialsWin: 35,
+                materialsLoss: 8,
+                shipyardLevel: 2,
+                boardWidth: 9,
+                boardHeight: 9,
             ),
             new Island(
                 id: 'archipelag-mgiel',
@@ -49,6 +65,11 @@ final class StaticIslandCatalog implements IslandCatalog
                 mode: 'fun',
                 xpWin: 80,
                 xpLoss: 20,
+                materialsWin: 40,
+                materialsLoss: 10,
+                shipyardLevel: 2,
+                boardWidth: 10,
+                boardHeight: 10,
             ),
             new Island(
                 id: 'ciesnina-sztormow',
@@ -58,6 +79,11 @@ final class StaticIslandCatalog implements IslandCatalog
                 mode: 'fun',
                 xpWin: 100,
                 xpLoss: 25,
+                materialsWin: 50,
+                materialsLoss: 12,
+                shipyardLevel: 3,
+                boardWidth: 10,
+                boardHeight: 10,
             ),
             new Island(
                 id: 'twierdza-admiralicji',
@@ -67,6 +93,11 @@ final class StaticIslandCatalog implements IslandCatalog
                 mode: 'fun',
                 xpWin: 120,
                 xpLoss: 30,
+                materialsWin: 60,
+                materialsLoss: 15,
+                shipyardLevel: 3,
+                boardWidth: 10,
+                boardHeight: 10,
             ),
         ];
     }

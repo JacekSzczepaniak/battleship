@@ -7,7 +7,6 @@ namespace Tests\Functional;
 use App\Kernel;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
-use Tests\Support\FleetFactory;
 
 final class ExpeditionApiTest extends WebTestCase
 {
@@ -20,75 +19,92 @@ final class ExpeditionApiTest extends WebTestCase
     {
         $client = static::createClient();
 
-        // 1) profil kapitana
+        // 1) profil kapitana z flotą startową (kuter + 3 tratwy) i materiałami
         $profile = $this->post($client, '/api/profiles', ['name' => 'Jacek']);
         self::assertResponseStatusCodeSame(201);
         self::assertSame('rozbitek', $profile['rank']);
-        self::assertSame(0, $profile['xp']);
         $profileId = $profile['id'];
 
-        // 2) stan wyprawy: pierwsza wyspa otwarta, ostatnia zamknięta
-        $client->request('GET', "/api/profiles/$profileId/expedition");
-        self::assertResponseIsSuccessful();
-        $expedition = json_decode($client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        // 2) stan wyprawy: pierwsza wyspa otwarta, ostatnia zamknięta; flota i stocznie widoczne
+        $expedition = $this->getExpedition($client, $profileId);
 
         $islands = $expedition['islands'];
         self::assertSame('zatoka-rozbitka', $islands[0]['id']);
         self::assertTrue($islands[0]['unlocked']);
         self::assertFalse(end($islands)['unlocked']);
         self::assertSame(['rank' => 'marynarz', 'xpNeeded' => 80], $expedition['profile']['nextRank']);
+        self::assertSame(20, $expedition['profile']['materials']);
+        self::assertCount(4, $expedition['fleet']);
+        self::assertSame(1, $islands[0]['shipyardLevel']);
+        self::assertNotEmpty($expedition['shipTypes']);
 
         // 3) zamknięta wyspa → 403 ISLAND_LOCKED
         $lockedId = end($islands)['id'];
         $this->post($client, "/api/profiles/$profileId/islands/$lockedId/battle");
         self::assertResponseStatusCodeSame(403);
 
-        // 4) bitwa o pierwszą wyspę (classic)
+        // 4) bitwa o pierwszą wyspę: plansza 7×7, skład = sprawna flota gracza
         $battle = $this->post($client, "/api/profiles/$profileId/islands/zatoka-rozbitka/battle");
         self::assertResponseStatusCodeSame(201);
         self::assertSame('classic', $battle['ruleset']);
+        self::assertSame(['w' => 7, 'h' => 7], $battle['board']);
         $gameId = $battle['id'];
+
+        $client->request('GET', "/api/games/$gameId");
+        $view = json_decode($client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame(['2' => 1, '1' => 3], $view['allowedShips']);
 
         // 5) rozliczenie przed końcem bitwy → 409
         $this->post($client, "/api/profiles/$profileId/battles/$gameId/settle");
         self::assertResponseStatusCodeSame(409);
 
-        // 6) wystaw flotę i zatop całą flotę przeciwnika (deterministyczna w env test)
-        $fleet = FleetFactory::classic10x10Array();
-        $this->post($client, "/api/games/$gameId/fleet", ['ships' => $fleet]);
+        // 6) wystaw flotę (kuter + 3 tratwy) i zatop lustrzaną flotę przeciwnika:
+        //    deterministyczny generator pakuje wierszowo → znane pozycje
+        $this->post($client, "/api/games/$gameId/fleet", ['ships' => [
+            ['x' => 0, 'y' => 0, 'o' => 'h', 'l' => 2],
+            ['x' => 4, 'y' => 0, 'o' => 'h', 'l' => 1],
+            ['x' => 6, 'y' => 2, 'o' => 'h', 'l' => 1],
+            ['x' => 0, 'y' => 4, 'o' => 'h', 'l' => 1],
+        ]]);
         self::assertResponseIsSuccessful();
 
-        foreach ($fleet as $s) {
-            $horiz = 'h' === strtolower((string) $s['o']);
-            for ($i = 0; $i < $s['l']; ++$i) {
-                $this->post($client, "/api/games/$gameId/shots", [
-                    'x' => $s['x'] + ($horiz ? $i : 0),
-                    'y' => $s['y'] + ($horiz ? 0 : $i),
-                ]);
-                self::assertResponseIsSuccessful();
-            }
+        foreach ([[0, 0], [1, 0], [3, 0], [5, 0], [0, 2]] as [$x, $y]) {
+            $this->post($client, "/api/games/$gameId/shots", ['x' => $x, 'y' => $y]);
+            self::assertResponseIsSuccessful();
         }
 
-        // 7) rozliczenie: XP za wygraną wg wyspy
+        // 7) rozliczenie: XP + materiały wg wyspy; wygrana nie odbiera statków na stałe
         $settled = $this->post($client, "/api/profiles/$profileId/battles/$gameId/settle");
         self::assertResponseIsSuccessful();
         self::assertSame('won', $settled['result']);
         self::assertSame(40, $settled['awarded']);
-        self::assertSame(40, $settled['xp']);
-        self::assertSame('rozbitek', $settled['rank']);
-        self::assertFalse($settled['rankUp']);
+        self::assertSame(20, $settled['materialsAwarded']);
+        self::assertSame(40, $settled['materials']);
+        self::assertSame([], $settled['lostShips']);
 
-        // 8) idempotencja: drugie rozliczenie bez XP
+        // 8) idempotencja: drugie rozliczenie bez nagród
         $again = $this->post($client, "/api/profiles/$profileId/battles/$gameId/settle");
         self::assertResponseIsSuccessful();
         self::assertSame(0, $again['awarded']);
-        self::assertSame(40, $again['xp']);
+        self::assertSame(0, $again['materialsAwarded']);
 
-        // 9) statystyki wyspy w stanie wyprawy
-        $client->request('GET', "/api/profiles/$profileId/expedition");
-        $expedition = json_decode($client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        // 9) stocznia: budowa kutra za 20 materiałów
+        $ship = $this->post($client, "/api/profiles/$profileId/ships", [
+            'type' => 'kuter', 'islandId' => 'zatoka-rozbitka',
+        ]);
+        self::assertResponseStatusCodeSame(201);
+        self::assertSame('kuter', $ship['type']);
+
+        $expedition = $this->getExpedition($client, $profileId);
+        self::assertSame(20, $expedition['profile']['materials']);
+        self::assertCount(5, $expedition['fleet']);
         self::assertSame(1, $expedition['islands'][0]['wins']);
-        self::assertSame(40, $expedition['profile']['xp']);
+
+        // 10) niszczyciel w stoczni poziomu 1 → 409 SHIPYARD_TOO_LOW
+        $this->post($client, "/api/profiles/$profileId/ships", [
+            'type' => 'niszczyciel', 'islandId' => 'zatoka-rozbitka',
+        ]);
+        self::assertResponseStatusCodeSame(409);
     }
 
     public function testSettleRejectsForeignGame(): void
@@ -102,6 +118,15 @@ final class ExpeditionApiTest extends WebTestCase
 
         $this->post($client, "/api/profiles/$profileId/battles/$gameId/settle");
         self::assertResponseStatusCodeSame(404);
+    }
+
+    /** @return array<string,mixed> */
+    private function getExpedition(KernelBrowser $client, string $profileId): array
+    {
+        $client->request('GET', "/api/profiles/$profileId/expedition");
+        self::assertResponseIsSuccessful();
+
+        return json_decode($client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
     }
 
     /** @return array<string,mixed> */

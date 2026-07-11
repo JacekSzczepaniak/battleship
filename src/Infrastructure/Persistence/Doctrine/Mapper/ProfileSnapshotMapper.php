@@ -3,17 +3,25 @@
 namespace App\Infrastructure\Persistence\Doctrine\Mapper;
 
 use App\Domain\Expedition\CaptainProfile;
+use App\Domain\Expedition\OwnedShip;
+use App\Domain\Expedition\ShipType;
 use App\Domain\Shared\ProfileId;
 
 final class ProfileSnapshotMapper
 {
-    /** @return array{name: string, xp: int, battles: array<string, array{island:string, settled:bool, result:?string}>} */
+    /** @return array<string,mixed> */
     public function toArray(CaptainProfile $profile): array
     {
         return [
             'name' => $profile->name(),
             'xp' => $profile->xp(),
             'battles' => $profile->battles(),
+            'materials' => $profile->materials(),
+            'fleet' => array_map(static fn (OwnedShip $ship) => [
+                'id' => $ship->id,
+                'type' => $ship->type->value,
+                'damaged' => $ship->isDamaged(),
+            ], $profile->fleet()),
         ];
     }
 
@@ -25,11 +33,28 @@ final class ProfileSnapshotMapper
             if (!is_array($battle) || !isset($battle['island'])) {
                 continue;
             }
-            $battles[(string) $gameId] = [
+            $entry = [
                 'island' => (string) $battle['island'],
                 'settled' => (bool) ($battle['settled'] ?? false),
                 'result' => isset($battle['result']) ? (string) $battle['result'] : null,
             ];
+            if (isset($battle['ships']) && is_array($battle['ships'])) {
+                $entry['ships'] = array_values(array_map('strval', $battle['ships']));
+            }
+            $battles[(string) $gameId] = $entry;
+        }
+
+        // Flota: brak klucza = profil sprzed ekonomii (CaptainProfile da flotę startową)
+        $fleet = null;
+        if (isset($state['fleet']) && is_array($state['fleet'])) {
+            $fleet = [];
+            foreach ($state['fleet'] as $ship) {
+                $type = is_array($ship) ? ShipType::tryFrom((string) ($ship['type'] ?? '')) : null;
+                if (null === $type || !isset($ship['id'])) {
+                    continue;
+                }
+                $fleet[] = new OwnedShip((string) $ship['id'], $type, (bool) ($ship['damaged'] ?? false));
+            }
         }
 
         return CaptainProfile::fromSnapshot(
@@ -37,6 +62,8 @@ final class ProfileSnapshotMapper
             (string) ($state['name'] ?? 'Rozbitek'),
             (int) ($state['xp'] ?? 0),
             $battles,
+            $fleet,
+            isset($state['materials']) ? max(0, (int) $state['materials']) : null,
         );
     }
 }

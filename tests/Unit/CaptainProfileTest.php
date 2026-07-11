@@ -6,6 +6,8 @@ use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\Rank;
 use App\Domain\Shared\GameId;
 
+const NO_AWARDS = ['xp' => 0, 'materials' => 0, 'lost' => [], 'damaged' => []];
+
 it('startuje jako rozbitek z zerowym XP', function () {
     $profile = CaptainProfile::create('Jacek');
 
@@ -17,33 +19,39 @@ it('odrzuca pustą i za długą nazwę', function (string $name) {
     CaptainProfile::create($name);
 })->with(['', '   ', str_repeat('x', 41)])->throws(InvalidArgumentException::class);
 
-it('rozlicza wygraną bitwę i nalicza XP', function () {
+it('rozlicza wygraną bitwę i nalicza XP oraz materiały', function () {
     $profile = CaptainProfile::create('Jacek');
     $gameId = GameId::new();
     $profile->startBattle('zatoka-rozbitka', $gameId);
 
-    expect($profile->settleBattle($gameId, 'won', 40))->toBe(40)
+    $outcome = $profile->settleBattle($gameId, 'won', 40, 20);
+
+    expect($outcome['xp'])->toBe(40)
+        ->and($outcome['materials'])->toBe(20)
         ->and($profile->xp())->toBe(40)
         ->and($profile->battleStats('zatoka-rozbitka'))->toBe(['wins' => 1, 'losses' => 0]);
 });
 
-it('nalicza XP także za przegraną — doświadczenia się nie traci', function () {
+it('nalicza XP i materiały także za przegraną — doświadczenia się nie traci', function () {
     $profile = CaptainProfile::create('Jacek');
     $gameId = GameId::new();
     $profile->startBattle('mielizny', $gameId);
 
-    expect($profile->settleBattle($gameId, 'lost', 12))->toBe(12)
+    $outcome = $profile->settleBattle($gameId, 'lost', 12, 6);
+
+    expect($outcome['xp'])->toBe(12)
         ->and($profile->xp())->toBe(12)
+        ->and($profile->materials())->toBe(26) // 20 startowych + 6
         ->and($profile->battleStats('mielizny'))->toBe(['wins' => 0, 'losses' => 1]);
 });
 
-it('rozliczenie jest idempotentne — druga próba nie daje XP', function () {
+it('rozliczenie jest idempotentne — druga próba nie daje nagród', function () {
     $profile = CaptainProfile::create('Jacek');
     $gameId = GameId::new();
     $profile->startBattle('zatoka-rozbitka', $gameId);
-    $profile->settleBattle($gameId, 'won', 40);
+    $profile->settleBattle($gameId, 'won', 40, 20);
 
-    expect($profile->settleBattle($gameId, 'won', 40))->toBe(0)
+    expect($profile->settleBattle($gameId, 'won', 40, 20))->toBe(NO_AWARDS)
         ->and($profile->xp())->toBe(40);
 });
 
@@ -75,11 +83,19 @@ it('round-tripuje przez snapshot', function () {
     $profile = CaptainProfile::create('Jacek');
     $gameId = GameId::new();
     $profile->startBattle('zatoka-rozbitka', $gameId);
-    $profile->settleBattle($gameId, 'won', 40);
+    $profile->settleBattle($gameId, 'won', 40, 20);
 
-    $restored = CaptainProfile::fromSnapshot($profile->id(), $profile->name(), $profile->xp(), $profile->battles());
+    $restored = CaptainProfile::fromSnapshot(
+        $profile->id(),
+        $profile->name(),
+        $profile->xp(),
+        $profile->battles(),
+        $profile->fleet(),
+        $profile->materials(),
+    );
 
     expect($restored->xp())->toBe(40)
+        ->and($restored->materials())->toBe(40) // 20 startowych + 20 z bitwy
         ->and($restored->battleStats('zatoka-rozbitka'))->toBe(['wins' => 1, 'losses' => 0])
-        ->and($restored->settleBattle($gameId, 'won', 40))->toBe(0);
+        ->and($restored->settleBattle($gameId, 'won', 40, 20))->toBe(NO_AWARDS);
 });

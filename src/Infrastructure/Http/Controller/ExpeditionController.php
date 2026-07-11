@@ -2,10 +2,14 @@
 
 namespace App\Infrastructure\Http\Controller;
 
+use App\Application\Expedition\BuildShip;
 use App\Application\Expedition\CreateProfile;
 use App\Application\Expedition\GetExpedition;
+use App\Application\Expedition\RepairShip;
 use App\Application\Expedition\SettleBattle;
 use App\Application\Expedition\StartIslandBattle;
+use App\Domain\Expedition\OwnedShip;
+use App\Domain\Expedition\ShipType;
 use App\Infrastructure\Http\Error\ApiException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -20,6 +24,8 @@ final class ExpeditionController
         private GetExpedition $getExpedition,
         private StartIslandBattle $startIslandBattle,
         private SettleBattle $settleBattle,
+        private BuildShip $buildShip,
+        private RepairShip $repairShip,
     ) {
     }
 
@@ -80,6 +86,61 @@ final class ExpeditionController
         $this->assertUuid($gameId, 'game');
 
         return new JsonResponse($this->settleBattle->handle($id, $gameId));
+    }
+
+    #[Route('/{id}/ships', name: 'api_profiles_build_ship', methods: ['POST'])]
+    public function buildShip(string $id, Request $request): JsonResponse
+    {
+        $this->assertUuid($id, 'profile');
+        $payload = $this->jsonPayload($request);
+
+        $type = ShipType::tryFrom((string) ($payload['type'] ?? ''));
+        $islandId = $payload['islandId'] ?? null;
+        if (null === $type || !is_string($islandId)) {
+            throw new ApiException('Missing or invalid fields: type:ship-type, islandId:string', 'VALIDATION_ERROR', 400);
+        }
+
+        $ship = $this->buildShip->handle($id, $islandId, $type);
+
+        return new JsonResponse($this->shipView($ship), 201);
+    }
+
+    #[Route('/{id}/ships/{shipId}/repair', name: 'api_profiles_repair_ship', methods: ['POST'])]
+    public function repairShip(string $id, string $shipId, Request $request): JsonResponse
+    {
+        $this->assertUuid($id, 'profile');
+        $payload = $this->jsonPayload($request);
+
+        $islandId = $payload['islandId'] ?? null;
+        if (!is_string($islandId)) {
+            throw new ApiException('Missing or invalid field: islandId:string', 'VALIDATION_ERROR', 400);
+        }
+
+        $ship = $this->repairShip->handle($id, $islandId, $shipId);
+
+        return new JsonResponse($this->shipView($ship));
+    }
+
+    /** @return array<string,mixed> */
+    private function shipView(OwnedShip $ship): array
+    {
+        return [
+            'id' => $ship->id,
+            'type' => $ship->type->value,
+            'length' => $ship->type->length(),
+            'damaged' => $ship->isDamaged(),
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function jsonPayload(Request $request): array
+    {
+        $payload = json_decode($request->getContent() ?: '{}', true);
+        if (!is_array($payload)) {
+            throw new ApiException('Invalid JSON', 'VALIDATION_ERROR', 400);
+        }
+
+        return $payload;
     }
 
     private function assertUuid(string $id, string $what): void

@@ -4,6 +4,7 @@ namespace App\Application\Expedition;
 
 use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\ProfileRepository;
+use App\Domain\Game\Game;
 use App\Domain\Game\GameRepository;
 use App\Domain\Game\GameStatus;
 use App\Domain\Shared\GameId;
@@ -19,10 +20,13 @@ final class SettleBattle
     }
 
     /**
-     * Rozlicza zakończoną bitwę: wynik czytany ze stanu gry (nie od klienta),
-     * XP wg definicji wyspy, idempotentnie (ponowne wywołanie → awarded 0).
+     * Rozlicza zakończoną bitwę: wynik i straty czytane ze stanu gry (nie od
+     * klienta), XP i materiały wg definicji wyspy, idempotentnie (ponowne
+     * wywołanie → zera). Zatopione statki: wygrana → do remontu, przegrana →
+     * stracone.
      *
-     * @return array{result:string, awarded:int, xp:int, rank:string, rankUp:bool}
+     * @return array{result:string, awarded:int, xp:int, rank:string, rankUp:bool,
+     *     materialsAwarded:int, materials:int, lostShips:list<string>, damagedShips:list<string>}
      */
     public function handle(string $profileId, string $gameId): array
     {
@@ -53,19 +57,57 @@ final class SettleBattle
         $result = GameStatus::Lost === $game->status() ? 'lost' : 'won';
         $rankBefore = $profile->rank();
 
-        $awarded = $profile->settleBattle(
+        $outcome = $profile->settleBattle(
             $game->id(),
             $result,
             'won' === $result ? $island->xpWin : $island->xpLoss,
+            'won' === $result ? $island->materialsWin : $island->materialsLoss,
+            $this->sunkPlayerShipLengths($game),
         );
         $this->profiles->save($profile);
 
         return [
             'result' => $result,
-            'awarded' => $awarded,
+            'awarded' => $outcome['xp'],
             'xp' => $profile->xp(),
             'rank' => $profile->rank()->value,
-            'rankUp' => $awarded > 0 && $profile->rank() !== $rankBefore,
+            'rankUp' => $outcome['xp'] > 0 && $profile->rank() !== $rankBefore,
+            'materialsAwarded' => $outcome['materials'],
+            'materials' => $profile->materials(),
+            'lostShips' => $outcome['lost'],
+            'damagedShips' => $outcome['damaged'],
         ];
+    }
+
+    /**
+     * Długości statków gracza zatopionych w bitwie — liczone ze snapshotu gry:
+     * statek jest zatopiony, gdy wszystkie jego pola zostały trafione przez AI.
+     *
+     * @return list<int>
+     */
+    private function sunkPlayerShipLengths(Game $game): array
+    {
+        $hits = [];
+        foreach ($game->opponentShotsWithResults() as $shot) {
+            if (in_array($shot['result'], ['hit', 'sunk'], true)) {
+                $hits["{$shot['x']}:{$shot['y']}"] = true;
+            }
+        }
+
+        $lengths = [];
+        foreach ($game->fleet() ?? [] as $ship) {
+            $allHit = true;
+            foreach ($ship->cells() as $cell) {
+                if (!isset($hits["{$cell->x}:{$cell->y}"])) {
+                    $allHit = false;
+                    break;
+                }
+            }
+            if ($allHit) {
+                $lengths[] = $ship->length;
+            }
+        }
+
+        return $lengths;
     }
 }

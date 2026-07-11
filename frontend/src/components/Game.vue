@@ -1,37 +1,41 @@
 <script setup lang="ts">
 import GameGameBoard from './GameBoard.vue';
 import { useGame } from '../composables/useGame';
-import { computed, unref } from 'vue'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
-const g = useGame();
+// Destrukturyzacja: ref-y stają się top-level, więc template odpakowuje je
+// automatycznie (zagnieżdżone w zwykłym obiekcie NIE są odpakowywane).
+const {
+    status, finished, turn, loading, error, disabled, shot,
+    shotsCount, hitsCount, missesCount, duplicatesCount, opponentHitsCount,
+    toast, toastType,
+    playerGrid, playerUnderFireOverlay, enemyFogGrid, lastShot, sunkCells,
+} = useGame();
 const router = useRouter();
 
 // Połącz siatkę gracza z overlayem strzałów przeciwnika (opp-hit/opp-miss)
-const mergedPlayerGrid = computed(() => {
-    const base = unref(g.playerGrid) as unknown as string[][];
-    const ov = unref(g.playerUnderFireOverlay) as unknown as (('none'|'opp-hit'|'opp-miss')[])[];
-    if (!Array.isArray(base) || !Array.isArray(ov) || base.length !== ov.length) return base as any;
+const mergedPlayerGrid = computed<string[][]>(() => {
+    const base = playerGrid.value;
+    const ov = playerUnderFireOverlay.value;
+    if (base.length !== ov.length) return base;
     return base.map((row, y) => row.map((cell, x) => {
-        const o = ov?.[y]?.[x] ?? 'none';
+        const o = ov[y]?.[x] ?? 'none';
         if (o === 'none') return cell as string;
         // złącz klasy, aby widoczny był statek i overlay
         return `${cell} ${o}`.trim();
     }));
 });
 
-const enemyAnimatedGrid = computed(() => {
-    const base = unref(g.enemyFogGrid) as unknown as string[][];
-    const ls = unref(g.lastShot) as { x: number; y: number; result: string } | null;
-    const sunk = unref(g.sunkCells) as Array<[number, number]> | null | undefined;
+const enemyAnimatedGrid = computed<string[][]>(() => {
+    const ls = lastShot.value;
+    const sunk = sunkCells.value;
 
-    if (!Array.isArray(base)) return base as any;
-
-    return base.map((row, y) => row.map((cell, x) => {
-        let classes = cell as string;
+    return enemyFogGrid.value.map((row, y) => row.map((cell, x) => {
+        let classes: string = cell;
 
         // Zatopione statki – stała klasa 'sink'
-        if (Array.isArray(sunk) && sunk.some(([sx, sy]) => sx === x && sy === y)) {
+        if (sunk.some(([sx, sy]) => sx === x && sy === y)) {
             classes += ' sink';
         }
 
@@ -48,17 +52,9 @@ const enemyAnimatedGrid = computed(() => {
     }));
 });
 
-
-
 function handleShot(x: number, y: number) {
-    // Uwaga: w <script setup> wartości z composable nie są auto‑odwijane poza template
-    // więc g.disabled jest Ref<boolean>. Sprawdźmy .value.
-    if (g.disabled && 'value' in g.disabled) {
-        if (!g.disabled.value) g.shot(x, y);
-    } else {
-        // fallback – jeśli z jakiegoś powodu disabled nie jest Refem
-        // to i tak spróbujemy oddać strzał
-        g.shot(x, y);
+    if (!disabled.value) {
+        shot(x, y);
     }
 }
 
@@ -69,8 +65,8 @@ function newGame() {
 
 <template>
     <!-- Banner końca gry u góry sekcji -->
-    <div v-if="g.finished || g.status === 'won' || g.status === 'lost'" class="game-banner" :class="g.status">
-        Koniec gry: {{ g.status === 'won' ? 'Wygrana' : 'Przegrana' }}
+    <div v-if="finished || status === 'won' || status === 'lost'" class="game-banner" :class="status">
+        Koniec gry: {{ status === 'won' ? 'Wygrana' : 'Przegrana' }}
         <button class="btn small" @click="newGame">Nowa gra</button>
     </div>
 
@@ -83,17 +79,17 @@ function newGame() {
 
         <div>
             <h3>Przeciwnik</h3>
-            <GameGameBoard :grid="enemyAnimatedGrid" :onCellClick="handleShot" :disabled="g.disabled" />
-            <div v-if="g.loading">Ładowanie…</div>
-            <div v-if="g.error" style="color:crimson">{{ g.error }}</div>
+            <GameGameBoard :grid="enemyAnimatedGrid" :onCellClick="handleShot" :disabled="disabled" />
+            <div v-if="loading">Ładowanie…</div>
+            <div v-if="error" style="color:crimson">{{ error }}</div>
             <div class="hud">
-                <div>Ruch: <strong>{{ g.turn }}</strong> <span v-if="g.disabled">(zablokowane)</span></div>
+                <div>Ruch: <strong>{{ turn }}</strong> <span v-if="disabled">(zablokowane)</span></div>
                 <div class="stats">
-                    <span class="pill">Strzały: <strong>{{ g.shotsCount }}</strong></span>
-                    <span class="pill hit">Trafienia: <strong>{{ g.hitsCount }}</strong></span>
-                    <span class="pill miss">Pudła: <strong>{{ g.missesCount }}</strong></span>
-                    <span class="pill dup">Duplikaty: <strong>{{ g.duplicatesCount }}</strong></span>
-                    <span class="pill opp">Trafienia przeciwnika: <strong>{{ g.opponentHitsCount }}</strong></span>
+                    <span class="pill">Strzały: <strong>{{ shotsCount }}</strong></span>
+                    <span class="pill hit">Trafienia: <strong>{{ hitsCount }}</strong></span>
+                    <span class="pill miss">Pudła: <strong>{{ missesCount }}</strong></span>
+                    <span class="pill dup">Duplikaty: <strong>{{ duplicatesCount }}</strong></span>
+                    <span class="pill opp">Trafienia przeciwnika: <strong>{{ opponentHitsCount }}</strong></span>
                 </div>
                 <div class="legend">
                     <span class="item"><span class="box ship"></span> Statek (Twoja plansza)</span>
@@ -102,7 +98,7 @@ function newGame() {
                     <span class="item"><span class="box opp-hit"></span> Trafienie przeciwnika</span>
                     <span class="item"><span class="box opp-miss"></span> Pudło przeciwnika</span>
                 </div>
-                <div v-if="g.toast" class="toast" :class="g.toastType">{{ g.toast }}</div>
+                <div v-if="toast" class="toast" :class="toastType">{{ toast }}</div>
             </div>
         </div>
     </div>

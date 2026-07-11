@@ -26,6 +26,8 @@ export interface GameViewDTO {
     status: 'pending' | 'in_progress' | 'won' | 'lost';
     board: { w: number; h: number };
     ruleset: RulesetName;
+    // skład floty do wystawienia: mapa długość => liczba sztuk (klucze JSON jako stringi)
+    allowedShips?: Record<string, number>;
     weapons: WeaponsState;
     opponentWeapons?: WeaponsState;
     mode: 'standard' | 'nonstandard' | string;

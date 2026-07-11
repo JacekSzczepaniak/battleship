@@ -30,7 +30,24 @@ final class GameController
             throw new ApiException('Invalid mode: expected classic|fun', 'VALIDATION_ERROR', 400);
         }
 
-        $game = $this->createGame->handle($w, $h, $mode);
+        // Opcjonalny skład floty: mapa długość => liczba sztuk (brak = flota klasyczna).
+        // Klucze JSON to stringi; walidację wartości robi domena (FleetComposition).
+        $ships = $data['ships'] ?? null;
+        if (null !== $ships) {
+            if (!is_array($ships) || [] === $ships) {
+                throw new ApiException('Invalid ships: expected map {length: count}', 'VALIDATION_ERROR', 400);
+            }
+            $parsed = [];
+            foreach ($ships as $length => $count) {
+                if (!is_int($count)) {
+                    throw new ApiException('Invalid ships: expected map {length: count}', 'VALIDATION_ERROR', 400);
+                }
+                $parsed[(int) $length] = $count;
+            }
+            $ships = $parsed;
+        }
+
+        $game = $this->createGame->handle($w, $h, $mode, $ships);
 
         return new JsonResponse([
             'id' => (string) $game->id(),

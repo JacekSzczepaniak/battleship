@@ -87,6 +87,8 @@ final class GameQueryController
             'status' => $game->status()->value,
             'board' => ['w' => $size->width, 'h' => $size->height],
             'ruleset' => $game->ruleset()->name(),
+            // skład floty do wystawienia: mapa długość => liczba sztuk
+            'allowedShips' => $game->ruleset()->allowedShips(),
             'weapons' => $game->weaponsState(),
             'opponentWeapons' => $game->opponentWeaponsState(),
             'mode' => $game->mode(),

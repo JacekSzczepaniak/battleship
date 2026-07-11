@@ -55,6 +55,7 @@ final class GameSnapshotMapper
             'ruleset' => [
                 'type' => $game->ruleset()->name(),
                 'board' => ['w' => $size->width, 'h' => $size->height],
+                'ships' => $game->ruleset()->allowedShips(),
             ],
             'fleet' => $fleet,
             'shots' => $shots,
@@ -182,9 +183,18 @@ final class GameSnapshotMapper
         $board = $data['board'] ?? ['w' => 10, 'h' => 10];
         $size = new BoardSize((int) $board['w'], (int) $board['h']);
 
+        // Skład floty (klucze JSON wracają jako stringi); brak = flota klasyczna
+        $ships = null;
+        if (!empty($data['ships']) && is_array($data['ships'])) {
+            $ships = [];
+            foreach ($data['ships'] as $length => $count) {
+                $ships[(int) $length] = (int) $count;
+            }
+        }
+
         return 'fun' === ($data['type'] ?? 'classic')
-            ? new FunRuleset($size)
-            : new ClassicRuleset($size);
+            ? new FunRuleset($size, $ships)
+            : new ClassicRuleset($size, $ships);
     }
 
     /** @return array{player: array<string,int>, opponent: array<string,int>}|null */

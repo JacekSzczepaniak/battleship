@@ -70,24 +70,41 @@ const hint = ref('Kliknij pole, aby postawić kolejny statek. Zmieniaj orientacj
 const width = ref(10)
 const height = ref(10)
 
+// Inwentarz domyślny (flota klasyczna): 1×4, 2×3, 3×2, 4×1;
+// gra może narzucić inny skład (allowedShips z API — flota wyprawy)
+const CLASSIC_INVENTORY = [4,3,3,2,2,2,1,1,1,1]
+
+function inventoryFrom(allowed: Record<string, number>): number[] {
+  const lengths: number[] = []
+  for (const [len, count] of Object.entries(allowed)) {
+    for (let i = 0; i < count; i++) lengths.push(Number(len))
+  }
+  return lengths.sort((a, b) => b - a)
+}
+
 onMounted(async () => {
   try {
     const g = await getGame(id)
     width.value = g.board.w
     height.value = g.board.h
+    if (g.allowedShips && Object.keys(g.allowedShips).length > 0) {
+      fullInventory.value = inventoryFrom(g.allowedShips)
+      inventory.value = [...fullInventory.value]
+    }
   } catch {
-    // zostają domyślne 10×10; błąd i tak wyjdzie przy zapisie floty
+    // zostają domyślne 10×10 i flota klasyczna; błąd i tak wyjdzie przy zapisie floty
   }
 })
 
-// Inwentarz klasyczny: 1×4, 2×3, 3×2, 4×1
-const inventory = ref<number[]>([4,3,3,2,2,2,1,1,1,1])
+const fullInventory = ref<number[]>([...CLASSIC_INVENTORY])
+const inventory = ref<number[]>([...CLASSIC_INVENTORY])
 const placed = ref<PlayerFleetItem[]>([])
 const orientation = ref<'h'|'v'>('h')
 const hoverPos = ref<{x:number,y:number}>({x:-1,y:-1})
 
 const remainingByLen = computed<Record<number, number>>(() => {
-  const left: Record<number, number> = {1:0,2:0,3:0,4:0}
+  const left: Record<number, number> = {}
+  for (const l of fullInventory.value) left[l] = 0
   for (const l of inventory.value) left[l] = (left[l] ?? 0) + 1
   return left
 })
@@ -96,7 +113,7 @@ const allPlaced = computed(() => inventory.value.length === 0)
 
 function resetFleet() {
   placed.value = []
-  inventory.value = [4,3,3,2,2,2,1,1,1,1]
+  inventory.value = [...fullInventory.value]
   error.value = ''
 }
 

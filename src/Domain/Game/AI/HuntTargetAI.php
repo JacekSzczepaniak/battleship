@@ -75,6 +75,19 @@ final class HuntTargetAI implements Shooter
         ];
     }
 
+    /**
+     * Dokłada zewnętrzne cele (np. wykryte sonarem) do kolejki dobijania.
+     * Nielegalne/ostrzelane odfiltruje nextShot() przy zdejmowaniu.
+     *
+     * @param Coordinate[] $coords
+     */
+    public function enqueueTargets(array $coords): void
+    {
+        foreach ($coords as $c) {
+            $this->targets[] = $c;
+        }
+    }
+
     public function nextShot(BoardReadModel $board): Coordinate
     {
         // Target – najpierw kandydaci wokół trafień

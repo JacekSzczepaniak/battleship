@@ -37,6 +37,7 @@ export function useGame() {
     // Tryb fun: bronie specjalne
     const ruleset = ref<RulesetName>('classic');
     const weapons = ref<WeaponsState | null>(null);
+    const opponentWeapons = ref<WeaponsState | null>(null);
     const weaponMode = ref<WeaponMode>('shot');
     const torpedoDirection = ref<TorpedoDirection>('E');
     // Wyniki sonaru — tylko po stronie klienta (backend nie zapisuje skanów)
@@ -104,6 +105,7 @@ export function useGame() {
         finished.value = dto.finished;
         ruleset.value = dto.ruleset ?? 'classic';
         weapons.value = dto.weapons ?? null;
+        opponentWeapons.value = dto.opponentWeapons ?? null;
         playerFleet.value = dto.playerFleet ?? [];
     }
 
@@ -328,7 +330,7 @@ export function useGame() {
         gameId, size, width, height, playerGrid, playerUnderFireOverlay, enemyFogGrid, turn, status, finished,
         loading, error, start, refresh, shot, attack, disabled,
         // tryb fun
-        ruleset, weapons, weaponMode, torpedoDirection, sonarMarks, launchableCells,
+        ruleset, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells,
         // stats
         shotsCount, hitsCount, missesCount, duplicatesCount, opponentHitsCount,
         // toast

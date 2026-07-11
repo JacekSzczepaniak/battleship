@@ -22,8 +22,10 @@ services:
 
     # Domain ports
     App\Domain\Game\FleetGenerator: '@App\Domain\Game\RandomFleetGenerator'
+    App\Application\Game\WeaponUseDecider: '@App\Application\Game\RandomWeaponUseDecider'
 
-# Testy funkcjonalne wymagają przewidywalnej floty przeciwnika
+# Testy funkcjonalne wymagają przewidywalnej floty przeciwnika i tury AI
 when@test:
     services:
         App\Domain\Game\FleetGenerator: '@App\Domain\Game\DeterministicFleetGenerator'
+        App\Application\Game\WeaponUseDecider: '@App\Application\Game\NeverUseWeaponsDecider'

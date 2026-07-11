@@ -28,12 +28,13 @@ final class Game
     private array $aiState = [];
 
     /**
-     * Liczba użyć broni specjalnych w tej grze (klucze: torpedo|sonar|airRaid).
-     * Limity per grę definiuje Ruleset::weaponLimits(); 0 = broń niedostępna.
+     * Liczba użyć broni specjalnych per strona (klucze zewn.: player|opponent,
+     * wewn.: torpedo|sonar|airRaid). Limity per grę i stronę definiuje
+     * Ruleset::weaponLimits(); 0 = broń niedostępna.
      *
-     * @var array<string,int>
+     * @var array{player: array<string,int>, opponent: array<string,int>}
      */
-    private array $weaponUses = [];
+    private array $weaponUses = ['player' => [], 'opponent' => []];
 
     public function __construct(
         private GameId $id,
@@ -238,52 +239,79 @@ final class Game
     }
 
     /**
-     * Stan broni specjalnych: użycia i limity z rulesetu.
+     * Stan broni specjalnych gracza: użycia i limity z rulesetu.
      *
      * @return array<string, array{used:int, limit:int}>
      */
     public function weaponsState(): array
     {
+        return $this->weaponsStateFor('player');
+    }
+
+    /**
+     * Stan broni specjalnych przeciwnika (AI).
+     *
+     * @return array<string, array{used:int, limit:int}>
+     */
+    public function opponentWeaponsState(): array
+    {
+        return $this->weaponsStateFor('opponent');
+    }
+
+    /** @return array<string, array{used:int, limit:int}> */
+    private function weaponsStateFor(string $shooter): array
+    {
         $out = [];
         foreach ($this->ruleset->weaponLimits() as $weapon => $limit) {
-            $out[$weapon] = ['used' => $this->weaponUses[$weapon] ?? 0, 'limit' => $limit];
+            $out[$weapon] = ['used' => $this->weaponUses[$shooter][$weapon] ?? 0, 'limit' => $limit];
         }
 
         return $out;
     }
 
-    /** @return array<string,int> surowe liczniki użyć (do snapshotu) */
+    /** @return array{player: array<string,int>, opponent: array<string,int>} surowe liczniki (do snapshotu) */
     public function weaponUses(): array
     {
         return $this->weaponUses;
     }
 
-    /** @param array<string,int> $uses */
+    /**
+     * Odtwarza liczniki użyć broni ze snapshotu. Obsługuje dwa kształty:
+     * nowy (player/opponent) oraz starszy płaski (tylko użycia gracza).
+     *
+     * @param array<string,mixed> $uses
+     */
     public function setWeaponUsesFromSnapshot(array $uses): void
     {
-        $this->weaponUses = [];
-        foreach ($uses as $weapon => $count) {
-            $this->weaponUses[(string) $weapon] = max(0, (int) $count);
+        $this->weaponUses = ['player' => [], 'opponent' => []];
+
+        $isPerSide = isset($uses['player']) || isset($uses['opponent']);
+        $sides = $isPerSide ? $uses : ['player' => $uses];
+
+        foreach (['player', 'opponent'] as $side) {
+            foreach ((array) ($sides[$side] ?? []) as $weapon => $count) {
+                $this->weaponUses[$side][(string) $weapon] = max(0, (int) $count);
+            }
         }
     }
 
-    /** Rzuca, gdy broń niedostępna w rulesecie albo limit na grę wyczerpany. */
-    private function assertWeaponAvailable(string $weapon): void
+    /** Rzuca, gdy broń niedostępna w rulesecie albo limit danej strony wyczerpany. */
+    private function assertWeaponAvailable(string $shooter, string $weapon): void
     {
         $limit = $this->ruleset->weaponLimits()[$weapon] ?? 0;
         if ($limit <= 0) {
             throw new \DomainException(sprintf('%s not available in this ruleset', ucfirst($weapon)));
         }
-        if (($this->weaponUses[$weapon] ?? 0) >= $limit) {
+        if (($this->weaponUses[$shooter][$weapon] ?? 0) >= $limit) {
             throw new \DomainException(sprintf('%s limit reached', ucfirst($weapon)));
         }
     }
 
     /** Zużywa jedno użycie broni (po przejściu wszystkich walidacji). */
-    private function consumeWeapon(string $weapon): void
+    private function consumeWeapon(string $shooter, string $weapon): void
     {
-        $this->assertWeaponAvailable($weapon);
-        $this->weaponUses[$weapon] = ($this->weaponUses[$weapon] ?? 0) + 1;
+        $this->assertWeaponAvailable($shooter, $weapon);
+        $this->weaponUses[$shooter][$weapon] = ($this->weaponUses[$shooter][$weapon] ?? 0) + 1;
     }
 
     /** Strzały gracza. @return list<array{x:int,y:int}> */
@@ -345,7 +373,7 @@ final class Game
             throw new \DomainException('Fleet not placed');
         }
 
-        $this->assertWeaponAvailable('torpedo');
+        $this->assertWeaponAvailable('player', 'torpedo');
 
         $w = $this->ruleset->boardSize()->width;
         $h = $this->ruleset->boardSize()->height;
@@ -358,7 +386,7 @@ final class Game
             throw new \DomainException('Torpedo must be launched from an unsunk ship');
         }
 
-        $this->consumeWeapon('torpedo');
+        $this->consumeWeapon('player', 'torpedo');
 
         // Direction vector
         [$dx, $dy] = match ($direction) {
@@ -396,7 +424,7 @@ final class Game
             throw new \DomainException('Fleet not placed');
         }
 
-        $this->consumeWeapon('sonar');
+        $this->consumeWeapon('player', 'sonar');
 
         $target = $this->targetSide();
 
@@ -455,7 +483,7 @@ final class Game
             throw new \DomainException('Air Raid area is oversize');
         }
 
-        $this->consumeWeapon('airRaid');
+        $this->consumeWeapon('player', 'airRaid');
 
         $fromX = max(0, $start->x - $area->width);
         $toX = min($w - 1, $start->x + $area->width);
@@ -467,6 +495,144 @@ final class Game
         for ($x = $fromX; $x <= $toX; ++$x) {
             for ($y = $fromY; $y <= $toY; ++$y) {
                 $r = $this->fireShot(new Coordinate($x, $y));
+                $results[] = ['x' => $x, 'y' => $y, 'result' => $r->value];
+            }
+        }
+
+        return $results;
+    }
+
+    // --- Bronie specjalne przeciwnika (AI) — lustrzane wobec broni gracza ---
+
+    /**
+     * Komórki niezatopionych statków AI — legalne wyrzutnie jego torped.
+     *
+     * @return list<array{x:int,y:int}>
+     */
+    public function opponentLaunchableCells(): array
+    {
+        return $this->opponentSide->unsunkShipCells();
+    }
+
+    /**
+     * Torpeda AI: startuje z niezatopionego statku AI, ostrzeliwuje planszę
+     * gracza wzdłuż kierunku. Ta sama reguła wyrzutni co u gracza.
+     *
+     * @return list<array{x:int,y:int,result:string}>
+     */
+    public function fireOpponentTorpedo(Coordinate $start, Direction $direction): array
+    {
+        if (!$this->playerSide->hasFleet()) {
+            throw new \DomainException('Fleet not placed');
+        }
+
+        $this->assertWeaponAvailable('opponent', 'torpedo');
+
+        $w = $this->ruleset->boardSize()->width;
+        $h = $this->ruleset->boardSize()->height;
+
+        if ($start->x >= $w || $start->y >= $h) {
+            throw new \DomainException('Torpedo start outside board');
+        }
+
+        if (!$this->opponentSide->hasUnsunkShipAt($start->x, $start->y)) {
+            throw new \DomainException('Torpedo must be launched from an unsunk ship');
+        }
+
+        $this->consumeWeapon('opponent', 'torpedo');
+
+        [$dx, $dy] = match ($direction) {
+            Direction::N => [0, -1],
+            Direction::S => [0, 1],
+            Direction::E => [1, 0],
+            Direction::W => [-1, 0],
+        };
+
+        $results = [];
+        $cx = $start->x;
+        $cy = $start->y;
+        while ($cx >= 0 && $cy >= 0 && $cx < $w && $cy < $h) {
+            $r = $this->fireOpponentShot(new Coordinate($cx, $cy));
+            $results[] = ['x' => $cx, 'y' => $cy, 'result' => $r->value];
+            $cx += $dx;
+            $cy += $dy;
+        }
+
+        return $results;
+    }
+
+    /**
+     * Sonar AI: skanuje planszę gracza (krzyż o promieniu $radius). Bez zmian stanu strzałów.
+     *
+     * @return list<array{x:int,y:int,occupied:bool}>
+     */
+    public function opponentSonarPing(Coordinate $center, int $radius = 3): array
+    {
+        if (!$this->playerSide->hasFleet()) {
+            throw new \DomainException('Fleet not placed');
+        }
+
+        $this->consumeWeapon('opponent', 'sonar');
+
+        $w = $this->ruleset->boardSize()->width;
+        $h = $this->ruleset->boardSize()->height;
+
+        $inBounds = static fn (int $x, int $y) => $x >= 0 && $y >= 0 && $x < $w && $y < $h;
+
+        $cells = [[$center->x, $center->y]];
+        for ($i = 1; $i <= $radius; ++$i) {
+            $cells[] = [$center->x, $center->y - $i];
+            $cells[] = [$center->x + $i, $center->y];
+            $cells[] = [$center->x, $center->y + $i];
+            $cells[] = [$center->x - $i, $center->y];
+        }
+
+        $results = [];
+        foreach ($cells as [$x, $y]) {
+            if (!$inBounds($x, $y)) {
+                continue;
+            }
+            $results[] = ['x' => $x, 'y' => $y, 'occupied' => $this->playerSide->hasShipAt($x, $y)];
+        }
+
+        return $results;
+    }
+
+    /**
+     * Nalot AI: ostrzeliwuje prostokąt planszy gracza wokół centrum
+     * (semantyka pół-zasięgów i limit rozmiaru jak u gracza).
+     *
+     * @return list<array{x:int,y:int,result:string}>
+     */
+    public function sendOpponentAirRaid(Coordinate $start, Area $area): array
+    {
+        if (!$this->playerSide->hasFleet()) {
+            throw new \DomainException('Fleet not placed');
+        }
+
+        $w = $this->ruleset->boardSize()->width;
+        $h = $this->ruleset->boardSize()->height;
+
+        if ($start->x >= $w || $start->y >= $h) {
+            throw new \DomainException('Air Raid start outside board');
+        }
+
+        $max = $this->ruleset->airRaidSize();
+        if (2 * $area->width + 1 > $max->width || 2 * $area->height + 1 > $max->height) {
+            throw new \DomainException('Air Raid area is oversize');
+        }
+
+        $this->consumeWeapon('opponent', 'airRaid');
+
+        $fromX = max(0, $start->x - $area->width);
+        $toX = min($w - 1, $start->x + $area->width);
+        $fromY = max(0, $start->y - $area->height);
+        $toY = min($h - 1, $start->y + $area->height);
+
+        $results = [];
+        for ($x = $fromX; $x <= $toX; ++$x) {
+            for ($y = $fromY; $y <= $toY; ++$y) {
+                $r = $this->fireOpponentShot(new Coordinate($x, $y));
                 $results[] = ['x' => $x, 'y' => $y, 'result' => $r->value];
             }
         }

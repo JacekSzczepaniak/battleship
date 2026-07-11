@@ -25,6 +25,7 @@ export interface GameViewDTO {
     board: { w: number; h: number };
     ruleset: RulesetName;
     weapons: WeaponsState;
+    opponentWeapons?: WeaponsState;
     mode: 'standard' | 'nonstandard' | string;
     opponent: 'mock' | 'ai' | 'pvp' | string;
     turn: 'player' | 'opponent' | 'none';

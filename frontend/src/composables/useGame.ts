@@ -125,14 +125,31 @@ export function useGame() {
         playerFleet.value = dto.playerFleet ?? [];
     }
 
+    /** Długości własnych statków, które wciąż pływają (żywe nośniki broni). */
+    const aliveShipLengths = computed<Set<number>>(() => {
+        const alive = new Set<number>();
+        const ov = playerUnderFireOverlay.value;
+        for (const s of playerFleet.value) {
+            let sunk = true;
+            for (let i = 0; i < s.l; i++) {
+                const x = s.x + ((s.o as string).toLowerCase() === 'h' ? i : 0);
+                const y = s.y + ((s.o as string).toLowerCase() === 'v' ? i : 0);
+                if (ov[y]?.[x] !== 'opp-hit') sunk = false;
+            }
+            if (!sunk) alive.add(s.l);
+        }
+        return alive;
+    });
+
     /**
-     * Komórki własnych NIEZATOPIONYCH statków — legalne wyrzutnie torped
-     * (reguła domenowa: torpeda startuje z żywego statku gracza).
+     * Komórki własnych NIEZATOPIONYCH NISZCZYCIELI (3-masztowców) — legalne
+     * wyrzutnie torped (reguła domenowa: broń wynika ze składu floty).
      */
     const launchableCells = computed<Set<string>>(() => {
         const set = new Set<string>();
         const ov = playerUnderFireOverlay.value;
         for (const s of playerFleet.value) {
+            if (s.l !== 3) continue;
             const cells: Array<[number, number]> = [];
             let sunk = true;
             for (let i = 0; i < s.l; i++) {
@@ -351,7 +368,7 @@ export function useGame() {
         gameId, size, width, height, playerGrid, playerUnderFireOverlay, enemyFogGrid, turn, status, finished,
         loading, error, start, refresh, shot, attack, disabled,
         // tryb fun
-        ruleset, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells,
+        ruleset, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells, aliveShipLengths,
         // notatki (saper-style)
         noteMarks, toggleNote,
         // stats

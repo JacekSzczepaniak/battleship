@@ -10,7 +10,7 @@ import { clearCurrentBattle, getCurrentBattle } from '../lib/expeditionSession'
 // automatycznie (zagnieżdżone w zwykłym obiekcie NIE są odpakowywane).
 const {
     status, finished, turn, loading, error, disabled, attack, width, height,
-    ruleset, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells,
+    ruleset, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells, aliveShipLengths,
     noteMarks, toggleNote,
     shotsCount, hitsCount, missesCount, duplicatesCount, opponentHitsCount,
     toast, toastType,
@@ -160,7 +160,7 @@ watch([diagonalAvailable, torpedoDirection], () => {
 
 const weaponHint = computed(() => {
     switch (weaponMode.value) {
-        case 'torpedo': return 'Kliknij WŁASNY niezatopiony statek (podświetlony na Twojej planszy) — torpeda popłynie z jego pozycji w wybranym kierunku.';
+        case 'torpedo': return 'Kliknij WŁASNY niezatopiony niszczyciel (3-masztowiec, podświetlony na Twojej planszy) — torpeda popłynie z jego pozycji w wybranym kierunku.';
         case 'sonar': return 'Kliknij centrum skanu — sonar sprawdzi krzyż o promieniu 3.';
         case 'airraid': return 'Kliknij centrum nalotu — ostrzał obszaru 3×3.';
         default: return '';
@@ -197,10 +197,16 @@ watch(gameOver, async (over) => {
         Koniec gry: {{ status === 'won' ? 'Wygrana' : 'Przegrana' }}
         <template v-if="expeditionResult">
             <span class="xp-award">
-                +{{ expeditionResult.awarded }} XP
+                +{{ expeditionResult.awarded }} XP · +{{ expeditionResult.materialsAwarded }} 🔩
                 <template v-if="expeditionResult.rankUp">
                     ⚓ awans: {{ RANK_LABELS[expeditionResult.rank] }}!
                 </template>
+            </span>
+            <span v-if="expeditionResult.lostShips.length" class="fleet-toll">
+                ⚓ stracone: {{ expeditionResult.lostShips.join(', ') }}
+            </span>
+            <span v-else-if="expeditionResult.damagedShips.length" class="fleet-toll">
+                🔧 do remontu: {{ expeditionResult.damagedShips.join(', ') }}
             </span>
             <router-link class="btn small" :to="{ name: 'expedition' }">Wróć na wyprawę</router-link>
         </template>
@@ -231,18 +237,22 @@ watch(gameOver, async (over) => {
                 <button class="wbtn" :class="{ active: weaponMode === 'shot' }" @click="selectWeapon('shot')">
                     🎯 Strzał
                 </button>
+                <!-- broń wynika ze składu floty: zatopiony nośnik ją odbiera -->
                 <button class="wbtn" :class="{ active: weaponMode === 'torpedo' }"
-                        :disabled="weapons.torpedo.used >= weapons.torpedo.limit"
+                        :disabled="weapons.torpedo.used >= weapons.torpedo.limit || !aliveShipLengths.has(3)"
+                        :title="!aliveShipLengths.has(3) ? 'Niszczyciel zatopiony — torpedy niedostępne' : ''"
                         @click="selectWeapon('torpedo')">
                     🚀 Torpeda {{ weapons.torpedo.limit - weapons.torpedo.used }}/{{ weapons.torpedo.limit }}
                 </button>
                 <button class="wbtn" :class="{ active: weaponMode === 'sonar' }"
-                        :disabled="weapons.sonar.used >= weapons.sonar.limit"
+                        :disabled="weapons.sonar.used >= weapons.sonar.limit || !aliveShipLengths.has(2)"
+                        :title="!aliveShipLengths.has(2) ? 'Kuter zwiadowczy zatopiony — sonar niedostępny' : ''"
                         @click="selectWeapon('sonar')">
                     📡 Sonar {{ weapons.sonar.limit - weapons.sonar.used }}/{{ weapons.sonar.limit }}
                 </button>
                 <button class="wbtn" :class="{ active: weaponMode === 'airraid' }"
-                        :disabled="weapons.airRaid.used >= weapons.airRaid.limit"
+                        :disabled="weapons.airRaid.used >= weapons.airRaid.limit || !aliveShipLengths.has(4)"
+                        :title="!aliveShipLengths.has(4) ? 'Lotniskowiec zatopiony — naloty niedostępne' : ''"
                         @click="selectWeapon('airraid')">
                     ✈️ Nalot {{ weapons.airRaid.limit - weapons.airRaid.used }}/{{ weapons.airRaid.limit }}
                 </button>
@@ -310,6 +320,7 @@ watch(gameOver, async (over) => {
 .game-banner.won { background: #e6ffe6; border-color: #b3ffb3; color: #0a5b0a; }
 .game-banner.lost { background: #ffe6e6; border-color: #ffb3b3; color: #7a0a0a; }
 .game-banner .xp-award { font-weight: 700; margin: 0 0.5rem; }
+.game-banner .fleet-toll { margin: 0 0.5rem; font-size: 0.9rem; }
 .game-banner a.btn { text-decoration: none; display: inline-block; }
 .btn.small { margin-left: .75rem; padding: .25rem .5rem; font-size: .9rem; background: #1f6feb; color: #fff; border: 0; border-radius: 4px; cursor: pointer; }
 .boards { display: flex; gap: 20px; align-items: start; }

@@ -6,6 +6,15 @@ use App\Domain\Shared\GameId;
 
 final class Game
 {
+    /**
+     * Broń wynika ze składu floty: długości statków-nośników. Zatopienie
+     * nośnika odbiera broń do końca bitwy (mapowanie na typy floty wyprawy:
+     * kuter=2, niszczyciel=3, lotniskowiec=4 — bitwa zna tylko długości).
+     */
+    public const SONAR_CARRIER_LENGTH = 2;
+    public const TORPEDO_CARRIER_LENGTH = 3;
+    public const AIR_RAID_CARRIER_LENGTH = 4;
+
     private GameStatus $status = GameStatus::Pending;
 
     /** Strona gracza: jego flota + strzały przeciwnika (AI) w nią oddane. */
@@ -425,8 +434,8 @@ final class Game
             throw new \DomainException('Torpedo start outside board');
         }
 
-        if (!$this->playerSide->hasUnsunkShipAt($start->x, $start->y)) {
-            throw new \DomainException('Torpedo must be launched from an unsunk ship');
+        if (!$this->playerSide->hasUnsunkShipOfLengthAt($start->x, $start->y, self::TORPEDO_CARRIER_LENGTH)) {
+            throw new \DomainException('Torpedo must be launched from an unsunk destroyer');
         }
 
         $this->consumeTorpedo('player', $direction);
@@ -463,6 +472,7 @@ final class Game
         }
 
         $radius = $this->resolveSonarRadius('player', $radius);
+        $this->assertWeaponCarrierAfloat($this->playerSide, self::SONAR_CARRIER_LENGTH, 'Sonar requires an unsunk scout ship');
         $this->consumeWeapon('player', 'sonar');
 
         $target = $this->targetSide();
@@ -518,6 +528,7 @@ final class Game
         }
 
         $this->assertWeaponAvailable('player', 'airRaid');
+        $this->assertWeaponCarrierAfloat($this->playerSide, self::AIR_RAID_CARRIER_LENGTH, 'Air raid requires an unsunk carrier');
 
         $max = $this->ruleset->weapons()->airRaid->maxArea;
         if (2 * $area->width + 1 > $max->width || 2 * $area->height + 1 > $max->height) {
@@ -546,13 +557,27 @@ final class Game
     // --- Bronie specjalne przeciwnika (AI) — lustrzane wobec broni gracza ---
 
     /**
-     * Komórki niezatopionych statków AI — legalne wyrzutnie jego torped.
+     * Komórki niezatopionych niszczycieli AI — legalne wyrzutnie jego torped.
      *
      * @return list<array{x:int,y:int}>
      */
     public function opponentLaunchableCells(): array
     {
-        return $this->opponentSide->unsunkShipCells();
+        return $this->opponentSide->unsunkShipCells(self::TORPEDO_CARRIER_LENGTH);
+    }
+
+    /** Czy AI ma jeszcze niezatopiony nośnik broni o danej długości. */
+    public function opponentHasWeaponCarrier(int $length): bool
+    {
+        return $this->opponentSide->hasUnsunkShipOfLength($length);
+    }
+
+    /** Rzuca, gdy nośnik broni danej strony został zatopiony. */
+    private function assertWeaponCarrierAfloat(BoardSide $side, int $length, string $message): void
+    {
+        if (!$side->hasUnsunkShipOfLength($length)) {
+            throw new \DomainException($message);
+        }
     }
 
     /**
@@ -577,8 +602,8 @@ final class Game
             throw new \DomainException('Torpedo start outside board');
         }
 
-        if (!$this->opponentSide->hasUnsunkShipAt($start->x, $start->y)) {
-            throw new \DomainException('Torpedo must be launched from an unsunk ship');
+        if (!$this->opponentSide->hasUnsunkShipOfLengthAt($start->x, $start->y, self::TORPEDO_CARRIER_LENGTH)) {
+            throw new \DomainException('Torpedo must be launched from an unsunk destroyer');
         }
 
         $this->consumeTorpedo('opponent', $direction);
@@ -611,6 +636,7 @@ final class Game
         }
 
         $radius = $this->resolveSonarRadius('opponent', $radius);
+        $this->assertWeaponCarrierAfloat($this->opponentSide, self::SONAR_CARRIER_LENGTH, 'Sonar requires an unsunk scout ship');
         $this->consumeWeapon('opponent', 'sonar');
 
         $w = $this->ruleset->boardSize()->width;
@@ -657,6 +683,7 @@ final class Game
         }
 
         $this->assertWeaponAvailable('opponent', 'airRaid');
+        $this->assertWeaponCarrierAfloat($this->opponentSide, self::AIR_RAID_CARRIER_LENGTH, 'Air raid requires an unsunk carrier');
 
         $max = $this->ruleset->weapons()->airRaid->maxArea;
         if (2 * $area->width + 1 > $max->width || 2 * $area->height + 1 > $max->height) {

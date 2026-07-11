@@ -10,6 +10,22 @@ export const RANK_LABELS: Record<RankName, string> = {
     admiral: 'Admirał',
 };
 
+export type ShipTypeName = 'tratwa' | 'kuter' | 'niszczyciel' | 'lotniskowiec';
+
+export const SHIP_LABELS: Record<ShipTypeName, string> = {
+    tratwa: 'Tratwa',
+    kuter: 'Kuter',
+    niszczyciel: 'Niszczyciel',
+    lotniskowiec: 'Lotniskowiec',
+};
+
+export const SHIP_ICONS: Record<ShipTypeName, string> = {
+    tratwa: '🛶',
+    kuter: '🚤',
+    niszczyciel: '🚢',
+    lotniskowiec: '🛳️',
+};
+
 export interface ProfileDTO {
     id: string;
     name: string;
@@ -19,6 +35,24 @@ export interface ProfileDTO {
 
 export interface ExpeditionProfileDTO extends ProfileDTO {
     nextRank: { rank: RankName; xpNeeded: number } | null;
+    materials: number;
+}
+
+export interface FleetShipDTO {
+    id: string;
+    type: ShipTypeName;
+    length: number;
+    damaged: boolean;
+    repairCost: number;
+}
+
+export interface ShipTypeDTO {
+    type: ShipTypeName;
+    length: number;
+    buildCost: number;
+    repairCost: number;
+    requiredRank: RankName;
+    requiredShipyardLevel: number;
 }
 
 export interface IslandDTO {
@@ -29,6 +63,10 @@ export interface IslandDTO {
     requiredRank: RankName;
     xpWin: number;
     xpLoss: number;
+    materialsWin: number;
+    materialsLoss: number;
+    shipyardLevel: number;
+    board: { w: number; h: number };
     unlocked: boolean;
     wins: number;
     losses: number;
@@ -36,6 +74,8 @@ export interface IslandDTO {
 
 export interface ExpeditionDTO {
     profile: ExpeditionProfileDTO;
+    fleet: FleetShipDTO[];
+    shipTypes: ShipTypeDTO[];
     islands: IslandDTO[];
 }
 
@@ -45,6 +85,10 @@ export interface SettleResultDTO {
     xp: number;
     rank: RankName;
     rankUp: boolean;
+    materialsAwarded: number;
+    materials: number;
+    lostShips: ShipTypeName[];
+    damagedShips: ShipTypeName[];
 }
 
 export async function createProfile(name: string): Promise<ProfileDTO> {
@@ -61,4 +105,12 @@ export async function startIslandBattle(profileId: string, islandId: string): Pr
 
 export async function settleBattle(profileId: string, gameId: string): Promise<SettleResultDTO> {
     return http.post<SettleResultDTO>(`/profiles/${profileId}/battles/${gameId}/settle`, {});
+}
+
+export async function buildShip(profileId: string, islandId: string, type: ShipTypeName): Promise<FleetShipDTO> {
+    return http.post<FleetShipDTO>(`/profiles/${profileId}/ships`, { type, islandId });
+}
+
+export async function repairShip(profileId: string, islandId: string, shipId: string): Promise<FleetShipDTO> {
+    return http.post<FleetShipDTO>(`/profiles/${profileId}/ships/${shipId}/repair`, { islandId });
 }

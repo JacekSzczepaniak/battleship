@@ -108,6 +108,14 @@ final class BoardSide
         return null !== $this->shipAtKey($x.':'.$y);
     }
 
+    /** Czy na polu stoi statek, który NIE został jeszcze zatopiony. */
+    public function hasUnsunkShipAt(int $x, int $y): bool
+    {
+        $ship = $this->shipAtKey($x.':'.$y);
+
+        return null !== $ship && !$this->isSunk($ship);
+    }
+
     /** @return list<array{x:int,y:int}> */
     public function shotsTaken(): array
     {

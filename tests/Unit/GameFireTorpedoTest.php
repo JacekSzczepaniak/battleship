@@ -30,8 +30,11 @@ final class GameFireTorpedoTest extends TestCase
             $this->assertContains($r['result'], ['hit', 'sunk', 'miss', 'duplicate']);
         }
 
-        // Ponowne odpalenie — wszystkie powinny być duplicate
-        $resultsDup = $game->fireTorpedo(new Coordinate(0, 0), Direction::E);
+        // Ponowne odpalenie w ten sam wiersz — wszystkie duplicate.
+        // Start z (6,0): w tym teście (fallback bez floty przeciwnika) pierwsza
+        // torpeda zatopiła własnego 4-masztowca na (0,0), a wyrzutnią może być
+        // tylko niezatopiony statek; trójmasztowiec (6,0)-(6,2) wciąż pływa.
+        $resultsDup = $game->fireTorpedo(new Coordinate(6, 0), Direction::E);
         foreach ($resultsDup as $r) {
             $this->assertSame('duplicate', $r['result']);
         }
@@ -53,5 +56,55 @@ final class GameFireTorpedoTest extends TestCase
             $this->assertSame(9 - $i, $r['y']);
             $this->assertContains($r['result'], ['hit', 'sunk', 'miss', 'duplicate']);
         }
+    }
+
+    public function testTorpedoCannotBeLaunchedFromWater(): void
+    {
+        $game = Game::create(new FunRuleset());
+        $game->placeFleet(FleetFactory::classic10x10());
+
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('Torpedo must be launched from an unsunk ship');
+        // (1,1) to woda — 4-masztowiec stoi w wierszu 0, trójmasztowiec w wierszu 2
+        $game->fireTorpedo(new Coordinate(1, 1), Direction::E);
+    }
+
+    public function testTorpedoCannotBeLaunchedFromSunkShip(): void
+    {
+        $game = Game::create(new FunRuleset());
+        $game->placeFleet(FleetFactory::classic10x10());
+
+        // przeciwnik zatapia jedynkę gracza na (0,6)
+        $game->fireOpponentShot(new Coordinate(0, 6));
+
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('Torpedo must be launched from an unsunk ship');
+        $game->fireTorpedo(new Coordinate(0, 6), Direction::E);
+    }
+
+    public function testTorpedoCanBeLaunchedFromDamagedButUnsunkShip(): void
+    {
+        $game = Game::create(new FunRuleset());
+        $game->placeFleet(FleetFactory::classic10x10());
+
+        // przeciwnik trafia 4-masztowiec gracza na (0,0) — uszkodzony, ale pływa
+        $game->fireOpponentShot(new Coordinate(0, 0));
+
+        $results = $game->fireTorpedo(new Coordinate(0, 0), Direction::E);
+        $this->assertCount(10, $results);
+    }
+
+    public function testFailedLaunchDoesNotConsumeTorpedo(): void
+    {
+        $game = Game::create(new FunRuleset());
+        $game->placeFleet(FleetFactory::classic10x10());
+
+        try {
+            $game->fireTorpedo(new Coordinate(1, 1), Direction::E); // woda
+        } catch (\DomainException) {
+            // oczekiwane
+        }
+
+        $this->assertSame(0, $game->weaponsState()['torpedo']['used']);
     }
 }

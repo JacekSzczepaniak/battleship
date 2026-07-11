@@ -267,21 +267,23 @@ final class Game
         }
     }
 
-    /**
-     * Zużywa jedno użycie broni; rzuca, gdy broń niedostępna w rulesecie
-     * albo limit na grę wyczerpany.
-     */
-    private function consumeWeapon(string $weapon): void
+    /** Rzuca, gdy broń niedostępna w rulesecie albo limit na grę wyczerpany. */
+    private function assertWeaponAvailable(string $weapon): void
     {
         $limit = $this->ruleset->weaponLimits()[$weapon] ?? 0;
         if ($limit <= 0) {
             throw new \DomainException(sprintf('%s not available in this ruleset', ucfirst($weapon)));
         }
-        $used = $this->weaponUses[$weapon] ?? 0;
-        if ($used >= $limit) {
+        if (($this->weaponUses[$weapon] ?? 0) >= $limit) {
             throw new \DomainException(sprintf('%s limit reached', ucfirst($weapon)));
         }
-        $this->weaponUses[$weapon] = $used + 1;
+    }
+
+    /** Zużywa jedno użycie broni (po przejściu wszystkich walidacji). */
+    private function consumeWeapon(string $weapon): void
+    {
+        $this->assertWeaponAvailable($weapon);
+        $this->weaponUses[$weapon] = ($this->weaponUses[$weapon] ?? 0) + 1;
     }
 
     /** Strzały gracza. @return list<array{x:int,y:int}> */
@@ -332,6 +334,9 @@ final class Game
      * Torpedo: moves across the entire board in a given direction.
      * For each cell along the line it calls fireShot() and returns the list of results.
      *
+     * Torpeda musi być odpalona z pozycji własnego, NIEZATOPIONEGO statku —
+     * pozycje żywej floty gracza wyznaczają dostępne linie ostrzału.
+     *
      * @return list<array{x:int,y:int,result:string}>
      */
     public function fireTorpedo(Coordinate $start, Direction $direction): array
@@ -340,11 +345,17 @@ final class Game
             throw new \DomainException('Fleet not placed');
         }
 
+        $this->assertWeaponAvailable('torpedo');
+
         $w = $this->ruleset->boardSize()->width;
         $h = $this->ruleset->boardSize()->height;
 
         if ($start->x >= $w || $start->y >= $h) {
             throw new \DomainException('Torpedo start outside board');
+        }
+
+        if (!$this->playerSide->hasUnsunkShipAt($start->x, $start->y)) {
+            throw new \DomainException('Torpedo must be launched from an unsunk ship');
         }
 
         $this->consumeWeapon('torpedo');

@@ -85,6 +85,9 @@ final class ExceptionSubscriber implements EventSubscriberInterface
         if (str_ends_with($message, 'limit reached')) {
             return ['WEAPON_LIMIT_REACHED', 422];
         }
+        if ('Torpedo must be launched from an unsunk ship' === $message) {
+            return ['TORPEDO_LAUNCH_INVALID', 422];
+        }
 
         return match ($message) {
             'Fleet not placed' => ['FLEET_NOT_PLACED', 422],

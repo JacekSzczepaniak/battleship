@@ -33,9 +33,9 @@ it('odrzuca sonar w klasycznym rulesecie', function () {
 
 it('egzekwuje limit torped na grę', function () {
     $game = funGame();
-    $game->fireTorpedo(new Coordinate(0, 5), Direction::E);
-    $game->fireTorpedo(new Coordinate(0, 7), Direction::E);
-    $game->fireTorpedo(new Coordinate(0, 9), Direction::E);
+    $game->fireTorpedo(new Coordinate(0, 0), Direction::E);
+    $game->fireTorpedo(new Coordinate(0, 2), Direction::E);
+    $game->fireTorpedo(new Coordinate(6, 0), Direction::E);
 })->throws(DomainException::class, 'Torpedo limit reached');
 
 it('egzekwuje limit sonarów na grę', function () {
@@ -54,7 +54,7 @@ it('egzekwuje limit nalotów na grę', function () {
 
 it('raportuje stan broni: użycia i limity', function () {
     $game = funGame();
-    $game->fireTorpedo(new Coordinate(0, 5), Direction::E);
+    $game->fireTorpedo(new Coordinate(0, 0), Direction::E);
     $game->sonarPing(new Coordinate(5, 5));
 
     expect($game->weaponsState())->toBe([

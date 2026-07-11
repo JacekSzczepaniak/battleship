@@ -9,6 +9,7 @@ import { useRouter } from 'vue-router'
 const {
     status, finished, turn, loading, error, disabled, attack, width, height,
     ruleset, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells,
+    noteMarks, toggleNote,
     shotsCount, hitsCount, missesCount, duplicatesCount, opponentHitsCount,
     toast, toastType,
     playerGrid, playerUnderFireOverlay, enemyFogGrid, lastShot, sunkCells,
@@ -104,6 +105,11 @@ const enemyAnimatedGrid = computed<string[][]>(() => {
             classes += sonar.get(`${x}:${y}`) ? ' sonar-ship' : ' sonar-water';
         }
 
+        // Notatka gracza „tu pusto" (tylko nieostrzelane pola)
+        if (cell === 'empty' && noteMarks.value.has(`${x}:${y}`)) {
+            classes += ' note';
+        }
+
         // Podgląd zasięgu broni pod kursorem
         if (previewCells.value.has(`${x}:${y}`)) {
             classes += ' preview';
@@ -187,7 +193,8 @@ function newGame() {
             <GameGameBoard :grid="enemyAnimatedGrid" :disabled="disabled"
                            :onCellClick="weaponMode === 'torpedo' ? undefined : handleShot"
                            :onCellHover="weaponMode === 'torpedo' ? undefined : handleHover"
-                           :onBoardLeave="handleBoardLeave" />
+                           :onBoardLeave="handleBoardLeave"
+                           :onCellRightClick="toggleNote" />
 
             <!-- Panel broni specjalnych (tylko tryb fun) -->
             <div v-if="ruleset === 'fun' && weapons" class="weapons">
@@ -210,17 +217,20 @@ function newGame() {
                     ✈️ Nalot {{ weapons.airRaid.limit - weapons.airRaid.used }}/{{ weapons.airRaid.limit }}
                 </button>
             </div>
+            <!-- Kierunek torpedy jako róża wiatrów: 3×3, statek w środku -->
             <div v-if="ruleset === 'fun' && weaponMode === 'torpedo'" class="weapon-opts">
-                Kierunek:
-                <label><input type="radio" value="N" v-model="torpedoDirection" /> ↑ N</label>
-                <label><input type="radio" value="NE" v-model="torpedoDirection" :disabled="!diagonalAvailable" /> ↗ NE</label>
-                <label><input type="radio" value="E" v-model="torpedoDirection" /> → E</label>
-                <label><input type="radio" value="SE" v-model="torpedoDirection" :disabled="!diagonalAvailable" /> ↘ SE</label>
-                <label><input type="radio" value="S" v-model="torpedoDirection" /> ↓ S</label>
-                <label><input type="radio" value="SW" v-model="torpedoDirection" :disabled="!diagonalAvailable" /> ↙ SW</label>
-                <label><input type="radio" value="W" v-model="torpedoDirection" /> ← W</label>
-                <label><input type="radio" value="NW" v-model="torpedoDirection" :disabled="!diagonalAvailable" /> ↖ NW</label>
-                <span v-if="!diagonalAvailable" class="diag-hint">(ukośna zużyta)</span>
+                <div class="rose" title="Kierunek torpedy">
+                    <label class="rose-cell"><input type="radio" value="NW" v-model="torpedoDirection" :disabled="!diagonalAvailable" /><span>↖</span></label>
+                    <label class="rose-cell"><input type="radio" value="N" v-model="torpedoDirection" /><span>↑</span></label>
+                    <label class="rose-cell"><input type="radio" value="NE" v-model="torpedoDirection" :disabled="!diagonalAvailable" /><span>↗</span></label>
+                    <label class="rose-cell"><input type="radio" value="W" v-model="torpedoDirection" /><span>←</span></label>
+                    <div class="rose-center" title="Wyrzutnia — Twój statek">🚢</div>
+                    <label class="rose-cell"><input type="radio" value="E" v-model="torpedoDirection" /><span>→</span></label>
+                    <label class="rose-cell"><input type="radio" value="SW" v-model="torpedoDirection" :disabled="!diagonalAvailable" /><span>↙</span></label>
+                    <label class="rose-cell"><input type="radio" value="S" v-model="torpedoDirection" /><span>↓</span></label>
+                    <label class="rose-cell"><input type="radio" value="SE" v-model="torpedoDirection" :disabled="!diagonalAvailable" /><span>↘</span></label>
+                </div>
+                <span v-if="!diagonalAvailable" class="diag-hint">ukośna zużyta</span>
             </div>
             <div v-if="weaponHint" class="weapon-hint">{{ weaponHint }}</div>
 
@@ -248,6 +258,7 @@ function newGame() {
                     <span class="item"><span class="box miss"></span> Pudło</span>
                     <span class="item"><span class="box opp-hit"></span> Trafienie przeciwnika</span>
                     <span class="item"><span class="box opp-miss"></span> Pudło przeciwnika</span>
+                    <span class="item"><span class="box note"></span> Notatka „pusto" (PPM)</span>
                     <template v-if="ruleset === 'fun'">
                         <span class="item"><span class="box sonar-ship"></span> Sonar: statek</span>
                         <span class="item"><span class="box sonar-water"></span> Sonar: woda</span>
@@ -292,11 +303,22 @@ function newGame() {
 .legend .box.opp-miss { background: transparent; border-color:#0c4a6e; box-shadow: inset 0 0 0 2px #0c4a6e; }
 .legend .box.sonar-ship { background: #fef3c7; border-color:#d97706; box-shadow: inset 0 0 0 2px #d97706; }
 .legend .box.sonar-water { background: #f0f9ff; border-color:#7dd3fc; }
+.legend .box.note { background-image: repeating-linear-gradient(45deg, rgba(100,116,139,.45) 0 2px, transparent 2px 5px); }
 .weapons { display:flex; gap:.4rem; margin-top:.6rem; flex-wrap:wrap; }
 .wbtn { padding:.3rem .6rem; border:1px solid #cbd5e1; border-radius:6px; background:#f8fafc; cursor:pointer; }
 .wbtn.active { background:#1f6feb; color:#fff; border-color:#1f6feb; }
 .wbtn[disabled] { opacity:.45; cursor:not-allowed; }
 .weapon-opts { margin-top:.35rem; display:flex; gap:.6rem; align-items:center; color:#334155; }
+.rose { display:grid; grid-template-columns: repeat(3, 34px); grid-auto-rows: 34px; gap:4px; }
+.rose-cell {
+    display:flex; align-items:center; justify-content:center;
+    border:1px solid #cbd5e1; border-radius:6px; background:#f8fafc;
+    cursor:pointer; font-size:1.05rem; color:#334155; user-select:none;
+}
+.rose-cell input { display:none; }
+.rose-cell:has(input:checked) { background:#1f6feb; border-color:#1f6feb; color:#fff; }
+.rose-cell:has(input:disabled) { opacity:.35; cursor:not-allowed; }
+.rose-center { display:flex; align-items:center; justify-content:center; font-size:1.2rem; }
 .weapon-hint { margin-top:.3rem; font-size:.9rem; color:#475569; }
 .ai-arsenal { font-size:.9rem; color:#475569; }
 .diag-hint { font-size:.85rem; color:#94a3b8; }

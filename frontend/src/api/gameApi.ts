@@ -49,13 +49,8 @@ export interface CreateGameResponse {
     board: { w: number; h: number };
 }
 
-export interface ShotResultDTO {
+export interface ShotResultDTO extends TurnOutcomeDTO {
     result: 'miss' | 'hit' | 'sunk' | 'duplicate';
-    finished: boolean;
-    win: boolean;
-    loss: boolean;
-    turn: 'player' | 'opponent' | 'none';
-    opponentMoves: { x: number; y: number; result: 'hit' | 'miss' | 'sunk' | 'duplicate' }[];
 }
 
 export async function createGame(mode: RulesetName = 'classic', size = 10): Promise<CreateGameResponse> {

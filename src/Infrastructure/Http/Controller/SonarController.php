@@ -30,19 +30,20 @@ final class SonarController
 
         $x = $payload['x'] ?? null;
         $y = $payload['y'] ?? null;
-        $radius = $payload['radius'] ?? 3;
+        // radius opcjonalny — brak oznacza maksymalny promień z rulesetu
+        $radius = $payload['radius'] ?? null;
 
-        if (!is_int($x) || !is_int($y) || !is_int($radius) || $radius < 0) {
+        if (!is_int($x) || !is_int($y) || (null !== $radius && (!is_int($radius) || $radius < 0))) {
             throw new ApiException('Missing or invalid fields: x:int, y:int, radius:int>=0', 'VALIDATION_ERROR', 400);
         }
 
         // DomainException zostanie obsłużony przez ExceptionSubscriber
-        $list = ($this->sonarPing)($id, $x, $y, $radius);
+        $out = ($this->sonarPing)($id, $x, $y, $radius);
 
         return new JsonResponse([
-            'results' => $list, // list of {x,y,occupied}
+            'results' => $out['cells'], // list of {x,y,occupied}
             'shape' => 'cross',
-            'radius' => $radius,
+            'radius' => $out['radius'],
         ]);
     }
 }

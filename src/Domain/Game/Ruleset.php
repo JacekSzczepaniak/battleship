@@ -2,6 +2,8 @@
 
 namespace App\Domain\Game;
 
+use App\Domain\Game\Weapon\WeaponSpecs;
+
 interface Ruleset
 {
     /** Identyfikator wariantu zasad: 'classic' | 'fun' (do snapshotu i API). */
@@ -15,15 +17,8 @@ interface Ruleset
     public function allowedShips(): array;
 
     /**
-     * Maksymalny pełny rozmiar obszaru nalotu (w komórkach).
+     * Parametry broni specjalnych wariantu (kształt, zasięg, limity użyć);
+     * uses = 0 oznacza broń niedostępną.
      */
-    public function airRaidSize(): Area;
-
-    /**
-     * Limity użyć broni specjalnych na grę; 0 = broń niedostępna w tym wariancie.
-     * torpedoDiagonal = ile z torped może płynąć po przekątnej (podzbiór torpedo).
-     *
-     * @return array{torpedo:int, sonar:int, airRaid:int, torpedoDiagonal:int}
-     */
-    public function weaponLimits(): array;
+    public function weapons(): WeaponSpecs;
 }

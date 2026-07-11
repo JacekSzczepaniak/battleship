@@ -2,6 +2,11 @@
 
 namespace App\Domain\Game;
 
+use App\Domain\Game\Weapon\AirRaidSpec;
+use App\Domain\Game\Weapon\SonarSpec;
+use App\Domain\Game\Weapon\TorpedoSpec;
+use App\Domain\Game\Weapon\WeaponSpecs;
+
 final class FunRuleset implements Ruleset
 {
     public function __construct(private BoardSize $size = new BoardSize(10, 10))
@@ -23,14 +28,12 @@ final class FunRuleset implements Ruleset
         return [4 => 1, 3 => 2, 2 => 3, 1 => 4];
     }
 
-    public function airRaidSize(): Area
+    public function weapons(): WeaponSpecs
     {
-        return new Area(3, 3);
-    }
-
-    public function weaponLimits(): array
-    {
-        // torpedoDiagonal = ile z torped może płynąć po przekątnej (podzbiór limitu torpedo)
-        return ['torpedo' => 2, 'sonar' => 3, 'airRaid' => 1, 'torpedoDiagonal' => 1];
+        return new WeaponSpecs(
+            torpedo: new TorpedoSpec(uses: 2, diagonalUses: 1),
+            sonar: new SonarSpec(uses: 3, radius: 3),
+            airRaid: new AirRaidSpec(uses: 1, maxArea: new Area(3, 3)),
+        );
     }
 }

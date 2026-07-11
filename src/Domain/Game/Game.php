@@ -29,8 +29,8 @@ final class Game
 
     /**
      * Liczba użyć broni specjalnych per strona (klucze zewn.: player|opponent,
-     * wewn.: torpedo|sonar|airRaid). Limity per grę i stronę definiuje
-     * Ruleset::weaponLimits(); 0 = broń niedostępna.
+     * wewn.: torpedo|sonar|airRaid). Limity per grę i stronę definiują
+     * specyfikacje broni z Ruleset::weapons(); 0 = broń niedostępna.
      *
      * @var array{player: array<string,int>, opponent: array<string,int>}
      */
@@ -262,7 +262,7 @@ final class Game
     private function weaponsStateFor(string $shooter): array
     {
         $out = [];
-        foreach ($this->ruleset->weaponLimits() as $weapon => $limit) {
+        foreach ($this->ruleset->weapons()->limits() as $weapon => $limit) {
             $out[$weapon] = ['used' => $this->weaponUses[$shooter][$weapon] ?? 0, 'limit' => $limit];
         }
 
@@ -298,7 +298,7 @@ final class Game
     /** Rzuca, gdy broń niedostępna w rulesecie albo limit danej strony wyczerpany. */
     private function assertWeaponAvailable(string $shooter, string $weapon): void
     {
-        $limit = $this->ruleset->weaponLimits()[$weapon] ?? 0;
+        $limit = $this->ruleset->weapons()->limits()[$weapon] ?? 0;
         if ($limit <= 0) {
             throw new \DomainException(sprintf('%s not available in this ruleset', ucfirst($weapon)));
         }
@@ -324,7 +324,7 @@ final class Game
             return;
         }
 
-        $limit = $this->ruleset->weaponLimits()['torpedoDiagonal'];
+        $limit = $this->ruleset->weapons()->torpedo->diagonalUses;
         if (($this->weaponUses[$shooter]['torpedoDiagonal'] ?? 0) >= $limit) {
             throw new \DomainException('Diagonal torpedo limit reached');
         }
@@ -337,6 +337,23 @@ final class Game
         if ($direction->isDiagonal()) {
             $this->weaponUses[$shooter]['torpedoDiagonal'] = ($this->weaponUses[$shooter]['torpedoDiagonal'] ?? 0) + 1;
         }
+    }
+
+    /**
+     * Efektywny promień sonaru: null = maksymalny ze specu; ponad spec — błąd.
+     * Najpierw dostępność broni, żeby classic zgłaszał 'not available', nie zasięg.
+     */
+    private function resolveSonarRadius(string $shooter, ?int $radius): int
+    {
+        $this->assertWeaponAvailable($shooter, 'sonar');
+
+        $spec = $this->ruleset->weapons()->sonar;
+        $radius ??= $spec->radius;
+        if ($radius > $spec->radius) {
+            throw new \DomainException('Sonar radius exceeds ruleset limit');
+        }
+
+        return $radius;
     }
 
     /** Strzały gracza. @return list<array{x:int,y:int}> */
@@ -435,15 +452,17 @@ final class Game
      * Sonar ping: reveals occupancy info for the center and up to $radius cells
      * in each cardinal direction (cross shape). It does not modify shots/hits.
      * Skanuje stronę, w którą strzela gracz (przeciwnika; fallback jak fireShot).
+     * Promień null = maksymalny z rulesetu; większy niż spec — błąd domenowy.
      *
      * @return list<array{x:int,y:int,occupied:bool}>
      */
-    public function sonarPing(Coordinate $center, int $radius = 3): array
+    public function sonarPing(Coordinate $center, ?int $radius = null): array
     {
         if (!$this->playerSide->hasFleet()) {
             throw new \DomainException('Fleet not placed');
         }
 
+        $radius = $this->resolveSonarRadius('player', $radius);
         $this->consumeWeapon('player', 'sonar');
 
         $target = $this->targetSide();
@@ -498,7 +517,9 @@ final class Game
             throw new \DomainException('Air Raid start outside board');
         }
 
-        $max = $this->ruleset->airRaidSize();
+        $this->assertWeaponAvailable('player', 'airRaid');
+
+        $max = $this->ruleset->weapons()->airRaid->maxArea;
         if (2 * $area->width + 1 > $max->width || 2 * $area->height + 1 > $max->height) {
             throw new \DomainException('Air Raid area is oversize');
         }
@@ -578,16 +599,18 @@ final class Game
     }
 
     /**
-     * Sonar AI: skanuje planszę gracza (krzyż o promieniu $radius). Bez zmian stanu strzałów.
+     * Sonar AI: skanuje planszę gracza (krzyż; promień jak u gracza — z rulesetu).
+     * Bez zmian stanu strzałów.
      *
      * @return list<array{x:int,y:int,occupied:bool}>
      */
-    public function opponentSonarPing(Coordinate $center, int $radius = 3): array
+    public function opponentSonarPing(Coordinate $center, ?int $radius = null): array
     {
         if (!$this->playerSide->hasFleet()) {
             throw new \DomainException('Fleet not placed');
         }
 
+        $radius = $this->resolveSonarRadius('opponent', $radius);
         $this->consumeWeapon('opponent', 'sonar');
 
         $w = $this->ruleset->boardSize()->width;
@@ -633,7 +656,9 @@ final class Game
             throw new \DomainException('Air Raid start outside board');
         }
 
-        $max = $this->ruleset->airRaidSize();
+        $this->assertWeaponAvailable('opponent', 'airRaid');
+
+        $max = $this->ruleset->weapons()->airRaid->maxArea;
         if (2 * $area->width + 1 > $max->width || 2 * $area->height + 1 > $max->height) {
             throw new \DomainException('Air Raid area is oversize');
         }

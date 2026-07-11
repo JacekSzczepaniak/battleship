@@ -109,6 +109,25 @@ final class GameSnapshotMapper
             $game->setFleetFromSnapshot($ships);
         }
 
+        // opponent fleet from snapshot (optional) — PRZED strzałami gracza:
+        // strzały są własnością strony, w którą oddano (targetSide), więc
+        // strona przeciwnika musi istnieć zanim je odtworzymy
+        if (!empty($state['opponentFleet']) && is_array($state['opponentFleet'])) {
+            $ships = [];
+            foreach ($state['opponentFleet'] as $s) {
+                if (isset($s['x'], $s['y'], $s['o'], $s['l'])) {
+                    $ships[] = new Ship(
+                        new Coordinate((int) $s['x'], (int) $s['y']),
+                        Orientation::from((string) $s['o']),
+                        (int) $s['l']
+                    );
+                }
+            }
+            if ([] !== $ships) {
+                $game->setOpponentFleetFromSnapshot($ships);
+            }
+        }
+
         // shots from snapshot (optional) + hits reconstruction
         if (!empty($state['shots']) && is_array($state['shots'])) {
             // normalize input
@@ -140,23 +159,6 @@ final class GameSnapshotMapper
             }
 
             $game->setOpponentShotsFromSnapshot($oppShots);
-        }
-
-        // opponent fleet from snapshot (optional)
-        if (!empty($state['opponentFleet']) && is_array($state['opponentFleet'])) {
-            $ships = [];
-            foreach ($state['opponentFleet'] as $s) {
-                if (isset($s['x'], $s['y'], $s['o'], $s['l'])) {
-                    $ships[] = new Ship(
-                        new Coordinate((int) $s['x'], (int) $s['y']),
-                        Orientation::from((string) $s['o']),
-                        (int) $s['l']
-                    );
-                }
-            }
-            if ([] !== $ships) {
-                $game->setOpponentFleetFromSnapshot($ships);
-            }
         }
 
         // AI state from snapshot (optional; stary kształt zostanie zignorowany przez HuntTargetAI::fromSnapshot)

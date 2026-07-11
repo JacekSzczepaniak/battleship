@@ -3,7 +3,6 @@
 namespace App\Application\Game;
 
 use App\Domain\Game\GameRepository;
-use App\Domain\Game\Orientation;
 use App\Domain\Shared\GameId;
 
 final class GetShots
@@ -20,36 +19,9 @@ final class GetShots
             throw new \InvalidArgumentException('Game not found');
         }
 
-        $shots = $game->shotsWithResults();
-
-        // Collect hit cells (hit or sunk)
-        $hitSet = [];
-        foreach ($shots as $s) {
-            if ('hit' === $s['result'] || 'sunk' === $s['result']) {
-                $hitSet[$s['x'].':'.$s['y']] = true;
-            }
-        }
-
-        $finished = false;
-        $fleet = $game->fleet();
-        if ($fleet) {
-            $allHit = true;
-            foreach ($fleet as $ship) {
-                for ($i = 0; $i < $ship->length; ++$i) {
-                    $x = $ship->start->x + (Orientation::H === $ship->orientation ? $i : 0);
-                    $y = $ship->start->y + (Orientation::V === $ship->orientation ? $i : 0);
-                    if (!isset($hitSet["$x:$y"])) {
-                        $allHit = false;
-                        break 2;
-                    }
-                }
-            }
-            $finished = $allHit;
-        }
-
         return [
-            'finished' => $finished,
-            'shots' => $shots,
+            'finished' => $game->isFinished(),
+            'shots' => $game->shotsWithResults(),
         ];
     }
 }

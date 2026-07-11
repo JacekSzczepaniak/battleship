@@ -34,16 +34,10 @@ final class FireTorpedoController
         $dir = $payload['direction'] ?? null;
 
         if (!is_int($x) || !is_int($y) || !is_string($dir)) {
-            throw new ApiException('Missing or invalid fields: x:int, y:int, direction:string(N|E|S|W)', 'VALIDATION_ERROR', 400);
+            throw new ApiException('Missing or invalid fields: x:int, y:int, direction:string(N|NE|E|SE|S|SW|W|NW)', 'VALIDATION_ERROR', 400);
         }
 
-        $direction = match (strtoupper($dir)) {
-            'N' => Direction::N,
-            'E' => Direction::E,
-            'S' => Direction::S,
-            'W' => Direction::W,
-            default => null,
-        };
+        $direction = Direction::tryFrom(strtoupper($dir));
 
         if (null === $direction) {
             throw new ApiException('Invalid direction', 'VALIDATION_ERROR', 400);

@@ -39,16 +39,17 @@ final class OpponentTurn
     }
 
     /**
-     * @return array{finished:bool, win:bool, loss:bool, turn:string, opponentMoves:list<array{x:int,y:int,result:string}>}
+     * @return array{finished:bool, win:bool, loss:bool, turn:string, opponentMoves:list<array{x:int,y:int,result:string}>, opponentTorpedoLaunch: array{x:int,y:int}|null}
      */
     public function respond(Game $game): array
     {
         $finished = $game->isFinished();
         $opponentMoves = [];
+        $torpedoLaunch = null;
 
         if (!$finished) {
             $ai = HuntTargetAI::fromSnapshot($game->aiState());
-            $opponentMoves = $this->act($game, $ai);
+            ['moves' => $opponentMoves, 'torpedoLaunch' => $torpedoLaunch] = $this->act($game, $ai);
             $game->setAiState($ai->toSnapshot());
 
             $finished = $game->isFinished();
@@ -64,10 +65,14 @@ final class OpponentTurn
             'loss' => 'lost' === $game->status()->value,
             'turn' => $turn,
             'opponentMoves' => $opponentMoves,
+            // koszt torpedy: zdradza wyrzutnię — gracz widzi, skąd strzelono
+            'opponentTorpedoLaunch' => null !== $torpedoLaunch
+                ? ['x' => $torpedoLaunch->x, 'y' => $torpedoLaunch->y]
+                : null,
         ];
     }
 
-    /** @return list<array{x:int,y:int,result:string}> */
+    /** @return array{moves: list<array{x:int,y:int,result:string}>, torpedoLaunch: Coordinate|null} */
     private function act(Game $game, HuntTargetAI $ai): array
     {
         $view = $game->opponentShotsView();
@@ -92,13 +97,14 @@ final class OpponentTurn
 
         // 2) Akcja ofensywna: torpeda / nalot (tylko hunt) albo zwykły strzał
         if ($huntMode && $this->hasUses($weapons, 'torpedo') && $this->decide(self::TORPEDO_CHANCE)) {
-            $run = $this->bestTorpedoRun($game, $view);
+            $run = $this->bestTorpedoRun($game, $view, $this->hasUses($weapons, 'torpedoDiagonal'));
             if (null !== $run) {
                 [$start, $direction] = $run;
                 $results = $game->fireOpponentTorpedo($start, $direction);
                 $this->notifyAll($ai, $results);
 
-                return $results;
+                // koszt torpedy: wyrzutnia AI zostaje ujawniona graczowi
+                return ['moves' => $results, 'torpedoLaunch' => $start];
             }
         }
 
@@ -108,7 +114,7 @@ final class OpponentTurn
                 $results = $game->sendOpponentAirRaid($center, new Area(1, 1));
                 $this->notifyAll($ai, $results);
 
-                return $results;
+                return ['moves' => $results, 'torpedoLaunch' => null];
             }
         }
 
@@ -116,7 +122,10 @@ final class OpponentTurn
         $result = $game->fireOpponentShot($target);
         $ai->notify($target, $result);
 
-        return [['x' => $target->x, 'y' => $target->y, 'result' => $result->value]];
+        return [
+            'moves' => [['x' => $target->x, 'y' => $target->y, 'result' => $result->value]],
+            'torpedoLaunch' => null,
+        ];
     }
 
     /** @param list<array{x:int,y:int,result:string}> $results */
@@ -163,19 +172,17 @@ final class OpponentTurn
      *
      * @return array{0: Coordinate, 1: Direction}|null
      */
-    private function bestTorpedoRun(Game $game, BoardReadModel $view): ?array
+    private function bestTorpedoRun(Game $game, BoardReadModel $view, bool $diagonalAllowed): ?array
     {
         $best = null;
         $bestScore = self::TORPEDO_MIN_UNTRIED - 1;
 
         foreach ($game->opponentLaunchableCells() as $cell) {
             foreach (Direction::cases() as $direction) {
-                [$dx, $dy] = match ($direction) {
-                    Direction::N => [0, -1],
-                    Direction::S => [0, 1],
-                    Direction::E => [1, 0],
-                    Direction::W => [-1, 0],
-                };
+                if ($direction->isDiagonal() && !$diagonalAllowed) {
+                    continue;
+                }
+                [$dx, $dy] = $direction->vector();
 
                 $score = 0;
                 $cx = $cell['x'];

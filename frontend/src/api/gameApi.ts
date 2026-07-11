@@ -17,6 +17,8 @@ export interface WeaponsState {
     torpedo: WeaponState;
     sonar: WeaponState;
     airRaid: WeaponState;
+    // ile z torped może płynąć po przekątnej (podzbiór limitu torpedo)
+    torpedoDiagonal?: WeaponState;
 }
 
 export interface GameViewDTO {
@@ -75,7 +77,7 @@ export async function fireShot(id: string, x: number, y: number): Promise<ShotRe
 
 // --- bronie specjalne (tryb fun) ---
 
-export type TorpedoDirection = 'N' | 'E' | 'S' | 'W';
+export type TorpedoDirection = 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW';
 
 export interface CellShotResult { x: number; y: number; result: 'hit' | 'miss' | 'sunk' | 'duplicate' }
 
@@ -85,6 +87,8 @@ export interface TurnOutcomeDTO {
     loss: boolean;
     turn: 'player' | 'opponent' | 'none';
     opponentMoves: CellShotResult[];
+    // torpeda AI zdradza wyrzutnię — pozycja statku przeciwnika
+    opponentTorpedoLaunch?: { x: number; y: number } | null;
 }
 
 export interface WeaponShotsResponse extends TurnOutcomeDTO {

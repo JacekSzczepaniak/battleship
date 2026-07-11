@@ -2,6 +2,7 @@
 
 namespace App\Application\Game;
 
+use App\Domain\Game\AI\HuntTargetAI;
 use App\Domain\Game\Coordinate;
 use App\Domain\Game\Direction;
 use App\Domain\Game\GameRepository;
@@ -42,7 +43,14 @@ final class FireTorpedo
 
         $game->setTurn('opponent');
 
-        $results = $game->fireTorpedo(new Coordinate($x, $y), $direction);
+        $launch = new Coordinate($x, $y);
+        $results = $game->fireTorpedo($launch, $direction);
+
+        // Koszt torpedy: zdradza wyrzutnię — AI dostaje pozycję statku gracza
+        // jako cel do dobicia (symetrycznie AI ujawnia swoją w OpponentTurn).
+        $ai = HuntTargetAI::fromSnapshot($game->aiState());
+        $ai->enqueueTargets([$launch]);
+        $game->setAiState($ai->toSnapshot());
 
         $turnOutcome = $this->opponentTurn->respond($game);
 

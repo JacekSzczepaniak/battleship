@@ -21,8 +21,9 @@ interface Ruleset
 
     /**
      * Limity użyć broni specjalnych na grę; 0 = broń niedostępna w tym wariancie.
+     * torpedoDiagonal = ile z torped może płynąć po przekątnej (podzbiór torpedo).
      *
-     * @return array{torpedo:int, sonar:int, airRaid:int}
+     * @return array{torpedo:int, sonar:int, airRaid:int, torpedoDiagonal:int}
      */
     public function weaponLimits(): array;
 }

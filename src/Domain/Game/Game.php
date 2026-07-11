@@ -314,6 +314,31 @@ final class Game
         $this->weaponUses[$shooter][$weapon] = ($this->weaponUses[$shooter][$weapon] ?? 0) + 1;
     }
 
+    /**
+     * Torpeda ukośna ma osobny limit (zwiad — nie trafi jednego statku dwa razy,
+     * za to rozrzuca trafienia po wielu; patrz Direction::isDiagonal()).
+     */
+    private function assertDiagonalTorpedoAvailable(string $shooter, Direction $direction): void
+    {
+        if (!$direction->isDiagonal()) {
+            return;
+        }
+
+        $limit = $this->ruleset->weaponLimits()['torpedoDiagonal'] ?? 0;
+        if (($this->weaponUses[$shooter]['torpedoDiagonal'] ?? 0) >= $limit) {
+            throw new \DomainException('Diagonal torpedo limit reached');
+        }
+    }
+
+    /** Zużycie torpedy: licznik ogólny + osobny dla przekątnych. */
+    private function consumeTorpedo(string $shooter, Direction $direction): void
+    {
+        $this->consumeWeapon($shooter, 'torpedo');
+        if ($direction->isDiagonal()) {
+            $this->weaponUses[$shooter]['torpedoDiagonal'] = ($this->weaponUses[$shooter]['torpedoDiagonal'] ?? 0) + 1;
+        }
+    }
+
     /** Strzały gracza. @return list<array{x:int,y:int}> */
     public function shots(): array
     {
@@ -374,6 +399,7 @@ final class Game
         }
 
         $this->assertWeaponAvailable('player', 'torpedo');
+        $this->assertDiagonalTorpedoAvailable('player', $direction);
 
         $w = $this->ruleset->boardSize()->width;
         $h = $this->ruleset->boardSize()->height;
@@ -386,15 +412,9 @@ final class Game
             throw new \DomainException('Torpedo must be launched from an unsunk ship');
         }
 
-        $this->consumeWeapon('player', 'torpedo');
+        $this->consumeTorpedo('player', $direction);
 
-        // Direction vector
-        [$dx, $dy] = match ($direction) {
-            Direction::N => [0, -1],
-            Direction::S => [0, 1],
-            Direction::E => [1, 0],
-            Direction::W => [-1, 0],
-        };
+        [$dx, $dy] = $direction->vector();
 
         $results = [];
 
@@ -527,6 +547,7 @@ final class Game
         }
 
         $this->assertWeaponAvailable('opponent', 'torpedo');
+        $this->assertDiagonalTorpedoAvailable('opponent', $direction);
 
         $w = $this->ruleset->boardSize()->width;
         $h = $this->ruleset->boardSize()->height;
@@ -539,14 +560,9 @@ final class Game
             throw new \DomainException('Torpedo must be launched from an unsunk ship');
         }
 
-        $this->consumeWeapon('opponent', 'torpedo');
+        $this->consumeTorpedo('opponent', $direction);
 
-        [$dx, $dy] = match ($direction) {
-            Direction::N => [0, -1],
-            Direction::S => [0, 1],
-            Direction::E => [1, 0],
-            Direction::W => [-1, 0],
-        };
+        [$dx, $dy] = $direction->vector();
 
         $results = [];
         $cx = $start->x;

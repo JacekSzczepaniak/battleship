@@ -61,6 +61,7 @@ it('raportuje stan broni: użycia i limity', function () {
         'torpedo' => ['used' => 1, 'limit' => 2],
         'sonar' => ['used' => 1, 'limit' => 3],
         'airRaid' => ['used' => 0, 'limit' => 1],
+        'torpedoDiagonal' => ['used' => 0, 'limit' => 1],
     ]);
 });
 

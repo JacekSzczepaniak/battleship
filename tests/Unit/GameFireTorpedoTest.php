@@ -94,6 +94,45 @@ final class GameFireTorpedoTest extends TestCase
         $this->assertCount(10, $results);
     }
 
+    public function testDiagonalTorpedoRunsAlongDiagonal(): void
+    {
+        $game = Game::create(new FunRuleset());
+        $game->placeFleet(FleetFactory::classic10x10());
+
+        // z 4-masztowca (0,0) po przekątnej SE — komórki (i,i)
+        $results = $game->fireTorpedo(new Coordinate(0, 0), Direction::SE);
+
+        $this->assertCount(10, $results);
+        foreach ($results as $i => $r) {
+            $this->assertSame($i, $r['x']);
+            $this->assertSame($i, $r['y']);
+        }
+        $this->assertSame(1, $game->weaponsState()['torpedoDiagonal']['used']);
+    }
+
+    public function testSecondDiagonalTorpedoIsRejected(): void
+    {
+        $game = Game::create(new FunRuleset());
+        $game->placeFleet(FleetFactory::classic10x10());
+        $game->fireTorpedo(new Coordinate(0, 0), Direction::SE);
+
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('Diagonal torpedo limit reached');
+        $game->fireTorpedo(new Coordinate(0, 2), Direction::NE);
+    }
+
+    public function testStraightTorpedoStillAvailableAfterDiagonal(): void
+    {
+        $game = Game::create(new FunRuleset());
+        $game->placeFleet(FleetFactory::classic10x10());
+        $game->fireTorpedo(new Coordinate(0, 0), Direction::SE);
+
+        // druga torpeda (prosta) przechodzi — limit ogólny to 2
+        $results = $game->fireTorpedo(new Coordinate(0, 2), Direction::E);
+        $this->assertNotEmpty($results);
+        $this->assertSame(2, $game->weaponsState()['torpedo']['used']);
+    }
+
     public function testFailedLaunchDoesNotConsumeTorpedo(): void
     {
         $game = Game::create(new FunRuleset());

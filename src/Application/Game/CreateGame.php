@@ -14,10 +14,11 @@ final class CreateGame
     {
     }
 
-    public function handle(?int $w = null, ?int $h = null, string $mode = 'classic'): Game
+    /** @param array<int,int>|null $ships skład floty (długość => sztuki); null = flota klasyczna */
+    public function handle(?int $w = null, ?int $h = null, string $mode = 'classic', ?array $ships = null): Game
     {
         $size = new BoardSize($w ?? 10, $h ?? 10);
-        $rules = 'fun' === $mode ? new FunRuleset($size) : new ClassicRuleset($size);
+        $rules = 'fun' === $mode ? new FunRuleset($size, $ships) : new ClassicRuleset($size, $ships);
 
         $game = Game::create($rules);
         $this->repo->save($game);

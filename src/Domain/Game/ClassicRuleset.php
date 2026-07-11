@@ -6,8 +6,12 @@ use App\Domain\Game\Weapon\WeaponSpecs;
 
 final class ClassicRuleset implements Ruleset
 {
-    public function __construct(private BoardSize $size = new BoardSize(10, 10))
-    {
+    /** @param array<int,int>|null $ships skład floty: długość => liczba sztuk (null = flota klasyczna) */
+    public function __construct(
+        private BoardSize $size = new BoardSize(10, 10),
+        private ?array $ships = null,
+    ) {
+        FleetComposition::assertValid($ships);
     }
 
     public function name(): string
@@ -22,8 +26,7 @@ final class ClassicRuleset implements Ruleset
 
     public function allowedShips(): array
     {
-        // classic fleet: 1x4, 2x3, 3x2, 4x1
-        return [4 => 1, 3 => 2, 2 => 3, 1 => 4];
+        return $this->ships ?? FleetComposition::CLASSIC;
     }
 
     public function weapons(): WeaponSpecs

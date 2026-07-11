@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import GameGameBoard from './GameBoard.vue';
 import { useGame } from '../composables/useGame';
-import { watch, computed, unref } from 'vue'
+import { computed, unref } from 'vue'
 import { useRouter } from 'vue-router'
 
 const g = useGame();
@@ -62,41 +62,6 @@ function handleShot(x: number, y: number) {
     }
 }
 
-// Diagnostyka: loguj zmianę statusu (pomaga upewnić się, że UI reaguje)
-watch(() => g.status, (nv) => {
-    try { console.log('[Game.vue] status →', nv) } catch {}
-});
-
-// Diagnostyka: loguj punkty overlayu przeciwnika i zmergowane klasy w pierwszych wierszach
-watch(() => g.playerUnderFireOverlay, (ov) => {
-    try {
-        const v = (ov as any)?.value ?? ov;
-        const hits = [] as string[];
-        const misses = [] as string[];
-        for (let y=0; y<Math.min(v?.length ?? 0, 3); y++) {
-            for (let x=0; x<Math.min(v?.[y]?.length ?? 0, 10); x++) {
-                if (v[y][x] === 'opp-hit') hits.push(`${x},${y}`);
-                if (v[y][x] === 'opp-miss') misses.push(`${x},${y}`);
-            }
-        }
-        console.debug('[Game.vue] overlay sample hits:', hits, 'misses:', misses);
-    } catch {}
-}, { deep: true });
-
-watch(mergedPlayerGrid, (mg) => {
-    try {
-        const row0 = mg?.[0]?.slice?.(0, 10) ?? [];
-        console.debug('[Game.vue] merged row0 classes:', row0);
-    } catch {}
-}, { deep: true });
-
-watch(enemyAnimatedGrid, (grid) => {
-    try {
-        const row0 = grid?.[0]?.slice?.(0, 10) ?? [];
-        console.debug('[enemyAnimatedGrid] row0:', row0);
-    } catch {}
-}, { deep: true });
-
 function newGame() {
     router.push({ name: 'home' })
 }
@@ -118,7 +83,6 @@ function newGame() {
 
         <div>
             <h3>Przeciwnik</h3>
-<!--            <GameGameBoard :grid="g.enemyFogGrid" :onCellClick="handleShot" :disabled="g.disabled" />-->
             <GameGameBoard :grid="enemyAnimatedGrid" :onCellClick="handleShot" :disabled="g.disabled" />
             <div v-if="g.loading">Ładowanie…</div>
             <div v-if="g.error" style="color:crimson">{{ g.error }}</div>

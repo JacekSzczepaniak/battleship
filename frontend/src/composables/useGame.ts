@@ -57,21 +57,6 @@ export function useGame() {
         playerUnderFireOverlay.value = ov;
 
         // enemy fog grid from hits/misses/sunk
-        // const eg = buildEmptyGrid(dto.board.w, dto.board.h, 'empty');
-        // for (const [x, y] of dto.enemyFogGrid.hits) {
-        //     if (eg[y] && typeof eg[y][x] !== 'undefined') eg[y][x] = 'hit';
-        // }
-        // for (const [x, y] of dto.enemyFogGrid.misses) {
-        //     if (eg[y] && typeof eg[y][x] !== 'undefined') eg[y][x] = 'miss';
-        // }
-        // for (const sunk of dto.enemyFogGrid.sunk) {
-        //     for (const [x, y] of sunk.cells) {
-        //         if (eg[y] && typeof eg[y][x] !== 'undefined') eg[y][x] = 'hit';
-        //     }
-        // }
-        // enemyFogGrid.value = eg;
-
-        // enemy fog grid from hits/misses/sunk
         const eg = buildEmptyGrid(dto.board.w, dto.board.h, 'empty');
         const sunk: Array<[number, number]> = [];
 
@@ -97,19 +82,6 @@ export function useGame() {
         turn.value = dto.turn;
         status.value = dto.status;
         finished.value = dto.finished;
-
-        // Debug: zweryfikuj wymiary i długości wierszy (pomaga przy diagnozie renderu)
-        try {
-            // eslint-disable-next-line no-console
-            console.debug('[useGame] board', dto.board, {
-                playerRows: pg.length,
-                playerRowLens: pg.map(r => r.length),
-                enemyRows: eg.length,
-                enemyRowLens: eg.map(r => r.length),
-            });
-        } catch (_) {
-            /* ignore */
-        }
     }
 
     async function start() {
@@ -119,31 +91,25 @@ export function useGame() {
             if (!gameId.value) {
                 throw new Error('Brak identyfikatora gry w adresie URL');
             }
-            try { console.debug('[useGame.start] gameId=', gameId.value); } catch {}
             const g = await getGame(gameId.value);
-            try { console.debug('[useGame.start] getGame →', g); } catch {}
             applyProjection(g);
         } catch (e: any) {
             error.value = e?.message ?? 'Start failed';
             try { console.warn('[useGame.start] ERROR', e); } catch {}
         } finally {
             loading.value = false;
-            try { console.debug('[useGame.start] loading=false'); } catch {}
         }
     }
 
     async function refresh() {
         if (!gameId.value) return;
-        try { console.debug('[useGame.refresh] → getGame', gameId.value); } catch {}
         const g = await getGame(gameId.value);
-        try { console.debug('[useGame.refresh] ← getGame', g); } catch {}
         applyProjection(g);
     }
 
     async function shot(x: number, y: number) {
         // Blokady: brak id, nie Twoja tura, już trwa strzał, gra skończona, pole poza zakresem lub już ostrzelane
         if (!gameId.value || turn.value !== 'player' || shooting.value) {
-            try { console.debug('[useGame.shot] blocked', { gameId: gameId.value, turn: turn.value, shooting: shooting.value }); } catch {}
             return;
         }
         if (status.value === 'won' || status.value === 'lost') return;
@@ -152,9 +118,7 @@ export function useGame() {
 
         try {
             shooting.value = true;
-            try { console.debug('[useGame.shot] → fireShot', { x, y }); } catch {}
             const res: ShotResultDTO = await fireShot(gameId.value, x, y);
-            try { console.debug('[useGame.shot] ← fireShot', res); } catch {}
             // Zastosuj zmianę na siatce przeciwnika lokalnie (opcj.)
             if (enemyFogGrid.value[y] && typeof enemyFogGrid.value[y][x] !== 'undefined') {
                 enemyFogGrid.value[y][x] = res.result === 'miss' ? 'miss' : 'hit';
@@ -192,7 +156,6 @@ export function useGame() {
             try { console.warn('[useGame.shot] ERROR', e); } catch {}
         } finally {
             shooting.value = false;
-            try { console.debug('[useGame.shot] shooting=false'); } catch {}
         }
     }
 

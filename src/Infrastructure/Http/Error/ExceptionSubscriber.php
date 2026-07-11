@@ -89,9 +89,12 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             return ['TORPEDO_LAUNCH_INVALID', 422];
         }
 
-        // Wyprawa: wyspa zamknięta rangą (komunikat niesie wymaganą rangę)
+        // Wyprawa: bramki rangowe (komunikaty niosą wymaganą rangę)
         if (str_starts_with($message, 'Island locked')) {
             return ['ISLAND_LOCKED', 403];
+        }
+        if (str_starts_with($message, 'Ship type locked')) {
+            return ['SHIP_TYPE_LOCKED', 403];
         }
 
         return match ($message) {
@@ -105,6 +108,11 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             'Island not found' => ['ISLAND_NOT_FOUND', 404],
             'Battle not registered for this profile' => ['BATTLE_NOT_REGISTERED', 404],
             'Battle not finished yet' => ['BATTLE_NOT_FINISHED', 409],
+            'Not enough materials' => ['NOT_ENOUGH_MATERIALS', 409],
+            'Shipyard level too low for this ship type' => ['SHIPYARD_TOO_LOW', 409],
+            'Ship not found' => ['SHIP_NOT_FOUND', 404],
+            'Ship is not damaged' => ['SHIP_NOT_DAMAGED', 409],
+            'No seaworthy ships' => ['NO_SEAWORTHY_SHIPS', 409],
             default => ['VALIDATION_ERROR', 400],
         };
     }

@@ -324,7 +324,7 @@ final class Game
             return;
         }
 
-        $limit = $this->ruleset->weaponLimits()['torpedoDiagonal'] ?? 0;
+        $limit = $this->ruleset->weaponLimits()['torpedoDiagonal'];
         if (($this->weaponUses[$shooter]['torpedoDiagonal'] ?? 0) >= $limit) {
             throw new \DomainException('Diagonal torpedo limit reached');
         }

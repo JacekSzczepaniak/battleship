@@ -2,7 +2,9 @@
 import GameGameBoard from './GameBoard.vue';
 import { useGame } from '../composables/useGame';
 import { computed, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { settleBattle, RANK_LABELS, type SettleResultDTO } from '../api/expeditionApi'
+import { clearCurrentBattle, getCurrentBattle } from '../lib/expeditionSession'
 
 // Destrukturyzacja: ref-y stają się top-level, więc template odpakowuje je
 // automatycznie (zagnieżdżone w zwykłym obiekcie NIE są odpakowywane).
@@ -168,12 +170,40 @@ const weaponHint = computed(() => {
 function newGame() {
     router.push({ name: 'home' })
 }
+
+// --- Wyprawa: rozliczenie XP po zakończonej bitwie o wyspę ---
+const route = useRoute();
+const expeditionResult = ref<SettleResultDTO | null>(null);
+const gameOver = computed(() => finished.value || status.value === 'won' || status.value === 'lost');
+
+watch(gameOver, async (over) => {
+    if (!over || expeditionResult.value) return;
+    const battle = getCurrentBattle();
+    if (!battle || battle.gameId !== String(route.params.id)) return;
+    try {
+        // idempotentne po stronie backendu; przy błędzie rozliczy się
+        // przy następnym wejściu na mapę wyprawy (siatka bezpieczeństwa)
+        expeditionResult.value = await settleBattle(battle.profileId, battle.gameId);
+        clearCurrentBattle();
+    } catch {
+        // wpis w localStorage zostaje — mapa wyprawy ponowi rozliczenie
+    }
+}, { immediate: true });
 </script>
 
 <template>
     <!-- Banner końca gry u góry sekcji -->
     <div v-if="finished || status === 'won' || status === 'lost'" class="game-banner" :class="status">
         Koniec gry: {{ status === 'won' ? 'Wygrana' : 'Przegrana' }}
+        <template v-if="expeditionResult">
+            <span class="xp-award">
+                +{{ expeditionResult.awarded }} XP
+                <template v-if="expeditionResult.rankUp">
+                    ⚓ awans: {{ RANK_LABELS[expeditionResult.rank] }}!
+                </template>
+            </span>
+            <router-link class="btn small" :to="{ name: 'expedition' }">Wróć na wyprawę</router-link>
+        </template>
         <button class="btn small" @click="newGame">Nowa gra</button>
     </div>
 
@@ -279,6 +309,8 @@ function newGame() {
 }
 .game-banner.won { background: #e6ffe6; border-color: #b3ffb3; color: #0a5b0a; }
 .game-banner.lost { background: #ffe6e6; border-color: #ffb3b3; color: #7a0a0a; }
+.game-banner .xp-award { font-weight: 700; margin: 0 0.5rem; }
+.game-banner a.btn { text-decoration: none; display: inline-block; }
 .btn.small { margin-left: .75rem; padding: .25rem .5rem; font-size: .9rem; background: #1f6feb; color: #fff; border: 0; border-radius: 4px; cursor: pointer; }
 .boards { display: flex; gap: 20px; align-items: start; }
 .hud { margin-top: .5rem; display: grid; gap: .4rem; }

@@ -116,6 +116,30 @@ final class BoardSide
         return null !== $ship && !$this->isSunk($ship);
     }
 
+    /**
+     * Komórki wszystkich niezatopionych statków tej strony (legalne wyrzutnie torped).
+     *
+     * @return list<array{x:int,y:int}>
+     */
+    public function unsunkShipCells(): array
+    {
+        if (!$this->hasFleet()) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($this->board->ships() as $ship) {
+            if ($this->isSunk($ship)) {
+                continue;
+            }
+            foreach ($ship->cells() as $c) {
+                $out[] = ['x' => $c->x, 'y' => $c->y];
+            }
+        }
+
+        return $out;
+    }
+
     /** @return list<array{x:int,y:int}> */
     public function shotsTaken(): array
     {

@@ -88,6 +88,7 @@ final class GameQueryController
             'board' => ['w' => $size->width, 'h' => $size->height],
             'ruleset' => $game->ruleset()->name(),
             'weapons' => $game->weaponsState(),
+            'opponentWeapons' => $game->opponentWeaponsState(),
             'mode' => $game->mode(),
             'opponent' => $game->opponent(),
             'turn' => $turn,

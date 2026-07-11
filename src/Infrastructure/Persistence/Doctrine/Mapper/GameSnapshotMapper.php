@@ -67,8 +67,8 @@ final class GameSnapshotMapper
             'opponentFleet' => $opponentFleet,
             // Stan AI przeciwnika (kształt zna HuntTargetAI) – opcjonalnie
             'ai' => [] !== $game->aiState() ? $game->aiState() : null,
-            // Użycia broni specjalnych (limity trzyma Ruleset)
-            'weapons' => [] !== $game->weaponUses() ? $game->weaponUses() : null,
+            // Użycia broni specjalnych per strona (limity trzyma Ruleset)
+            'weapons' => $this->weaponUsesOrNull($game),
             // Iteration 1 meta
             'mode' => $game->mode(),
             'opponent' => $game->opponent(),
@@ -185,5 +185,13 @@ final class GameSnapshotMapper
         return 'fun' === ($data['type'] ?? 'classic')
             ? new FunRuleset($size)
             : new ClassicRuleset($size);
+    }
+
+    /** @return array{player: array<string,int>, opponent: array<string,int>}|null */
+    private function weaponUsesOrNull(Game $game): ?array
+    {
+        $uses = $game->weaponUses();
+
+        return ([] !== $uses['player'] || [] !== $uses['opponent']) ? $uses : null;
     }
 }

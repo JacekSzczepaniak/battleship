@@ -8,7 +8,7 @@ import { useRouter } from 'vue-router'
 // automatycznie (zagnieżdżone w zwykłym obiekcie NIE są odpakowywane).
 const {
     status, finished, turn, loading, error, disabled, attack, width, height,
-    ruleset, weapons, weaponMode, torpedoDirection, sonarMarks, launchableCells,
+    ruleset, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells,
     shotsCount, hitsCount, missesCount, duplicatesCount, opponentHitsCount,
     toast, toastType,
     playerGrid, playerUnderFireOverlay, enemyFogGrid, lastShot, sunkCells,
@@ -207,6 +207,12 @@ function newGame() {
             <div v-if="error" style="color:crimson">{{ error }}</div>
             <div class="hud">
                 <div>Ruch: <strong>{{ turn }}</strong> <span v-if="disabled">(zablokowane)</span></div>
+                <div v-if="ruleset === 'fun' && opponentWeapons" class="ai-arsenal">
+                    Arsenał AI:
+                    🚀 {{ opponentWeapons.torpedo.limit - opponentWeapons.torpedo.used }}/{{ opponentWeapons.torpedo.limit }}
+                    📡 {{ opponentWeapons.sonar.limit - opponentWeapons.sonar.used }}/{{ opponentWeapons.sonar.limit }}
+                    ✈️ {{ opponentWeapons.airRaid.limit - opponentWeapons.airRaid.used }}/{{ opponentWeapons.airRaid.limit }}
+                </div>
                 <div class="stats">
                     <span class="pill">Strzały: <strong>{{ shotsCount }}</strong></span>
                     <span class="pill hit">Trafienia: <strong>{{ hitsCount }}</strong></span>
@@ -271,6 +277,7 @@ function newGame() {
 .wbtn[disabled] { opacity:.45; cursor:not-allowed; }
 .weapon-opts { margin-top:.35rem; display:flex; gap:.6rem; align-items:center; color:#334155; }
 .weapon-hint { margin-top:.3rem; font-size:.9rem; color:#475569; }
+.ai-arsenal { font-size:.9rem; color:#475569; }
 .toast { display:inline-block; padding:.3rem .6rem; border-radius:6px; border:1px solid #cbd5e1; background:#f8fafc; color:#0f172a; }
 .toast.warn { background:#fff7ed; border-color:#fed7aa; color:#7c2d12; }
 .toast.error { background:#fee2e2; border-color:#fecaca; color:#7f1d1d; }

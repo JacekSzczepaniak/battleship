@@ -32,31 +32,22 @@ final class GameSnapshotMapper
 
         // opponent fleet (optional)
         $opponentFleet = null;
-        if (method_exists($game, 'opponentFleet')) {
-            /** @var Ship[]|null $opp */
-            $opp = $game->opponentFleet();
-            if (null !== $opp) {
-                $opponentFleet = array_map(function (Ship $s) {
-                    return [
-                        'x' => $s->start->x,
-                        'y' => $s->start->y,
-                        'o' => $s->orientation->value,
-                        'l' => $s->length,
-                    ];
-                }, $opp);
-            }
+        if (null !== $game->opponentFleet()) {
+            $opponentFleet = array_map(function (Ship $s) {
+                return [
+                    'x' => $s->start->x,
+                    'y' => $s->start->y,
+                    'o' => $s->orientation->value,
+                    'l' => $s->length,
+                ];
+            }, $game->opponentFleet());
         }
 
-        // include shots (with results) if domain exposes them
-        $shots = [];
-        if (method_exists($game, 'shotsWithResults')) {
-            /** @var list<array{x:int,y:int,result:string}> $withResults */
-            $withResults = $game->shotsWithResults();
-            $shots = array_map(
-                static fn (array $s) => ['x' => $s['x'], 'y' => $s['y'], 'r' => $s['result']],
-                $withResults
-            );
-        }
+        // shots with results
+        $shots = array_map(
+            static fn (array $s) => ['x' => $s['x'], 'y' => $s['y'], 'r' => $s['result']],
+            $game->shotsWithResults()
+        );
 
         return [
             'status' => $game->status()->value,
@@ -66,13 +57,11 @@ final class GameSnapshotMapper
             ],
             'fleet' => $fleet,
             'shots' => $shots,
-            // opponent shots (mock AI) snapshot – optional
-            'opponentShots' => method_exists($game, 'opponentShotsWithResults')
-                ? array_map(
-                    static fn (array $s) => ['x' => $s['x'], 'y' => $s['y'], 'r' => $s['result']],
-                    $game->opponentShotsWithResults()
-                )
-                : [],
+            // opponent shots (AI) snapshot
+            'opponentShots' => array_map(
+                static fn (array $s) => ['x' => $s['x'], 'y' => $s['y'], 'r' => $s['result']],
+                $game->opponentShotsWithResults()
+            ),
             // opponent fleet snapshot – optional
             'opponentFleet' => $opponentFleet,
             // Stan AI przeciwnika (kształt zna HuntTargetAI) – opcjonalnie
@@ -134,43 +123,7 @@ final class GameSnapshotMapper
                 }
             }
 
-            // preferred: domain setter (if available)
-            if (method_exists($game, 'setShotsFromSnapshot')) {
-                $game->setShotsFromSnapshot($shots);
-            } else {
-                // fallback: reflection — set 'shots' and compute 'hits'
-                $ref = new \ReflectionObject($game);
-
-                // build 'x:y' => true map for shots
-                $shotMap = [];
-                foreach ($shots as $s) {
-                    $key = $s['x'].':'.$s['y'];
-                    $shotMap[$key] = true;
-                }
-
-                // set private $shots if present
-                if ($ref->hasProperty('shots')) {
-                    $p = $ref->getProperty('shots');
-                    $p->setValue($game, $shotMap);
-                }
-
-                // compute hits based on current fleet
-                $hitMap = [];
-                $fleet = $game->fleet() ?? [];
-                foreach ($fleet as $ship) {
-                    foreach ($this->cellsFor($ship) as $cellKey) {
-                        if (isset($shotMap[$cellKey])) {
-                            $hitMap[$cellKey] = true;
-                        }
-                    }
-                }
-
-                // set private $hits if present
-                if ($ref->hasProperty('hits')) {
-                    $p = $ref->getProperty('hits');
-                    $p->setValue($game, $hitMap);
-                }
-            }
+            $game->setShotsFromSnapshot($shots);
         }
 
         // opponent shots from snapshot (optional)
@@ -186,39 +139,11 @@ final class GameSnapshotMapper
                 }
             }
 
-            if (method_exists($game, 'setOpponentShotsFromSnapshot')) {
-                $game->setOpponentShotsFromSnapshot($oppShots);
-            } else {
-                // reflection fallback (analogicznie jak dla shots)
-                $ref = new \ReflectionObject($game);
-                $shotMap = [];
-                foreach ($oppShots as $s) {
-                    $shotMap[$s['x'].':'.$s['y']] = true;
-                }
-                if ($ref->hasProperty('opponentShots')) {
-                    $p = $ref->getProperty('opponentShots');
-                    $p->setValue($game, $shotMap);
-                }
-
-                // compute opponentHits from fleet
-                $hitMap = [];
-                $fleet = $game->fleet() ?? [];
-                foreach ($fleet as $ship) {
-                    foreach ($this->cellsFor($ship) as $cellKey) {
-                        if (isset($shotMap[$cellKey])) {
-                            $hitMap[$cellKey] = true;
-                        }
-                    }
-                }
-                if ($ref->hasProperty('opponentHits')) {
-                    $p = $ref->getProperty('opponentHits');
-                    $p->setValue($game, $hitMap);
-                }
-            }
+            $game->setOpponentShotsFromSnapshot($oppShots);
         }
 
         // opponent fleet from snapshot (optional)
-        if (!empty($state['opponentFleet']) && is_array($state['opponentFleet']) && method_exists($game, 'setOpponentFleetFromSnapshot')) {
+        if (!empty($state['opponentFleet']) && is_array($state['opponentFleet'])) {
             $ships = [];
             foreach ($state['opponentFleet'] as $s) {
                 if (isset($s['x'], $s['y'], $s['o'], $s['l'])) {
@@ -247,20 +172,5 @@ final class GameSnapshotMapper
         $board = $data['board'] ?? ['w' => 10, 'h' => 10];
 
         return new ClassicRuleset(new BoardSize((int) $board['w'], (int) $board['h']));
-    }
-
-    /**
-     * @return list<string> ship cell keys in "x:y" format
-     */
-    private function cellsFor(Ship $ship): array
-    {
-        $out = [];
-        for ($i = 0; $i < $ship->length; ++$i) {
-            $x = $ship->start->x + (Orientation::H === $ship->orientation ? $i : 0);
-            $y = $ship->start->y + (Orientation::V === $ship->orientation ? $i : 0);
-            $out[] = $x.':'.$y;
-        }
-
-        return $out;
     }
 }

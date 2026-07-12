@@ -13,13 +13,14 @@ final class BuildShip
     public function __construct(
         private ProfileRepository $profiles,
         private IslandCatalog $islands,
+        private WorldFactory $worldFactory,
     ) {
     }
 
     /**
-     * Buduje statek w stoczni wyspy: wyspa musi być dostępna (ranga),
-     * stocznia wystarczająco duża, a bramkę rangi typu i koszt materiałów
-     * egzekwuje domena (CaptainProfile::buildShip).
+     * Buduje statek w stoczni wyspy, na której kapitan STOI (geografia =
+     * logistyka); stocznia musi być wystarczająco duża, a bramkę rangi typu
+     * i koszt materiałów egzekwuje domena (CaptainProfile::buildShip).
      */
     public function handle(string $profileId, string $islandId, ShipType $type): OwnedShip
     {
@@ -32,8 +33,8 @@ final class BuildShip
         if (null === $island) {
             throw new \DomainException('Island not found');
         }
-        if (!$island->isAccessibleFor($profile->rank())) {
-            throw new \DomainException(sprintf('Island locked: requires rank %s', $island->requiredRank->value));
+        if (!$profile->isAt($this->worldFactory->worldFor($profile), $island->id)) {
+            throw new \DomainException('Not at island');
         }
         if ($island->shipyardLevel < $type->requiredShipyardLevel()) {
             throw new \DomainException('Shipyard level too low for this ship type');

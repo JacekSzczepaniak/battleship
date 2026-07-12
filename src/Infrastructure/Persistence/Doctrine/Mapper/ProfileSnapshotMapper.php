@@ -22,6 +22,10 @@ final class ProfileSnapshotMapper
                 'type' => $ship->type->value,
                 'damaged' => $ship->isDamaged(),
             ], $profile->fleet()),
+            'worldSeed' => $profile->worldSeed(),
+            'position' => $profile->hasWorldState() ? $profile->position() : null,
+            'discovered' => $profile->discoveredSectors(),
+            'moveCount' => $profile->moveCount(),
         ];
     }
 
@@ -57,6 +61,17 @@ final class ProfileSnapshotMapper
             }
         }
 
+        $position = null;
+        if (isset($state['position']) && is_array($state['position'])
+            && isset($state['position']['x'], $state['position']['y'])) {
+            $position = ['x' => (int) $state['position']['x'], 'y' => (int) $state['position']['y']];
+        }
+
+        $discovered = null;
+        if (isset($state['discovered']) && is_array($state['discovered'])) {
+            $discovered = array_values(array_map('strval', $state['discovered']));
+        }
+
         return CaptainProfile::fromSnapshot(
             new ProfileId($id),
             (string) ($state['name'] ?? 'Rozbitek'),
@@ -64,6 +79,10 @@ final class ProfileSnapshotMapper
             $battles,
             $fleet,
             isset($state['materials']) ? max(0, (int) $state['materials']) : null,
+            isset($state['worldSeed']) ? (int) $state['worldSeed'] : null,
+            $position,
+            $discovered,
+            (int) ($state['moveCount'] ?? 0),
         );
     }
 }

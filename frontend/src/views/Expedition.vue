@@ -50,7 +50,27 @@
                 </div>
             </section>
 
-            <!-- Flota i port -->
+            <!-- Mapa morza: mgła, wyspy, pozycja -->
+            <section class="card sea">
+                <div class="island-head">
+                    <h2>🗺️ Morze</h2>
+                    <span class="muted">niezbadane wody: ryzyko sztormu {{ expedition.world.stormChance }}%</span>
+                </div>
+                <div class="sea-grid" :style="{ gridTemplateColumns: `repeat(${expedition.world.width}, 1.7rem)` }">
+                    <button
+                        v-for="cell in seaCells"
+                        :key="cell.key"
+                        class="sea-cell"
+                        :class="cell.cls"
+                        :disabled="busy || !cell.sailable"
+                        :title="cell.title"
+                        @click="onSail(cell.x, cell.y)"
+                    >{{ cell.glyph }}</button>
+                </div>
+                <p v-if="seaMsg" class="sea-msg">{{ seaMsg }}</p>
+            </section>
+
+            <!-- Flota i port (stocznia dostępna tylko w doku) -->
             <section class="card port">
                 <h2>⚓ Flota</h2>
                 <ul class="ships">
@@ -72,21 +92,24 @@
                     </li>
                 </ul>
 
-                <h3>🏗️ Stocznia <span class="muted">(najlepsza dostępna: poziom {{ bestShipyardLevel }})</span></h3>
-                <ul class="ships">
-                    <li v-for="t in expedition.shipTypes" :key="t.type" class="ship">
-                        <span class="ship-name">{{ SHIP_ICONS[t.type] }} {{ SHIP_LABELS[t.type] }} ({{ t.length }}-masztowiec)</span>
-                        <button
-                            class="btn small"
-                            :disabled="busy || buildBlock(t) !== null"
-                            :title="buildBlock(t) ?? ''"
-                            @click="onBuild(t)"
-                        >
-                            Buduj ({{ t.buildCost }} 🔩)
-                        </button>
-                        <span v-if="buildBlock(t)" class="muted">{{ buildBlock(t) }}</span>
-                    </li>
-                </ul>
+                <template v-if="currentIsland">
+                    <h3>🏗️ Stocznia — {{ currentIsland.name }} <span class="muted">(poziom {{ currentIsland.shipyardLevel }})</span></h3>
+                    <ul class="ships">
+                        <li v-for="t in expedition.shipTypes" :key="t.type" class="ship">
+                            <span class="ship-name">{{ SHIP_ICONS[t.type] }} {{ SHIP_LABELS[t.type] }} ({{ t.length }}-masztowiec)</span>
+                            <button
+                                class="btn small"
+                                :disabled="busy || buildBlock(t) !== null"
+                                :title="buildBlock(t) ?? ''"
+                                @click="onBuild(t)"
+                            >
+                                Buduj ({{ t.buildCost }} 🔩)
+                            </button>
+                            <span v-if="buildBlock(t)" class="muted">{{ buildBlock(t) }}</span>
+                        </li>
+                    </ul>
+                </template>
+                <p v-else class="muted">🏗️ Stocznia dostępna po zawinięciu do portu — dopłyń na wyspę.</p>
             </section>
 
             <!-- Trwająca bitwa -->
@@ -97,10 +120,10 @@
                 </router-link>
             </section>
 
-            <!-- Trasa wyprawy -->
+            <!-- Odkryte wyspy (nieodkryte kryje mgła) -->
             <ol class="islands">
                 <li
-                    v-for="island in expedition.islands"
+                    v-for="island in discoveredIslands"
                     :key="island.id"
                     class="card island"
                     :class="{ locked: !island.unlocked }"
@@ -119,13 +142,14 @@
                         </span>
                     </div>
                     <button
-                        v-if="island.unlocked"
+                        v-if="island.unlocked && island.present"
                         class="btn"
                         :disabled="starting !== null || pendingBattle !== null"
                         @click="onStartBattle(island)"
                     >
                         {{ starting === island.id ? 'Stawianie żagli…' : '⚔️ Bitwa' }}
                     </button>
+                    <p v-else-if="island.unlocked" class="muted">⛵ Dopłyń na wyspę, aby walczyć i korzystać ze stoczni.</p>
                     <p v-else class="muted">Wymaga rangi: {{ rankLabel(island.requiredRank) }}</p>
                 </li>
             </ol>
@@ -137,7 +161,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
-    buildShip, createProfile, getExpedition, repairShip, settleBattle, startIslandBattle,
+    buildShip, createProfile, getExpedition, repairShip, sail, settleBattle, startIslandBattle,
     RANK_LABELS, SHIP_ICONS, SHIP_LABELS,
     type ExpeditionDTO, type FleetShipDTO, type IslandDTO, type RankName, type ShipTypeDTO,
 } from '../api/expeditionApi';
@@ -169,9 +193,10 @@ function rankLabel(rank: RankName): string {
     return RANK_LABELS[rank] ?? rank;
 }
 
-// --- Port: budowa i remont w najlepszej dostępnej stoczni ---
+// --- Wolne morze: mapa, żegluga, port w doku ---
 
 const busy = ref(false);
+const seaMsg = ref('');
 
 const RANK_ORDER: RankName[] = ['rozbitek', 'marynarz', 'kapitan', 'admiral'];
 
@@ -179,21 +204,77 @@ function rankAtLeast(rank: RankName, required: RankName): boolean {
     return RANK_ORDER.indexOf(rank) >= RANK_ORDER.indexOf(required);
 }
 
-/** Odblokowana wyspa ze stocznią o wymaganym poziomie (do budowy/remontu). */
-function shipyardIslandFor(level: number): IslandDTO | null {
-    return expedition.value?.islands.find(i => i.unlocked && i.shipyardLevel >= level) ?? null;
+/** Wyspa, w której porcie stoi kapitan (stocznia i bitwa tylko tutaj). */
+const currentIsland = computed<IslandDTO | null>(
+    () => expedition.value?.islands.find(i => i.present) ?? null
+);
+
+const discoveredIslands = computed<IslandDTO[]>(
+    () => expedition.value?.islands.filter(i => i.discovered) ?? []
+);
+
+interface SeaCell {
+    key: string; x: number; y: number;
+    cls: Record<string, boolean>; glyph: string; title: string; sailable: boolean;
 }
 
-const bestShipyardLevel = computed(() =>
-    Math.max(0, ...(expedition.value?.islands.filter(i => i.unlocked).map(i => i.shipyardLevel) ?? [0]))
-);
+const seaCells = computed<SeaCell[]>(() => {
+    const exp = expedition.value;
+    if (!exp) return [];
+    const world = exp.world;
+    const fog = new Set(world.discovered);
+    const islandsByPos = new Map(
+        exp.islands.filter(i => i.discovered && i.position).map(i => [`${i.position!.x}:${i.position!.y}`, i])
+    );
+    const { x: px, y: py } = world.position;
+
+    const cells: SeaCell[] = [];
+    for (let y = 0; y < world.height; y++) {
+        for (let x = 0; x < world.width; x++) {
+            const key = `${x}:${y}`;
+            const discovered = fog.has(key);
+            const island = islandsByPos.get(key) ?? null;
+            const isPlayer = x === px && y === py;
+            const sailable = Math.max(Math.abs(x - px), Math.abs(y - py)) === 1;
+
+            cells.push({
+                key, x, y, sailable,
+                cls: { fog: !discovered, water: discovered && !island, island: !!island, player: isPlayer, sailable },
+                glyph: isPlayer ? '⛵' : island ? (island.unlocked ? '🏝️' : '🔒') : '',
+                title: island ? island.name : discovered ? `${x}:${y}` : 'niezbadane wody — ryzyko sztormu',
+            });
+        }
+    }
+    return cells;
+});
+
+async function onSail(x: number, y: number) {
+    const profileId = getProfileId();
+    if (!profileId) return;
+    busy.value = true;
+    error.value = '';
+    try {
+        const result = await sail(profileId, x, y);
+        const parts: string[] = [];
+        if (result.cartography > 0) parts.push(`+${result.cartography} 🔩 za nowe mapy`);
+        if (result.event?.effect === 'materials-lost') parts.push(`🌩️ Sztorm! Fale zabrały ${result.event.materials} 🔩`);
+        if (result.event?.effect === 'ship-damaged') parts.push(`🌩️ Sztorm! ${SHIP_LABELS[result.event.ship!]} uszkodzony`);
+        seaMsg.value = parts.join(' · ');
+        expedition.value = await getExpedition(profileId);
+    } catch (e: any) {
+        error.value = e?.message ?? 'Żegluga nie powiodła się';
+    } finally {
+        busy.value = false;
+    }
+}
 
 /** Powód blokady budowy typu; null = można budować. */
 function buildBlock(t: ShipTypeDTO): string | null {
     const profile = expedition.value?.profile;
-    if (!profile) return 'wczytywanie…';
+    const island = currentIsland.value;
+    if (!profile || !island) return 'dopłyń do portu';
     if (!rankAtLeast(profile.rank, t.requiredRank)) return `wymaga rangi: ${rankLabel(t.requiredRank)}`;
-    if (!shipyardIslandFor(t.requiredShipyardLevel)) return `wymaga stoczni poziomu ${t.requiredShipyardLevel}`;
+    if (island.shipyardLevel < t.requiredShipyardLevel) return `wymaga stoczni poziomu ${t.requiredShipyardLevel}`;
     if (profile.materials < t.buildCost) return 'za mało materiałów';
     return null;
 }
@@ -201,16 +282,18 @@ function buildBlock(t: ShipTypeDTO): string | null {
 /** Powód blokady remontu statku; null = można remontować. */
 function repairBlock(ship: FleetShipDTO): string | null {
     const profile = expedition.value?.profile;
+    const island = currentIsland.value;
     const type = expedition.value?.shipTypes.find(t => t.type === ship.type);
     if (!profile || !type) return 'wczytywanie…';
-    if (!shipyardIslandFor(type.requiredShipyardLevel)) return `wymaga stoczni poziomu ${type.requiredShipyardLevel}`;
+    if (!island) return 'dopłyń do portu';
+    if (island.shipyardLevel < type.requiredShipyardLevel) return `wymaga stoczni poziomu ${type.requiredShipyardLevel}`;
     if (profile.materials < ship.repairCost) return 'za mało materiałów';
     return null;
 }
 
 async function onBuild(t: ShipTypeDTO) {
     const profileId = getProfileId();
-    const island = shipyardIslandFor(t.requiredShipyardLevel);
+    const island = currentIsland.value;
     if (!profileId || !island) return;
     busy.value = true;
     error.value = '';
@@ -226,8 +309,7 @@ async function onBuild(t: ShipTypeDTO) {
 
 async function onRepair(ship: FleetShipDTO) {
     const profileId = getProfileId();
-    const type = expedition.value?.shipTypes.find(t => t.type === ship.type);
-    const island = shipyardIslandFor(type?.requiredShipyardLevel ?? 1);
+    const island = currentIsland.value;
     if (!profileId || !island) return;
     busy.value = true;
     error.value = '';
@@ -336,6 +418,15 @@ h1 { margin-bottom: 0.75rem; }
 .xp-fill { height: 100%; background: #1f6feb; transition: width 0.4s ease; }
 .pending { display: flex; gap: 0.75rem; align-items: center; background: #fff7ed; border-color: #fed7aa; }
 .materials { font-weight: 600; color: #92400e; }
+.sea-grid { display: grid; gap: 2px; margin-top: 0.5rem; }
+.sea-cell { width: 1.7rem; height: 1.7rem; border: 0; border-radius: 3px; padding: 0; font-size: 0.95rem; line-height: 1; cursor: default; }
+.sea-cell.fog { background: #334155; }
+.sea-cell.water { background: #bae6fd; }
+.sea-cell.island { background: #fde68a; }
+.sea-cell.player { background: #93c5fd; }
+.sea-cell.sailable:not(:disabled) { cursor: pointer; outline: 1px dashed #1f6feb; outline-offset: -2px; }
+.sea-cell.sailable:not(:disabled):hover { filter: brightness(1.12); }
+.sea-msg { margin: 0.5rem 0 0; color: #92400e; }
 .port h2, .port h3 { margin: 0 0 0.4rem; font-size: 1.05rem; }
 .port h3 { margin-top: 0.8rem; }
 .ships { list-style: none; padding: 0; margin: 0; }

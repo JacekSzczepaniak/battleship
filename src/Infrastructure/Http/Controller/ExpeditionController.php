@@ -6,6 +6,7 @@ use App\Application\Expedition\BuildShip;
 use App\Application\Expedition\CreateProfile;
 use App\Application\Expedition\GetExpedition;
 use App\Application\Expedition\RepairShip;
+use App\Application\Expedition\Sail;
 use App\Application\Expedition\SettleBattle;
 use App\Application\Expedition\StartIslandBattle;
 use App\Domain\Expedition\OwnedShip;
@@ -26,6 +27,7 @@ final class ExpeditionController
         private SettleBattle $settleBattle,
         private BuildShip $buildShip,
         private RepairShip $repairShip,
+        private Sail $sail,
     ) {
     }
 
@@ -86,6 +88,21 @@ final class ExpeditionController
         $this->assertUuid($gameId, 'game');
 
         return new JsonResponse($this->settleBattle->handle($id, $gameId));
+    }
+
+    #[Route('/{id}/sail', name: 'api_profiles_sail', methods: ['POST'])]
+    public function sail(string $id, Request $request): JsonResponse
+    {
+        $this->assertUuid($id, 'profile');
+        $payload = $this->jsonPayload($request);
+
+        $x = $payload['x'] ?? null;
+        $y = $payload['y'] ?? null;
+        if (!is_int($x) || !is_int($y)) {
+            throw new ApiException('Missing or invalid fields: x:int, y:int', 'VALIDATION_ERROR', 400);
+        }
+
+        return new JsonResponse($this->sail->handle($id, $x, $y));
     }
 
     #[Route('/{id}/ships', name: 'api_profiles_build_ship', methods: ['POST'])]

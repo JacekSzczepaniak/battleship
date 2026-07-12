@@ -14,6 +14,7 @@ final class StartIslandBattle
         private ProfileRepository $profiles,
         private IslandCatalog $islands,
         private CreateGame $createGame,
+        private WorldFactory $worldFactory,
     ) {
     }
 
@@ -37,6 +38,11 @@ final class StartIslandBattle
 
         if (!$island->isAccessibleFor($profile->rank())) {
             throw new \DomainException(sprintf('Island locked: requires rank %s', $island->requiredRank->value));
+        }
+
+        // wolne morze: bitwę toczy się tam, gdzie stoi okręt flagowy
+        if (!$profile->isAt($this->worldFactory->worldFor($profile), $island->id)) {
+            throw new \DomainException('Not at island');
         }
 
         $activeFleet = $profile->activeFleet();

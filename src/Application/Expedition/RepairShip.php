@@ -12,12 +12,13 @@ final class RepairShip
     public function __construct(
         private ProfileRepository $profiles,
         private IslandCatalog $islands,
+        private WorldFactory $worldFactory,
     ) {
     }
 
     /**
-     * Remontuje statek w stoczni wyspy — te same bramki co budowa
-     * (dostępność wyspy, poziom stoczni), koszt egzekwuje domena.
+     * Remontuje statek w stoczni wyspy, na której kapitan stoi — te same
+     * bramki co budowa (obecność, poziom stoczni), koszt egzekwuje domena.
      */
     public function handle(string $profileId, string $islandId, string $shipId): OwnedShip
     {
@@ -30,8 +31,8 @@ final class RepairShip
         if (null === $island) {
             throw new \DomainException('Island not found');
         }
-        if (!$island->isAccessibleFor($profile->rank())) {
-            throw new \DomainException(sprintf('Island locked: requires rank %s', $island->requiredRank->value));
+        if (!$profile->isAt($this->worldFactory->worldFor($profile), $island->id)) {
+            throw new \DomainException('Not at island');
         }
 
         $ship = null;

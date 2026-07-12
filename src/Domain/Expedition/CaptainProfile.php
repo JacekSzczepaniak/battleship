@@ -15,6 +15,16 @@ final class CaptainProfile
 {
     private const STARTING_MATERIALS = 20;
 
+    /** Szansa sztormu przy wpłynięciu w NIEZBADANY sektor (w %). */
+    private const STORM_CHANCE = 20;
+
+    /** Górny limit materiałów zabieranych przez sztorm. */
+    private const STORM_MATERIALS_LOSS = 5;
+
+    /** Nagroda kartograficzna: materiały za nowy sektor / bonus za odkrycie wyspy. */
+    private const CARTOGRAPHY_SECTOR_REWARD = 1;
+    private const CARTOGRAPHY_ISLAND_BONUS = 5;
+
     /** @var array<string, array{island: string, settled: bool, result: ?string, ships?: list<string>}> klucz: gameId */
     private array $battles = [];
 
@@ -22,6 +32,20 @@ final class CaptainProfile
     private array $fleet = [];
 
     private int $materials = 0;
+
+    // --- Wolne morze ---
+
+    /** Seed świata (deterministyczna mapa per kapitan). */
+    private int $worldSeed = 0;
+
+    /** @var array{x:int,y:int}|null pozycja na morzu; null = jeszcze nie zainicjalizowana (ensureWorldState) */
+    private ?array $position = null;
+
+    /** @var array<string,bool> odkryte sektory (klucz "x:y") */
+    private array $discovered = [];
+
+    /** Licznik ruchów — wejście do deterministycznych rzutów eventów podróży. */
+    private int $moveCount = 0;
 
     private function __construct(
         private ProfileId $id,
@@ -40,6 +64,7 @@ final class CaptainProfile
         $self = new self(ProfileId::new(), $name);
         $self->materials = self::STARTING_MATERIALS;
         $self->fleet = self::startingFleet();
+        $self->worldSeed = crc32((string) $self->id) & 0x7FFFFFFF;
 
         return $self;
     }
@@ -155,6 +180,155 @@ final class CaptainProfile
             throw new \DomainException('Not enough materials');
         }
         $this->materials -= $cost;
+    }
+
+    // --- Wolne morze: żegluga, mgła świata, kartografia ---
+
+    public function worldSeed(): int
+    {
+        return $this->worldSeed;
+    }
+
+    /** Czy stan morski (pozycja/mgła) został już zainicjalizowany. */
+    public function hasWorldState(): bool
+    {
+        return null !== $this->position;
+    }
+
+    /**
+     * Inicjalizuje stan morski (start = sektor pierwszej wyspy + sąsiedztwo),
+     * jeśli profil jeszcze go nie ma (nowy albo sprzed wolnego morza).
+     */
+    public function ensureWorldState(WorldMap $world): void
+    {
+        if (null !== $this->position) {
+            return;
+        }
+
+        $this->position = $world->startPosition();
+        foreach ($this->neighborhood($this->position['x'], $this->position['y'], $world) as [$x, $y]) {
+            $this->discovered["$x:$y"] = true;
+        }
+    }
+
+    /** @return array{x:int,y:int} */
+    public function position(): array
+    {
+        if (null === $this->position) {
+            throw new \DomainException('World state not initialized');
+        }
+
+        return $this->position;
+    }
+
+    public function isDiscovered(int $x, int $y): bool
+    {
+        return isset($this->discovered["$x:$y"]);
+    }
+
+    /** @return list<string> odkryte sektory jako "x:y" */
+    public function discoveredSectors(): array
+    {
+        return array_keys($this->discovered);
+    }
+
+    public function moveCount(): int
+    {
+        return $this->moveCount;
+    }
+
+    /** Czy kapitan stoi na sektorze danej wyspy. */
+    public function isAt(WorldMap $world, string $islandId): bool
+    {
+        $this->ensureWorldState($world);
+        $pos = $world->islandPosition($islandId);
+
+        return null !== $pos && $pos === $this->position;
+    }
+
+    /**
+     * Żegluga o jeden sektor. Wpłynięcie w niezbadane wody grozi sztormem
+     * (deterministycznie z seed+moveCount — przeładowanie strony nie zmienia
+     * losu); nowe sektory dają dochód kartograficzny. Żegluga NIGDY nie
+     * wymaga sprawnej floty — uszkodzone statki dopłyną (bezpiecznik:
+     * z morza zawsze wrócisz do stoczni).
+     *
+     * @return array{discoveredNow: list<string>, cartography: int, event: array<string,mixed>|null}
+     */
+    public function sail(int $x, int $y, WorldMap $world): array
+    {
+        $this->ensureWorldState($world);
+
+        if (!$world->isInside($x, $y)) {
+            throw new \DomainException('Sector out of bounds');
+        }
+        $dx = abs($x - $this->position['x']);
+        $dy = abs($y - $this->position['y']);
+        if (1 !== max($dx, $dy)) {
+            throw new \DomainException('Can only sail to an adjacent sector');
+        }
+
+        ++$this->moveCount;
+
+        // sztorm łapie w drodze — tylko na niezbadanych wodach
+        $event = $this->isDiscovered($x, $y) ? null : $this->rollStorm();
+
+        $this->position = ['x' => $x, 'y' => $y];
+
+        $discoveredNow = [];
+        $cartography = 0;
+        foreach ($this->neighborhood($x, $y, $world) as [$nx, $ny]) {
+            if ($this->isDiscovered($nx, $ny)) {
+                continue;
+            }
+            $this->discovered["$nx:$ny"] = true;
+            $discoveredNow[] = "$nx:$ny";
+            $cartography += self::CARTOGRAPHY_SECTOR_REWARD;
+            if (null !== $world->islandAt($nx, $ny)) {
+                $cartography += self::CARTOGRAPHY_ISLAND_BONUS;
+            }
+        }
+        $this->materials += $cartography;
+
+        return ['discoveredNow' => $discoveredNow, 'cartography' => $cartography, 'event' => $event];
+    }
+
+    /** @return array<string,mixed>|null zdarzenie sztormu (deterministyczne) albo spokojna żegluga */
+    private function rollStorm(): ?array
+    {
+        if (crc32("{$this->worldSeed}:{$this->moveCount}") % 100 >= self::STORM_CHANCE) {
+            return null;
+        }
+
+        $effectRoll = crc32("{$this->worldSeed}:{$this->moveCount}:effect");
+        $active = $this->activeFleet();
+
+        if (1 === $effectRoll % 2 && [] !== $active) {
+            $ship = $active[$effectRoll % count($active)];
+            $ship->markDamaged();
+
+            return ['type' => 'storm', 'effect' => 'ship-damaged', 'ship' => $ship->type->value];
+        }
+
+        $loss = min(self::STORM_MATERIALS_LOSS, $this->materials);
+        $this->materials -= $loss;
+
+        return ['type' => 'storm', 'effect' => 'materials-lost', 'materials' => $loss];
+    }
+
+    /** @return list<array{0:int,1:int}> sektor + sąsiedztwo (promień 1) w granicach mapy */
+    private function neighborhood(int $x, int $y, WorldMap $world): array
+    {
+        $out = [];
+        for ($dx = -1; $dx <= 1; ++$dx) {
+            for ($dy = -1; $dy <= 1; ++$dy) {
+                if ($world->isInside($x + $dx, $y + $dy)) {
+                    $out[] = [$x + $dx, $y + $dy];
+                }
+            }
+        }
+
+        return $out;
     }
 
     // --- Bitwy ---
@@ -281,15 +455,32 @@ final class CaptainProfile
 
     /**
      * @param array<string, array{island: string, settled: bool, result: ?string, ships?: list<string>}> $battles
-     * @param list<OwnedShip>|null                                                                       $fleet     null = profil sprzed ekonomii — dostaje flotę startową
-     * @param int|null                                                                                   $materials null = materiały startowe
+     * @param list<OwnedShip>|null                                                                       $fleet      null = profil sprzed ekonomii — dostaje flotę startową
+     * @param int|null                                                                                   $materials  null = materiały startowe
+     * @param int|null                                                                                   $worldSeed  null = seed wyprowadzony z id (stabilny dla starych profili)
+     * @param array{x:int,y:int}|null                                                                    $position   null = start ustali ensureWorldState
+     * @param list<string>|null                                                                          $discovered sektory "x:y"
      */
-    public static function fromSnapshot(ProfileId $id, string $name, int $xp, array $battles, ?array $fleet = null, ?int $materials = null): self
-    {
+    public static function fromSnapshot(
+        ProfileId $id,
+        string $name,
+        int $xp,
+        array $battles,
+        ?array $fleet = null,
+        ?int $materials = null,
+        ?int $worldSeed = null,
+        ?array $position = null,
+        ?array $discovered = null,
+        int $moveCount = 0,
+    ): self {
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
         $self->fleet = $fleet ?? self::startingFleet();
         $self->materials = $materials ?? self::STARTING_MATERIALS;
+        $self->worldSeed = $worldSeed ?? (crc32((string) $id) & 0x7FFFFFFF);
+        $self->position = $position;
+        $self->discovered = null !== $discovered ? array_fill_keys($discovered, true) : [];
+        $self->moveCount = max(0, $moveCount);
 
         return $self;
     }

@@ -70,6 +70,28 @@ export interface IslandDTO {
     unlocked: boolean;
     wins: number;
     losses: number;
+    // wolne morze
+    discovered: boolean;
+    position: { x: number; y: number } | null;
+    present: boolean;
+}
+
+export interface WorldDTO {
+    width: number;
+    height: number;
+    position: { x: number; y: number };
+    discovered: string[]; // sektory "x:y"
+    atIsland: string | null;
+    stormChance: number;
+}
+
+export interface SailResultDTO {
+    position: { x: number; y: number };
+    discoveredNow: string[];
+    cartography: number;
+    event: { type: string; effect: string; ship?: ShipTypeName; materials?: number } | null;
+    materials: number;
+    atIsland: string | null;
 }
 
 export interface ExpeditionDTO {
@@ -77,6 +99,7 @@ export interface ExpeditionDTO {
     fleet: FleetShipDTO[];
     shipTypes: ShipTypeDTO[];
     islands: IslandDTO[];
+    world: WorldDTO;
 }
 
 export interface SettleResultDTO {
@@ -113,4 +136,8 @@ export async function buildShip(profileId: string, islandId: string, type: ShipT
 
 export async function repairShip(profileId: string, islandId: string, shipId: string): Promise<FleetShipDTO> {
     return http.post<FleetShipDTO>(`/profiles/${profileId}/ships/${shipId}/repair`, { islandId });
+}
+
+export async function sail(profileId: string, x: number, y: number): Promise<SailResultDTO> {
+    return http.post<SailResultDTO>(`/profiles/${profileId}/sail`, { x, y });
 }

@@ -5,6 +5,7 @@ namespace App\Application\Expedition;
 use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\ProfileRepository;
 use App\Domain\Expedition\ShipType;
+use App\Domain\Expedition\WorldMap;
 use App\Domain\Shared\ProfileId;
 
 final class GetExpedition
@@ -12,6 +13,7 @@ final class GetExpedition
     public function __construct(
         private ProfileRepository $profiles,
         private IslandCatalog $islands,
+        private WorldFactory $worldFactory,
     ) {
     }
 
@@ -19,7 +21,7 @@ final class GetExpedition
      * Stan wyprawy: profil (XP, ranga, materiały), flota, katalog typów
      * statków (do UI stoczni) i wyspy z kłódkami.
      *
-     * @return array{profile: array<string,mixed>, fleet: list<array<string,mixed>>, shipTypes: list<array<string,mixed>>, islands: list<array<string,mixed>>}
+     * @return array{profile: array<string,mixed>, fleet: list<array<string,mixed>>, shipTypes: list<array<string,mixed>>, islands: list<array<string,mixed>>, world: array<string,mixed>}
      */
     public function handle(string $profileId): array
     {
@@ -31,10 +33,19 @@ final class GetExpedition
         $rank = $profile->rank();
         $next = $rank->next();
 
+        $world = $this->worldFactory->worldFor($profile);
+        $profile->ensureWorldState($world);
+        $position = $profile->position();
+
         $islands = [];
         foreach ($this->islands->all() as $island) {
             $stats = $profile->battleStats($island->id);
+            $islandPos = $world->islandPosition($island->id);
+            $discovered = null !== $islandPos && $profile->isDiscovered($islandPos['x'], $islandPos['y']);
             $islands[] = [
+                'discovered' => $discovered,
+                'position' => $discovered ? $islandPos : null,
+                'present' => $discovered && $islandPos === $position,
                 'id' => $island->id,
                 'name' => $island->name,
                 'description' => $island->description,
@@ -83,6 +94,14 @@ final class GetExpedition
             'fleet' => $fleet,
             'shipTypes' => $shipTypes,
             'islands' => $islands,
+            'world' => [
+                'width' => WorldMap::WIDTH,
+                'height' => WorldMap::HEIGHT,
+                'position' => $position,
+                'discovered' => $profile->discoveredSectors(),
+                'atIsland' => $world->islandAt($position['x'], $position['y']),
+                'stormChance' => 20,
+            ],
         ];
     }
 }

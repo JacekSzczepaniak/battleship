@@ -1,121 +1,170 @@
-# GAME_DESIGN.md — wizja gry
+# GAME_DESIGN.md — wizja gry (v2)
 
-Żywy dokument — rama, nie specyfikacja. Będzie ewoluować; decyzje kierunkowe
-oznaczamy ✅, otwarte pytania trzymamy na końcu. Spisane po burzach mózgów
-2026-07-11/12.
+Żywy dokument — rama, nie specyfikacja. Decyzje kierunkowe oznaczamy ✅,
+otwarte pytania trzymamy na końcu. Wersja 2 po burzach mózgów 2026-07-12/13;
+zadania NIE są jeszcze rozpisane — do koncepcji wrócimy przy planowaniu.
 
 ## Wizja jednym zdaniem
 
-Od **rozbitka na tratwie** do **admirała z lotniskowcem**: meta-gra
-eksploracyjno-ekonomiczna (wolne morze, wyspy, stocznie, handel mapami)
-zbudowana nad klasyczną bitwą w statki, która pozostaje sercem pętli:
+Od **rozbitka na tratwie** do **admirała z lotniskowcem**: podróż przez
+łańcuch akwenów — na morzu odkrywanie, konwoje i bitwy; na wyspach wydobycie,
+osady i drzewko technologiczne. Sercem gry pozostaje bitwa w statki.
 
 ```
-mapa → wyspa → bitwa → łup/strata → rozbudowa floty → dalej
+morze:  ruch → odkrywanie → spotkania/bitwy → łupy i mapy
+wyspa:  wydobycie → transport → stocznia/osada → technologia
+        └── wszystko, co daje wyspa, wraca na morze ──┘
 ```
 
-## Pięć filarów
+## Co już działa (zrealizowany „wstęp", stan po 2026-07-12)
 
-### 1. Bitwa (istnieje dziś jako gra)
+Bitwa (classic/fun, bronie specjalne z nośników: sonar=kuter, torpeda=
+niszczyciel, nalot=lotniskowiec; zatopiony nośnik odbiera broń) · profil
+kapitana (XP nigdy nie maleje, rangi rozbitek→marynarz→kapitan→admirał) ·
+flota jako majątek (budowa/remont, stocznie, wygrana→remont / przegrana→
+strata) · wolne morze 12×12 z mgłą, deterministyczne z seeda profilu ·
+kartografia pasywna · sztormy w niezbadanych wodach · geografia=logistyka
+(bitwa/stocznia wymagają obecności). Szczegóły: git log + testy.
 
-- ✅ **Broń wynika ze składu floty**, nie z abstrakcyjnych limitów:
-  - nalot — masz lotniskowiec; zatopiony lotniskowiec = koniec nalotów w tej bitwie,
-  - torpeda — startuje z niszczyciela / okrętu podwodnego
-    (rozwinięcie istniejącej reguły „torpeda z niezatopionego statku"),
-  - sonar — okręt zwiadowczy.
-- Limity użyć zostają jako „amunicja"; zasięg/kształt broni rośnie z technologią.
-- Wymaga refaktoru **`WeaponSpec`**: parametry broni (kształt, zasięg, limit)
-  zamiast hardcodu — pierwszy konkretny krok kodowy całej wizji, sensowny
-  niezależnie od reszty.
-- Bitwa pozostaje czystym modułem: wejście = skład floty + parametry broni,
-  wyjście = wynik + straty. Agregat `Game` nie wie o meta-grze.
+## Filar I — Świat: łańcuch akwenów ✅
 
-### 2. Flota jako majątek
+Świat to **graf akwenów** (mórz), nie jedna wielka mapa. Każdy akwen =
+osobna plansza (~12×12, z czasem większe) z własnym zestawem wysp,
+generowana deterministycznie: `worldSeed → akwenSeed_i`.
 
-- ✅ Statki **giną albo wymagają remontu** po bitwie.
-- ✅ **Stocznie** (na wyspach, z poziomami) budują i remontują flotę:
-  plaża skleci tratwę, lotniskowiec wymaga wielkiej stoczni.
-- Geografia = logistyka: poobijana flota musi *dopłynąć* do remontu.
+- **Akwen 1 = „Morze Rozbitków"** — obecna trasa; istniejące profile
+  niczego nie tracą.
+- **Trudność rośnie w głąb** — silniejsze floty, droższe stocznie, lepsze
+  łupy; progresja rang mapuje się na geografię.
+- **Motyw akwenu = modyfikatory globalne, nie dekoracja** (2–3 parametry:
+  szansa sztormu, promień widoczności, mnożniki cen/złóż), np.:
+  Morze Rozbitków (spokojne, tutorial) → Archipelag Kupców (handel, piraci
+  polują na konwoje) → Morze Mgieł (widoczność 0 — sonar i mapy w cenie) →
+  Ocean Sztormów (sztorm 40%, najbogatsza stal) → Wody Admiralicji (endgame).
 
-### 3. Kapitan
+**Przejścia między akwenami — trzy rodzaje bram (mieszane):**
+1. **Strzeżona cieśnina** — bitwa-boss: flota strażnicza + fort,
+2. **Otwarty ocean** — wymaga technologii („Nawigacja oceaniczna"),
+3. **Wody nieznane** — wymaga **mapy akwenu** (kupionej / z wraku / z questa).
 
-- ✅ Rangi: **rozbitek → marynarz → kapitan → admirał** — wymagają czasu
-  i doświadczenia.
-- ✅ **XP i technologia nigdy nie giną** — także po przegranej bitwie
-  (z porażek też się uczymy).
-- Rama narracyjna za darmo: start gry = rozbitek, który sklecił tratwę z wraku.
-- Bramki progresji (rozdzielone, żeby lotniskowiec nie miał czterech kłódek naraz):
-  - **ranga** → typy statków + dostęp do wysp,
-  - **technologia** (schematy z wysp) → ulepszenia (zasięg sonaru, ukośne torpedy…),
-  - **materiały + stocznia** → budowa i remont konkretnych jednostek.
+Mapa akwenu = najcenniejszy przedmiot w grze; to domyka wątek „mapy jako
+towar" i daje sens handlowi, questom i abordażom.
 
-### 4. Świat
+## Filar II — Czas: tik = akcja morska ✅
 
-- ✅ **Wolne morze** (na początek małe), mgła świata, generacja z seeda.
-- ✅ **Mapy archipelagów jako towar**: kupno/sprzedaż, nagrody za questy;
-  **kartograf jako zawód** — żeglujesz po niezbadanych wodach, nanosisz
-  archipelagi, sprzedajesz mapy w portach (trzecia ścieżka dochodu obok
-  bitew i questów).
-- Eventy podróży: **sztorm / tajfun / wir** — losowe (z seeda), zapowiadane
-  z wyprzedzeniem; niezbadane wody = większe ryzyko (risk/reward kartografii).
-- Symetria mgły: bitwa = odkrywanie planszy przeciwnika strzałami i sonarem,
-  morze = odkrywanie świata żeglugą i mapami. Ta sama mechanika na dwóch piętrach.
+Czysta turowość, **zero zegara ściennego**. Tik = akcja na morzu
+(rejs / bitwa / dokowanie). Budowa statku = N tików, kopalnia produkuje
+X surowca/tik — świat żyje, gdy gracz działa. W pełni deterministyczne
+(religia seedów obowiązuje), testowalne, bez mechanik f2p wymuszających
+powroty. Odrzucone: czas rzeczywisty i hybrydy czasowe.
 
-### 5. Ekonomia
+## Filar III — Wyspy: typologia i zdobywanie
 
-- **Materiały** = koszt budowy/remontu (krążą); **schematy** = odblokowanie
-  typu/ulepszenia (zdobywa się raz).
-- **Bezpiecznik anty-softlock**: tratwa jest zawsze darmowa, a najniższe
-  misje/łowiska/kartografia dają dochód bez ryzyka bitwy. Gracz może stracić
-  wszystko *oprócz* rangi, technologii i możliwości odbicia się.
-- ✅ **PvP odłożone** — na początek go nie ma; jeśli kiedyś wejdzie,
-  to wyłącznie na czystym rulesecie (progresja psuje balans PvP).
+**Typy wysp** (per akwen losowane z puli, deterministycznie):
+- **Stoczniowa (1–2 na akwen)** — jedyne miejsce budowy dużych jednostek; hub
+- **Surowcowa** — złoża do wydobycia; surowiec trzeba **odebrać i przewieźć**
+- **Neutralna (handlowa)** — rynek (surowce, mapy, technologie), questy,
+  tubylcy; tu się nie walczy
+- **Osada gracza** — zdobyta wyspa rozwijana budynkami (tartak, kopalnia,
+  uczelnia, fort)
+- **Dzika/questowa** — wraki, ekspedycje, sekrety (czarna perła)
+
+**Zdobywanie wyspy — trzy fazy:** ✅
+1. potyczka morska (obecna bitwa = flota strażnicza),
+2. **abordaż**: ostatni niezatopiony statek wroga można abordażować zamiast
+   dobić → statek jako łup; ryzyko przegranej próby ✅,
+3. **oblężenie fortu** — „battleship w innym smaku": plansza fortu (mury,
+   działa nadbrzeżne, **magazyn prochu** = trafienie wywołuje eksplozję
+   łańcuchową). Ta sama mechanika obsługuje bramy-cieśniny.
+
+**Zdobyta wyspa przestaje być areną powtarzalnych bitew** — staje się
+majątkiem. Nowe źródła walki: NPC, piraci, **kontrataki na osady**
+(obrona = bitwa w odwróconych rolach; fort podnosi obronę).
+
+## Filar IV — Ekonomia: trzy surowce, ładownia, konwoje ✅
+
+- **Drewno** (→ kadłuby, budynki), **stal** (→ uzbrojenie, forty),
+  **złoto** (→ handel, uczelnie, najemnicy). Obecne „materiały" stają się
+  drewnem. Na start dokładnie trzy — budżet złożoności.
+- **Ładownia**: statki mają pojemność cargo; surowce wozi się fizycznie
+  między wyspami. Nowy typ: **transportowiec/galeon** — dużo cargo,
+  bezbronny, wymaga eskorty.
+- **Konwój = gameplay**: ryzyko (sztorm, pirat) skaluje się z wartością
+  ładunku; ekonomia i walka sprzęgają się bez sztucznych mechanik.
+
+## Filar V — Technologia: drzewko z dwiema ścieżkami
+
+Gałęzie (szkic): **Kadłuby** (rozmiary, ładownia) · **Uzbrojenie**
+(parametry broni — WeaponSpec już na to gotowy) · **Nawigacja** (ruch o 2
+sektory, odporność na sztormy, jakość map, przejścia oceaniczne) ·
+**Osady** (budynki, wydobycie). Surowce per gałąź (drewno/stal/złoto).
+
+Każdy węzeł ma **dwie ścieżki odblokowania**:
+- **standardową** — surowce + tiki + wymagana uczelnia (wolniej),
+- **questową** — artefakt/wyczyn = natychmiast (Twoje „przyspieszenie").
+Kilka węzłów-legend **tylko questowych** (czarna perła → „Nawigacja Legend").
+Questy nie są obok gry — są skrótami i sekretami w drzewku.
+
+## Filar VI — NPC i reputacja
+
+Spotkania na morzu jak sztormy: deterministycznie z `seed+moveCount`.
+- **Handlarz**: handel na miejscu (gorsze ceny niż port) / **napad** → łup,
+  ale −reputacja u cechu → rosnące ceny → embargo → flota łowców nagród
+  (nowy typ bitwy).
+- **Pirat**: walka / ucieczka (koszt: tik albo część cargo) / okup.
+- **Reputacja** = wybór stylu gry (kupiec ↔ korsarz); pole projektujemy
+  od razu, mechaniki dowozimy później.
+
+## Filar VII — Questy
+
+- **Ekspedycja w głąb lądu** (dzikie wyspy): press-your-luck — idziesz
+  głębiej po skarb czy wracasz z tym, co masz.
+- Nagrody: mapy akwenów, artefakty (questowe ścieżki drzewka), statki,
+  reputacja. Fabuła = krótkie teksty przy questach i bramach akwenów.
 
 ## Zasady projektowe
 
-1. **Determinizm z seeda** — świat, floty i eventy generowane deterministycznie
-   (jak `FleetGenerator`); port losowości w domenie zamiast globalnego RNG.
-   Daje powtarzalne testy, replay i daily challenge.
-2. **Telegrafowanie > zaskoczenie** — eventy losowe zapowiadane („barometr
-   spada — sztorm za 2 tury"); zapowiedziana losowość to decyzje, czysta
-   losowość to frustracja.
-3. **Flavor over mechanics dla frakcji** — technologia/magia/rasa na start
-   jako czysta skórka nazw/ikon w UI (sonar = echolokacja = kryształ);
-   różnicowanie mechaniczne dopiero po okrzepnięciu balansu.
-4. **Nowy kontekst domenowy** `Expedition`/`Profile` (kapitan, inwentarz,
-   flota, postęp mapy) osobno od agregatu `Game`; profil w Postgresie
-   (PvP odpadło jako blocker tej decyzji).
-5. **Każdy plaster grywalny osobno** — nie budujemy katedry; kolejny etap
-   zaczynamy od działającej gry.
+1. **Wyspa produkuje dla morza** — każda mechanika lądowa musi oddawać
+   coś do pętli morskiej; bitwa pozostaje sercem gry.
+2. **Determinizm z seeda** — świat, sztormy, spotkania, łupy; zero
+   globalnego RNG (port/seed jak `FleetGenerator`).
+3. **Battleship w wielu smakach** — nowe tryby walki (fort, obrona osady)
+   to warianty rdzennej mechaniki, nie osobne gry.
+4. **Telegrafowanie > zaskoczenie** — ryzyka (sztorm, reputacja,
+   kontratak) komunikowane zanim gracz podejmie decyzję.
+5. **Budżet złożoności** — 3 surowce, 2–3 parametry na motyw akwenu,
+   krótkie drzewko na start; głębia przez sprzężenia, nie przez liczbę bytów.
+6. **Bezpiecznik anty-softlock** — tratwa darmowa, kartografia jako dochód
+   bez ryzyka, żegluga bez wymogu sprawnej floty.
+7. **Każdy plaster grywalny osobno** — kolejny etap zaczyna się od
+   działającej gry.
 
-## Plasterki (kolejność budowy)
+## Kierunek krojenia (szkic — zadania rozpiszemy przy planowaniu)
 
-- **Krok 0 — `WeaponSpec`**: refaktor parametrów broni w domenie bez zmiany
-  zachowania (testy pilnują). Fundament pod technologie i broń-z-floty.
-- **A — pętla bez ekonomii**: kilka wysp (na start choćby liniowo), każda =
-  bitwa z zadaną flotą wroga + XP; ranga odblokowuje kolejne wyspy i statki.
-  Dowodzi pętli mapa → bitwa → postęp.
-- **B — flota jako majątek**: materiały, schematy, stocznie, budowa/remont,
-  broń wynikająca ze składu floty.
-- **C — prawdziwe wolne morze**: mgła świata, kartografia i handel mapami,
-  eventy podróży, wyspy specjalne.
+1. Trzy surowce + ładownia + transport (stocznie tylko na 1–2 wyspach)
+2. Zdobywanie wysp (flaga, kontrataki)
+3. Osady: budynki i produkcja per tik
+4. Drzewko technologiczne
+5. Fort (oblężenie) + abordaż
+6. Akweny: graf świata, bramy, motywy
+7. NPC, reputacja, questy-przyspieszenia
+
+Kolejność do dyskusji — np. akweny mogą wejść wcześniej, jeśli ciasnota
+Akwenu 1 zacznie uwierać.
 
 ## Otwarte pytania
 
-- Czy bitwy na wyspach są obowiązkowe (strażnicy), czy da się eksplorować
-  unikając walki?
-- Jak duże pierwsze morze (liczba wysp w plastrze A)?
-- Szczegóły utraty statków: kiedy remont, a kiedy strata całkowita?
-  (kierunek: remont po wygranej, strata przy przegranej — do zgrania w praktyce)
-- Frakcje: moment wyboru (raz na kapitana? wielu kapitanów równolegle?).
-- Tempo progresji: ile wieczorów ma trwać droga tratwa → lotniskowiec?
+- Budynki osady: konkretna lista i koszty (tartak/kopalnia/uczelnia/fort — co jeszcze?)
+- Kształt drzewka: ile węzłów na start, które questowe?
+- Rangi vs akweny: czy progi XP rosną z liczbą akwenów; gdzie osiągalny admirał?
+- Kontrataki: częstość, siła, co się dzieje przy utracie osady?
+- Ile akwenów na start (2–3?) i rozmiar planszy akwenu (12×12 wystarczy?)
+- Balans z obserwacji: pełna utrata floty przy przegranej, sztormy 20%, koszty statków
+- Abordaż: dokładna mechanika rozstrzygnięcia (rzut? mini-plansza? koszt?)
 
 ## Poczekalnia (pomysły wciąż aktualne, poza głównym torem)
 
-- Perki kapitanów (Łowca/Artylerzysta/Torpedysta/Cichy…) — mogą wrócić jako
-  wybory przy awansie na rangę.
-- Eventy losowe **w bitwie** (mgła, cisza morska, prąd) — wymagają systemu
-  eventów tury; na razie eventy żyją na mapie podróży.
-- Miny na własnej planszy, replay partii (historia strzałów już jest
-  w snapshotach — czysty frontend), statystyki/osiągnięcia, daily challenge
-  (flota/świat z seeda dnia).
+Perki kapitanów (wybory przy awansie) · eventy losowe w bitwie (mgła, cisza
+morska, prąd) · frakcje jako skórki (technologia/magia/rasa — flavor over
+mechanics) · miny · replay partii · statystyki/osiągnięcia · daily challenge ·
+PvP (tylko na czystym rulesecie, jeśli kiedykolwiek).

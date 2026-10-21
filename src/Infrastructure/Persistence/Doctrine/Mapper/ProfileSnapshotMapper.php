@@ -27,6 +27,7 @@ final class ProfileSnapshotMapper
             'discovered' => $profile->discoveredSectors(),
             'moveCount' => $profile->moveCount(),
             'tick' => $profile->tick(),
+            'visited' => $profile->visitedSectors(),
         ];
     }
 
@@ -89,6 +90,8 @@ final class ProfileSnapshotMapper
             (int) ($state['moveCount'] ?? 0),
             // brak klucza = profil sprzed tiku; CaptainProfile wyliczy go z historii
             isset($state['tick']) ? (int) $state['tick'] : null,
+            // brak klucza = profil sprzed odwiedzin; CaptainProfile przyjmie obecną pozycję
+            isset($state['visited']) && is_array($state['visited']) ? array_values(array_map('strval', $state['visited'])) : null,
         );
     }
 }

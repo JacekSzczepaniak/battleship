@@ -25,7 +25,7 @@ kapitana (XP nigdy nie maleje, 9 rang od rozbitka do admirała — progi
 w Filarze VIII; licznik zatopionych jednostek wroga) · flota jako majątek
 (budowa/remont, stocznie, wygrana→remont / przegrana→strata) · wolne morze
 12×12 z mgłą, deterministyczne z seeda profilu · kartografia pasywna ·
-sztormy w niezbadanych wodach · geografia=logistyka (bitwa/stocznia
+sztormy przy pierwszym wpłynięciu na sektor · geografia=logistyka (bitwa/stocznia
 wymagają obecności) · UI flow bitwy: port → rozstawianie → bitwa → wynik
 (projekt: `docs/design/ui-flow/`). Elementy projektu UI bez pokrycia
 w silniku czekają w zadaniach: energia i „Zakończ turę” (#59), ruch statku
@@ -129,7 +129,7 @@ nie ulepszenie. Techniczna droga wejścia: WeaponSpec + koszt w stoczni.
 
 ## Filar VI — NPC i reputacja
 
-Spotkania na morzu jak sztormy: deterministycznie z `seed+moveCount`.
+Spotkania na morzu jak sztormy: deterministycznie z `seed+tik`.
 - **Handlarz**: handel na miejscu (gorsze ceny niż port) / **napad** → łup,
   ale −reputacja u cechu → rosnące ceny → embargo → flota łowców nagród
   (nowy typ bitwy).

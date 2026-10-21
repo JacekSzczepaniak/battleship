@@ -44,6 +44,13 @@ final class CaptainProfile
     /** @var array<string,bool> odkryte sektory (klucz "x:y") */
     private array $discovered = [];
 
+    /**
+     * @var array<string,bool> sektory, na których kapitan był (klucz "x:y"). Odkrycie
+     *                         sięga sąsiedztwa, odwiedziny — tylko pozycji; sztorm
+     *                         grozi przy pierwszym wpłynięciu na sektor
+     */
+    private array $visited = [];
+
     /** Licznik ruchów — wejście do deterministycznych rzutów eventów podróży. */
     private int $moveCount = 0;
 
@@ -209,6 +216,7 @@ final class CaptainProfile
         }
 
         $this->position = $world->startPosition();
+        $this->visited["{$this->position['x']}:{$this->position['y']}"] = true;
         foreach ($this->neighborhood($this->position['x'], $this->position['y'], $world) as [$x, $y]) {
             $this->discovered["$x:$y"] = true;
         }
@@ -235,6 +243,17 @@ final class CaptainProfile
         return array_keys($this->discovered);
     }
 
+    public function isVisited(int $x, int $y): bool
+    {
+        return isset($this->visited["$x:$y"]);
+    }
+
+    /** @return list<string> odwiedzone sektory jako "x:y" */
+    public function visitedSectors(): array
+    {
+        return array_keys($this->visited);
+    }
+
     public function moveCount(): int
     {
         return $this->moveCount;
@@ -255,9 +274,10 @@ final class CaptainProfile
     }
 
     /**
-     * Żegluga o jeden sektor. Wpłynięcie w niezbadane wody grozi sztormem
+     * Żegluga o jeden sektor. Pierwsze wpłynięcie na sektor grozi sztormem
      * (deterministycznie z seed+tik — przeładowanie strony nie zmienia
-     * losu); nowe sektory dają dochód kartograficzny. Żegluga NIGDY nie
+     * losu); powrót na odwiedzony sektor jest bezpieczny. Nowo odkryte
+     * sektory dają dochód kartograficzny. Żegluga NIGDY nie
      * wymaga sprawnej floty — uszkodzone statki dopłyną (bezpiecznik:
      * z morza zawsze wrócisz do stoczni).
      *
@@ -279,10 +299,13 @@ final class CaptainProfile
         ++$this->moveCount;
         ++$this->tick;
 
-        // sztorm łapie w drodze — tylko na niezbadanych wodach
-        $event = $this->isDiscovered($x, $y) ? null : $this->rollStorm();
+        // sztorm łapie w drodze — tylko przy pierwszym wpłynięciu na sektor.
+        // Nie „nieodkryty”: cel rejsu jest zawsze odkryty, bo przybycie odkrywa
+        // całe sąsiedztwo (#68)
+        $event = $this->isVisited($x, $y) ? null : $this->rollStorm();
 
         $this->position = ['x' => $x, 'y' => $y];
+        $this->visited["$x:$y"] = true;
 
         $discoveredNow = [];
         $cartography = 0;
@@ -490,6 +513,7 @@ final class CaptainProfile
      * @param array{x:int,y:int}|null                                                                                     $position   null = start ustali ensureWorldState
      * @param list<string>|null                                                                                           $discovered sektory "x:y"
      * @param int|null                                                                                                    $tick       null = profil sprzed tiku: rejsy + zarejestrowane bitwy
+     * @param list<string>|null                                                                                           $visited    null = profil sprzed odwiedzin: tylko obecna pozycja
      */
     public static function fromSnapshot(
         ProfileId $id,
@@ -503,6 +527,7 @@ final class CaptainProfile
         ?array $discovered = null,
         int $moveCount = 0,
         ?int $tick = null,
+        ?array $visited = null,
     ): self {
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
@@ -514,6 +539,10 @@ final class CaptainProfile
         $self->moveCount = max(0, $moveCount);
         // profil sprzed tiku: rejsy + zarejestrowane bitwy, żeby zegar nie cofnął się względem historii
         $self->tick = max(0, $tick ?? $self->moveCount + count($battles));
+        // profil sprzed odwiedzin: znamy tylko obecną pozycję, trasy z przeszłości nie
+        $self->visited = null !== $visited
+            ? array_fill_keys($visited, true)
+            : (null !== $position ? ["{$position['x']}:{$position['y']}" => true] : []);
 
         return $self;
     }

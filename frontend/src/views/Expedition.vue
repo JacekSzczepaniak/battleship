@@ -57,7 +57,7 @@
             <section class="card sea">
                 <div class="island-head">
                     <h2>🗺️ Morze</h2>
-                    <span class="muted">tik {{ expedition.world.tick }} · niezbadane wody: ryzyko sztormu {{ expedition.world.stormChance }}%</span>
+                    <span class="muted">tik {{ expedition.world.tick }} · nieodwiedzone sektory: ryzyko sztormu {{ expedition.world.stormChance }}%</span>
                 </div>
                 <div class="sea-grid" :style="{ gridTemplateColumns: `repeat(${expedition.world.width}, 1.7rem)` }">
                     <button
@@ -226,6 +226,7 @@ const seaCells = computed<SeaCell[]>(() => {
     if (!exp) return [];
     const world = exp.world;
     const fog = new Set(world.discovered);
+    const visited = new Set(world.visited);
     const islandsByPos = new Map(
         exp.islands.filter(i => i.discovered && i.position).map(i => [`${i.position!.x}:${i.position!.y}`, i])
     );
@@ -239,12 +240,17 @@ const seaCells = computed<SeaCell[]>(() => {
             const island = islandsByPos.get(key) ?? null;
             const isPlayer = x === px && y === py;
             const sailable = Math.max(Math.abs(x - px), Math.abs(y - py)) === 1;
+            // sztorm grozi przy pierwszym wpłynięciu na sektor (#68)
+            const stormRisk = sailable && !visited.has(key);
 
             cells.push({
                 key, x, y, sailable,
-                cls: { fog: !discovered, water: discovered && !island, island: !!island, player: isPlayer, sailable },
+                cls: { fog: !discovered, water: discovered && !island, island: !!island, player: isPlayer, sailable, risk: stormRisk },
                 glyph: isPlayer ? '⛵' : island ? (island.unlocked ? '🏝️' : '🔒') : '',
-                title: island ? island.name : discovered ? `${x}:${y}` : 'niezbadane wody — ryzyko sztormu',
+                title: [
+                    island ? island.name : discovered ? `${x}:${y}` : 'niezbadane wody',
+                    stormRisk ? `pierwsze wpłynięcie — ryzyko sztormu ${world.stormChance}%` : '',
+                ].filter(Boolean).join(' · '),
             });
         }
     }
@@ -435,6 +441,7 @@ h2, h3 { font-family: var(--font-head); }
 .sea-cell.island { background: #3b3220; box-shadow: inset 0 0 0 1px #6b5a35; }
 .sea-cell.player { background: #13404a; box-shadow: inset 0 0 0 2px var(--info); }
 .sea-cell.sailable:not(:disabled) { cursor: pointer; outline: 1px dashed var(--info); outline-offset: -3px; }
+.sea-cell.sailable.risk:not(:disabled) { outline-color: var(--warn); }
 .sea-cell.sailable:not(:disabled):hover { filter: brightness(1.3); }
 .sea-msg { margin: 0.5rem 0 0; color: var(--warn); }
 .port h2, .port h3 { margin: 0 0 0.4rem; font-size: 1.05rem; }

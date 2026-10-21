@@ -106,6 +106,7 @@ export interface WorldDTO {
     height: number;
     position: { x: number; y: number };
     discovered: string[]; // sektory "x:y"
+    visited: string[]; // sektory "x:y", na których kapitan był — tam sztorm nie grozi
     atIsland: string | null;
     stormChance: number;
     // zegar świata: liczba akcji morskich (rejs, bitwa)

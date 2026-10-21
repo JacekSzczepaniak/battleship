@@ -104,7 +104,7 @@ it('sztormy są deterministyczne — bliźniacze profile mają ten sam los', fun
     }
 });
 
-it('na zbadanych wodach nie ma sztormów', function () {
+it('na odwiedzonym sektorze nie ma sztormów', function () {
     $profile = CaptainProfile::create('Jacek');
     $world = seaWorldFor($profile);
     $profile->ensureWorldState($world);
@@ -178,4 +178,43 @@ it('sztorm losuje się z seed+tik, nie z liczby rejsów', function () {
     }
 
     expect($storms)->toBeGreaterThan(0); // próbka ma sens tylko, gdy jakiś sztorm wypadł
+});
+
+it('sztorm grozi przy pierwszym wpłynięciu na sektor w zwykłej grze (#68)', function () {
+    $storms = 0;
+    for ($seed = 1; $seed <= 40; ++$seed) {
+        $profile = CaptainProfile::fromSnapshot(CaptainProfile::create('Jacek')->id(), 'Jacek', 0, [], null, null, $seed);
+        $world = WorldMap::generate($seed, SEA_ISLANDS);
+        $profile->ensureWorldState($world);
+        $start = $profile->position();
+        $target = ['x' => $start['x'] + ($start['x'] < WorldMap::WIDTH - 1 ? 1 : -1), 'y' => $start['y']];
+
+        // cel jest odkryty (sąsiedztwo startu), ale nieodwiedzony — sztorm się losuje
+        expect($profile->isDiscovered($target['x'], $target['y']))->toBeTrue()
+            ->and($profile->isVisited($target['x'], $target['y']))->toBeFalse();
+
+        $event = $profile->sail($target['x'], $target['y'], $world)['event'];
+
+        $expectedStorm = crc32("$seed:1") % 100 < 20;
+        expect(null !== $event)->toBe($expectedStorm);
+        $storms += $expectedStorm ? 1 : 0;
+    }
+
+    expect($storms)->toBeGreaterThan(0);
+});
+
+it('drugie wpłynięcie na ten sam sektor jest bezpieczne', function () {
+    for ($seed = 1; $seed <= 20; ++$seed) {
+        $profile = CaptainProfile::fromSnapshot(CaptainProfile::create('Jacek')->id(), 'Jacek', 0, [], null, null, $seed);
+        $world = WorldMap::generate($seed, SEA_ISLANDS);
+        $profile->ensureWorldState($world);
+        $a = $profile->position();
+        $b = ['x' => $a['x'] + ($a['x'] < WorldMap::WIDTH - 1 ? 1 : -1), 'y' => $a['y']];
+
+        $profile->sail($b['x'], $b['y'], $world);
+        $profile->sail($a['x'], $a['y'], $world);
+        $again = $profile->sail($b['x'], $b['y'], $world);
+
+        expect($again['event'])->toBeNull();
+    }
 });

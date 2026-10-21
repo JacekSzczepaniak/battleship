@@ -63,6 +63,7 @@ final class SettleBattle
             'won' === $result ? $island->xpWin : $island->xpLoss,
             'won' === $result ? $island->materialsWin : $island->materialsLoss,
             $this->sunkPlayerShipLengths($game),
+            $this->sunkEnemyShipCount($game),
         );
         $this->profiles->save($profile);
 
@@ -77,6 +78,36 @@ final class SettleBattle
             'lostShips' => $outcome['lost'],
             'damagedShips' => $outcome['damaged'],
         ];
+    }
+
+    /**
+     * Liczba statków wroga zatopionych przez gracza — ze snapshotu gry, tak jak
+     * straty własne: statek jest zatopiony, gdy wszystkie jego pola trafił gracz.
+     */
+    private function sunkEnemyShipCount(Game $game): int
+    {
+        $hits = [];
+        foreach ($game->shotsWithResults() as $shot) {
+            if (in_array($shot['result'], ['hit', 'sunk'], true)) {
+                $hits["{$shot['x']}:{$shot['y']}"] = true;
+            }
+        }
+
+        $count = 0;
+        foreach ($game->opponentFleet() ?? [] as $ship) {
+            $allHit = true;
+            foreach ($ship->cells() as $cell) {
+                if (!isset($hits["{$cell->x}:{$cell->y}"])) {
+                    $allHit = false;
+                    break;
+                }
+            }
+            if ($allHit) {
+                ++$count;
+            }
+        }
+
+        return $count;
     }
 
     /**

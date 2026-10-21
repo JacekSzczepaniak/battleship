@@ -88,6 +88,9 @@ final class ExpeditionApiTest extends WebTestCase
         self::assertSame(0, $again['awarded']);
         self::assertSame(0, $again['materialsAwarded']);
 
+        // licznik zatopień w profilu: cała flota wroga (kuter + 3 tratwy), bez podwojenia po 2. rozliczeniu
+        self::assertSame(4, $this->getExpedition($client, $profileId)['profile']['enemyShipsSunk']);
+
         // 9) stocznia: budowa kutra za 20 materiałów
         $ship = $this->post($client, "/api/profiles/$profileId/ships", [
             'type' => 'kuter', 'islandId' => 'zatoka-rozbitka',

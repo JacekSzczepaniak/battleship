@@ -65,7 +65,7 @@
 
                     <div class="stats">
                         <div class="stat"><b>{{ totals.wins }}</b><span>BITWY WYGRANE</span></div>
-                        <div class="stat"><b>{{ totals.losses }}</b><span>BITWY PRZEGRANE</span></div>
+                        <div class="stat" :title="`bitwy przegrane: ${totals.losses}`"><b>{{ expedition.profile.enemyShipsSunk }}</b><span>ZATOPIONE</span></div>
                     </div>
 
                     <div class="resources">

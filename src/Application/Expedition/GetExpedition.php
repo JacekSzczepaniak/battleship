@@ -90,6 +90,7 @@ final class GetExpedition
                     ? ['rank' => $next->value, 'xpNeeded' => max(0, $next->threshold() - $profile->xp())]
                     : null,
                 'materials' => $profile->materials(),
+                'enemyShipsSunk' => $profile->enemyShipsSunk(),
             ],
             'fleet' => $fleet,
             'shipTypes' => $shipTypes,

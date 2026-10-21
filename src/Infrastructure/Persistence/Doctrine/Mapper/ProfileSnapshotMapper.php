@@ -45,6 +45,9 @@ final class ProfileSnapshotMapper
             if (isset($battle['ships']) && is_array($battle['ships'])) {
                 $entry['ships'] = array_values(array_map('strval', $battle['ships']));
             }
+            if (isset($battle['enemySunk'])) {
+                $entry['enemySunk'] = max(0, (int) $battle['enemySunk']);
+            }
             $battles[(string) $gameId] = $entry;
         }
 

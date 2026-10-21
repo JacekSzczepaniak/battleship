@@ -25,7 +25,7 @@ final class CaptainProfile
     private const CARTOGRAPHY_SECTOR_REWARD = 1;
     private const CARTOGRAPHY_ISLAND_BONUS = 5;
 
-    /** @var array<string, array{island: string, settled: bool, result: ?string, ships?: list<string>}> klucz: gameId */
+    /** @var array<string, array{island: string, settled: bool, result: ?string, ships?: list<string>, enemySunk?: int}> klucz: gameId */
     private array $battles = [];
 
     /** @var list<OwnedShip> */
@@ -359,17 +359,21 @@ final class CaptainProfile
      * straty dotykają floty — zatopione statki po wygranej wymagają remontu,
      * po przegranej są stracone. Idempotentne: druga próba zwraca zera.
      *
-     * @param list<int> $sunkLengths długości statków gracza zatopionych w bitwie
+     * @param list<int> $sunkLengths    długości statków gracza zatopionych w bitwie
+     * @param int       $enemyShipsSunk liczba jednostek wroga zatopionych w bitwie (statystyka kapitana)
      *
      * @return array{xp:int, materials:int, lost:list<string>, damaged:list<string>}
      */
-    public function settleBattle(GameId $gameId, string $result, int $xpAward, int $materialsAward = 0, array $sunkLengths = []): array
+    public function settleBattle(GameId $gameId, string $result, int $xpAward, int $materialsAward = 0, array $sunkLengths = [], int $enemyShipsSunk = 0): array
     {
         if (!in_array($result, ['won', 'lost'], true)) {
             throw new \InvalidArgumentException('Result must be won|lost');
         }
         if ($xpAward < 0 || $materialsAward < 0) {
             throw new \InvalidArgumentException('Negative battle award');
+        }
+        if ($enemyShipsSunk < 0) {
+            throw new \InvalidArgumentException('Negative sunk ship count');
         }
 
         $key = (string) $gameId;
@@ -380,6 +384,7 @@ final class CaptainProfile
 
         $battle['settled'] = true;
         $battle['result'] = $result;
+        $battle['enemySunk'] = $enemyShipsSunk;
         $this->battles[$key] = $battle;
 
         $this->xp += $xpAward;
@@ -445,21 +450,34 @@ final class CaptainProfile
         return ['wins' => $wins, 'losses' => $losses];
     }
 
+    /** Jednostki wroga zatopione we wszystkich rozliczonych bitwach (rekordy sprzed licznika liczą się jako 0). */
+    public function enemyShipsSunk(): int
+    {
+        $sunk = 0;
+        foreach ($this->battles as $battle) {
+            if ($battle['settled']) {
+                $sunk += $battle['enemySunk'] ?? 0;
+            }
+        }
+
+        return $sunk;
+    }
+
     // --- Snapshot (mapper persystencji) ---
 
-    /** @return array<string, array{island: string, settled: bool, result: ?string, ships?: list<string>}> */
+    /** @return array<string, array{island: string, settled: bool, result: ?string, ships?: list<string>, enemySunk?: int}> */
     public function battles(): array
     {
         return $this->battles;
     }
 
     /**
-     * @param array<string, array{island: string, settled: bool, result: ?string, ships?: list<string>}> $battles
-     * @param list<OwnedShip>|null                                                                       $fleet      null = profil sprzed ekonomii — dostaje flotę startową
-     * @param int|null                                                                                   $materials  null = materiały startowe
-     * @param int|null                                                                                   $worldSeed  null = seed wyprowadzony z id (stabilny dla starych profili)
-     * @param array{x:int,y:int}|null                                                                    $position   null = start ustali ensureWorldState
-     * @param list<string>|null                                                                          $discovered sektory "x:y"
+     * @param array<string, array{island: string, settled: bool, result: ?string, ships?: list<string>, enemySunk?: int}> $battles
+     * @param list<OwnedShip>|null                                                                                        $fleet      null = profil sprzed ekonomii — dostaje flotę startową
+     * @param int|null                                                                                                    $materials  null = materiały startowe
+     * @param int|null                                                                                                    $worldSeed  null = seed wyprowadzony z id (stabilny dla starych profili)
+     * @param array{x:int,y:int}|null                                                                                     $position   null = start ustali ensureWorldState
+     * @param list<string>|null                                                                                           $discovered sektory "x:y"
      */
     public static function fromSnapshot(
         ProfileId $id,

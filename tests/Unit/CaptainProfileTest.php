@@ -99,3 +99,48 @@ it('round-tripuje przez snapshot', function () {
         ->and($restored->battleStats('zatoka-rozbitka'))->toBe(['wins' => 1, 'losses' => 0])
         ->and($restored->settleBattle($gameId, 'won', 40, 20))->toBe(NO_AWARDS);
 });
+
+it('liczy jednostki wroga zatopione w rozliczonych bitwach', function () {
+    $profile = CaptainProfile::create('Jacek');
+    $won = GameId::new();
+    $lost = GameId::new();
+    $open = GameId::new();
+    $profile->startBattle('zatoka-rozbitka', $won);
+    $profile->startBattle('zatoka-rozbitka', $lost);
+    $profile->startBattle('zatoka-rozbitka', $open);
+
+    $profile->settleBattle($won, 'won', 40, 20, [], 4);
+    $profile->settleBattle($lost, 'lost', 10, 5, [], 2);
+
+    // nierozliczona bitwa nic nie dokłada; porażka też liczy zatopienia
+    expect($profile->enemyShipsSunk())->toBe(6);
+});
+
+it('nie podwaja zatopień przy ponownym rozliczeniu', function () {
+    $profile = CaptainProfile::create('Jacek');
+    $gameId = GameId::new();
+    $profile->startBattle('zatoka-rozbitka', $gameId);
+    $profile->settleBattle($gameId, 'won', 40, 20, [], 4);
+    $profile->settleBattle($gameId, 'won', 40, 20, [], 4);
+
+    expect($profile->enemyShipsSunk())->toBe(4);
+});
+
+it('odrzuca ujemną liczbę zatopień', function () {
+    $profile = CaptainProfile::create('Jacek');
+    $gameId = GameId::new();
+    $profile->startBattle('zatoka-rozbitka', $gameId);
+    $profile->settleBattle($gameId, 'won', 40, 20, [], -1);
+})->throws(InvalidArgumentException::class);
+
+it('rekord bitwy sprzed licznika zatopień liczy się jako zero', function () {
+    $profile = CaptainProfile::fromSnapshot(
+        CaptainProfile::create('Jacek')->id(),
+        'Jacek',
+        40,
+        [(string) GameId::new() => ['island' => 'zatoka-rozbitka', 'settled' => true, 'result' => 'won']],
+    );
+
+    expect($profile->enemyShipsSunk())->toBe(0)
+        ->and($profile->battleStats('zatoka-rozbitka'))->toBe(['wins' => 1, 'losses' => 0]);
+});

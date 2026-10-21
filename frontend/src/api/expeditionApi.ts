@@ -36,6 +36,8 @@ export interface ProfileDTO {
 export interface ExpeditionProfileDTO extends ProfileDTO {
     nextRank: { rank: RankName; xpNeeded: number } | null;
     materials: number;
+    // jednostki wroga zatopione we wszystkich rozliczonych bitwach
+    enemyShipsSunk: number;
 }
 
 export interface FleetShipDTO {

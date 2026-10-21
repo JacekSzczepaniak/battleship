@@ -2,7 +2,8 @@
 
 Żywy dokument — rama, nie specyfikacja. Decyzje kierunkowe oznaczamy ✅,
 otwarte pytania trzymamy na końcu. Wersja 2 po burzach mózgów 2026-07-12/13;
-zadania NIE są jeszcze rozpisane — do koncepcji wrócimy przy planowaniu.
+uzupełnienie 2026-07-15 (planowanie): rozszerzona drabina rang, specjalizacje,
+pobojowisko, warianty statków.
 
 ## Wizja jednym zdaniem
 
@@ -85,12 +86,21 @@ majątkiem. Nowe źródła walki: NPC, piraci, **kontrataki na osady**
 
 - **Drewno** (→ kadłuby, budynki), **stal** (→ uzbrojenie, forty),
   **złoto** (→ handel, uczelnie, najemnicy). Obecne „materiały" stają się
-  drewnem. Na start dokładnie trzy — budżet złożoności.
+  drewnem. Na start dokładnie trzy — budżet złożoności. ✅ Złoto wchodzi
+  od razu (złoża na mapie), nawet jeśli jego sink (handel/uczelnie)
+  pojawi się w późniejszym plastrze — migracja surowców tylko raz.
 - **Ładownia**: statki mają pojemność cargo; surowce wozi się fizycznie
   między wyspami. Nowy typ: **transportowiec/galeon** — dużo cargo,
   bezbronny, wymaga eskorty.
 - **Konwój = gameplay**: ryzyko (sztorm, pirat) skaluje się z wartością
   ładunku; ekonomia i walka sprzęgają się bez sztucznych mechanik.
+- **Pobojowisko (pomysł na przyszłość):** po bitwie morskiej na miejscu
+  starcia dryfują resztki z zatopionych statków (przynajmniej drewno).
+  Zbiera je flota obecna na miejscu albo wysłane po nie transportowce pod
+  eskortą — drugie zastosowanie transportowca poza konwojami, decyzja po
+  bitwie: spalić tiki na zbieranie czy płynąć dalej. Bezpieczniki balansu:
+  niski procent odzysku, resztki znikają po N tikach, po przegranej pole
+  bitwy zostaje przy wrogu (wojna nie może się sama finansować).
 
 ## Filar V — Technologia: drzewko z dwiema ścieżkami
 
@@ -104,6 +114,13 @@ Każdy węzeł ma **dwie ścieżki odblokowania**:
 - **questową** — artefakt/wyczyn = natychmiast (Twoje „przyspieszenie").
 Kilka węzłów-legend **tylko questowych** (czarna perła → „Nawigacja Legend").
 Questy nie są obok gry — są skrótami i sekretami w drzewku.
+
+**Warianty statków (kierunek):** ✅ technologia odblokowuje nie tylko
+parametry, ale **warianty kadłubów z różnym wyposażeniem** — ten sam rozmiar,
+inny loadout, np. trójmasztowiec torpedowy vs zwiadowczy (lepszy sonar
+kosztem torped), lotniskowiec klasyczny (nalot) vs śmigłowcowy (zwalczanie
+okrętów podwodnych). Balans przez wybór przy budowie: wariant to trade-off,
+nie ulepszenie. Techniczna droga wejścia: WeaponSpec + koszt w stoczni.
 
 ## Filar VI — NPC i reputacja
 
@@ -122,6 +139,26 @@ Spotkania na morzu jak sztormy: deterministycznie z `seed+moveCount`.
 - Nagrody: mapy akwenów, artefakty (questowe ścieżki drzewka), statki,
   reputacja. Fabuła = krótkie teksty przy questach i bramach akwenów.
 
+## Filar VIII — Kapitan: rangi i specjalizacje ✅
+
+**Rozszerzona drabina rang** — obecne 4 stopnie to za mało na świat
+z akwenami; celujemy w ~9, np.:
+rozbitek → majtek → marynarz → bosman → sternik → porucznik → kapitan →
+komandor → admirał.
+Ranga nadal bramkuje typy statków i dostęp do wysp/akwenów — więcej stopni
+= gładsza progresja i częstsze nagrody. XP bez zmian: nigdy nie maleje,
+ranga wynika z XP (istniejące profile automatycznie dostają nową rangę).
+
+**Specjalizacje — rozwój obok rangi:** ✅ dwie równoległe ścieżki,
+rozwijane przez to, co gracz faktycznie robi (nie przez wybór z listy):
+- **bojowa** — punkty z bitew (wygrane, zatopienia, abordaże),
+- **ekonomiczna** — punkty z handlu, transportu, wydobycia, kartografii.
+Poziom specjalizacji daje perki (szkic: bojowa → tańszy remont po wygranej,
+dodatkowy strzał zwiadu; ekonomiczna → +ładownia, lepsze ceny, tańsza
+budowa). Ścieżki nie wykluczają się — profil gracza wyłania się z akcji;
+to wchłania pomysł „perków kapitanów" z poczekalni. Konkretne perki
+i progi do zaprojektowania przy epiku.
+
 ## Zasady projektowe
 
 1. **Wyspa produkuje dla morza** — każda mechanika lądowa musi oddawać
@@ -138,6 +175,9 @@ Spotkania na morzu jak sztormy: deterministycznie z `seed+moveCount`.
    bez ryzyka, żegluga bez wymogu sprawnej floty.
 7. **Każdy plaster grywalny osobno** — kolejny etap zaczyna się od
    działającej gry.
+8. **Bitwa rozwija się ze światem** — plastry ekonomii/świata nie zamrażają
+   mechaniki bitwy; nowe bronie i warianty statków (przez WeaponSpec)
+   wchodzą równolegle z rozwojem świata.
 
 ## Kierunek krojenia (szkic — zadania rozpiszemy przy planowaniu)
 
@@ -156,7 +196,9 @@ Akwenu 1 zacznie uwierać.
 
 - Budynki osady: konkretna lista i koszty (tartak/kopalnia/uczelnia/fort — co jeszcze?)
 - Kształt drzewka: ile węzłów na start, które questowe?
-- Rangi vs akweny: czy progi XP rosną z liczbą akwenów; gdzie osiągalny admirał?
+- Rangi vs akweny: progi XP dla ~9 stopni; czy rosną z liczbą akwenów; gdzie osiągalny admirał?
+- Specjalizacje: konkretne perki i progi; czy bojowa wpływa na samą bitwę, czy tylko na otoczkę (remont, zwiad)?
+- Pobojowisko: procent odzysku, po ilu tikach resztki znikają?
 - Kontrataki: częstość, siła, co się dzieje przy utracie osady?
 - Ile akwenów na start (2–3?) i rozmiar planszy akwenu (12×12 wystarczy?)
 - Balans z obserwacji: pełna utrata floty przy przegranej, sztormy 20%, koszty statków
@@ -164,7 +206,8 @@ Akwenu 1 zacznie uwierać.
 
 ## Poczekalnia (pomysły wciąż aktualne, poza głównym torem)
 
-Perki kapitanów (wybory przy awansie) · eventy losowe w bitwie (mgła, cisza
-morska, prąd) · frakcje jako skórki (technologia/magia/rasa — flavor over
-mechanics) · miny · replay partii · statystyki/osiągnięcia · daily challenge ·
-PvP (tylko na czystym rulesecie, jeśli kiedykolwiek).
+Eventy losowe w bitwie (mgła, cisza morska, prąd) · frakcje jako skórki
+(technologia/magia/rasa — flavor over mechanics) · miny · replay partii ·
+statystyki/osiągnięcia · daily challenge · PvP (tylko na czystym rulesecie,
+jeśli kiedykolwiek). Perki kapitanów przeniesione do Filaru VIII
+(specjalizacje).

@@ -165,7 +165,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
     buildShip, createProfile, getExpedition, repairShip, sail, settleBattle, startIslandBattle,
-    RANK_LABELS, SHIP_ICONS, SHIP_LABELS,
+    RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS,
     type ExpeditionDTO, type FleetShipDTO, type IslandDTO, type RankName, type ShipTypeDTO,
 } from '../api/expeditionApi';
 import { ApiError } from '../api/http';
@@ -202,7 +202,6 @@ function rankLabel(rank: RankName): string {
 const busy = ref(false);
 const seaMsg = ref('');
 
-const RANK_ORDER: RankName[] = ['rozbitek', 'marynarz', 'kapitan', 'admiral'];
 
 function rankAtLeast(rank: RankName, required: RankName): boolean {
     return RANK_ORDER.indexOf(rank) >= RANK_ORDER.indexOf(required);

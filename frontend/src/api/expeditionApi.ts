@@ -1,13 +1,36 @@
 import { http } from './http';
 import type { CreateGameResponse } from './gameApi';
 
-export type RankName = 'rozbitek' | 'marynarz' | 'kapitan' | 'admiral';
+// kolejność jak w Domain/Expedition/Rank::ordered() — od najniższej
+export const RANK_ORDER = [
+    'rozbitek', 'majtek', 'marynarz', 'bosman', 'sternik', 'porucznik', 'kapitan', 'komandor', 'admiral',
+] as const;
+
+export type RankName = typeof RANK_ORDER[number];
 
 export const RANK_LABELS: Record<RankName, string> = {
     rozbitek: 'Rozbitek',
+    majtek: 'Majtek',
     marynarz: 'Marynarz',
+    bosman: 'Bosman',
+    sternik: 'Sternik',
+    porucznik: 'Porucznik',
     kapitan: 'Kapitan',
+    komandor: 'Komandor',
     admiral: 'Admirał',
+};
+
+// dopełniacz do zdań typu „XP do kapitana”
+export const RANK_LABELS_GENITIVE: Record<RankName, string> = {
+    rozbitek: 'rozbitka',
+    majtek: 'majtka',
+    marynarz: 'marynarza',
+    bosman: 'bosmana',
+    sternik: 'sternika',
+    porucznik: 'porucznika',
+    kapitan: 'kapitana',
+    komandor: 'komandora',
+    admiral: 'admirała',
 };
 
 export type ShipTypeName = 'tratwa' | 'kuter' | 'niszczyciel' | 'lotniskowiec';

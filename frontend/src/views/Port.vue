@@ -56,7 +56,7 @@
                     </div>
                     <div class="xp">
                         <div class="xp-head">
-                            <span v-if="expedition.profile.nextRank">XP do {{ rankLabel(expedition.profile.nextRank.rank).toUpperCase() }}</span>
+                            <span v-if="expedition.profile.nextRank">XP do {{ RANK_LABELS_GENITIVE[expedition.profile.nextRank.rank].toUpperCase() }}</span>
                             <span v-else>NAJWYŻSZA RANGA</span>
                             <span>{{ fmt(expedition.profile.xp) }}<template v-if="xpTarget"> / {{ fmt(xpTarget) }}</template></span>
                         </div>
@@ -135,7 +135,7 @@ import { useRouter } from 'vue-router';
 import { Anchor, Compass, Map as MapIcon, Plane, Radar, Settings, Ship, Sailboat, Wrench, Crosshair } from 'lucide-vue-next';
 import {
     createProfile, getExpedition, settleBattle, startIslandBattle,
-    RANK_LABELS, SHIP_LABELS,
+    RANK_LABELS, RANK_LABELS_GENITIVE, SHIP_LABELS,
     type ExpeditionDTO, type IslandDTO, type RankName,
 } from '../api/expeditionApi';
 import { createGame } from '../api/gameApi';

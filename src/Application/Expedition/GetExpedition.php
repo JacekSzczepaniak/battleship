@@ -100,6 +100,8 @@ final class GetExpedition
                 'height' => WorldMap::HEIGHT,
                 'position' => $position,
                 'discovered' => $profile->discoveredSectors(),
+                // sektory, na których kapitan był — tam sztorm już nie grozi
+                'visited' => $profile->visitedSectors(),
                 'atIsland' => $world->islandAt($position['x'], $position['y']),
                 'stormChance' => 20,
                 // zegar świata: rejs i bitwa kosztują tik

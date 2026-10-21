@@ -1,6 +1,9 @@
 <template>
-    <main class="p-6 expedition">
-        <h1>⚓ Wyprawa</h1>
+    <main class="expedition">
+        <div class="exp-head">
+            <h1>Rejs</h1>
+            <router-link :to="{ name: 'home' }" class="back">← Port</router-link>
+        </div>
 
         <p v-if="loading" class="muted">Wczytywanie wyprawy…</p>
         <p v-if="error" class="err">{{ error }}</p>
@@ -71,7 +74,7 @@
             </section>
 
             <!-- Flota i port (stocznia dostępna tylko w doku) -->
-            <section class="card port">
+            <section id="stocznia" class="card port">
                 <h2>⚓ Flota</h2>
                 <ul class="ships">
                     <li v-for="ship in expedition.fleet" :key="ship.id" class="ship" :class="{ dmg: ship.damaged }">
@@ -159,7 +162,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import {
     buildShip, createProfile, getExpedition, repairShip, sail, settleBattle, startIslandBattle,
     RANK_LABELS, SHIP_ICONS, SHIP_LABELS,
@@ -172,6 +175,7 @@ import {
 } from '../lib/expeditionSession';
 
 const router = useRouter();
+const route = useRoute();
 
 const loading = ref(true);
 const creating = ref(false);
@@ -336,6 +340,10 @@ async function load() {
         }
         await settlePendingBattle(profileId);
         expedition.value = await getExpedition(profileId);
+        // wejście z portu „Stocznia" (#stocznia) — przewiń po wyrenderowaniu
+        if (route.hash) {
+            requestAnimationFrame(() => document.querySelector(route.hash)?.scrollIntoView({ behavior: 'smooth' }));
+        }
     } catch (e: any) {
         // profil zniknął (np. wyczyszczona baza) — zacznij od nowa
         if (e instanceof ApiError && e.status === 404) {
@@ -405,46 +413,49 @@ async function onStartBattle(island: IslandDTO) {
 </script>
 
 <style scoped>
-.expedition { max-width: 720px; }
-h1 { margin-bottom: 0.75rem; }
-.card { border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.9rem 1rem; margin-bottom: 0.9rem; background: #fff; }
+.expedition { max-width: 820px; margin: 0 auto; }
+.exp-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
+h1 { font: 700 34px var(--font-head); margin: 0; }
+h2, h3 { font-family: var(--font-head); }
+.back { font: 500 12px var(--font-mono); color: var(--text-muted); }
+.card { border: 1px solid var(--line-card); border-radius: 14px; padding: 18px 20px; margin-bottom: 14px; background: var(--bg-card); }
 .intro h2 { margin-top: 0; }
 .name-form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
-.name-form input { padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; }
-.profile-head { display: flex; gap: 0.6rem; align-items: baseline; }
-.rank { color: #1f6feb; font-weight: 600; }
-.xp-row { display: flex; gap: 0.6rem; align-items: center; margin-top: 0.4rem; flex-wrap: wrap; }
-.xp-bar { flex: 1 1 140px; min-width: 120px; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
-.xp-fill { height: 100%; background: #1f6feb; transition: width 0.4s ease; }
-.pending { display: flex; gap: 0.75rem; align-items: center; background: #fff7ed; border-color: #fed7aa; }
-.materials { font-weight: 600; color: #92400e; }
-.sea-grid { display: grid; gap: 2px; margin-top: 0.5rem; }
-.sea-cell { width: 1.7rem; height: 1.7rem; border: 0; border-radius: 3px; padding: 0; font-size: 0.95rem; line-height: 1; cursor: default; }
-.sea-cell.fog { background: #334155; }
-.sea-cell.water { background: #bae6fd; }
-.sea-cell.island { background: #fde68a; }
-.sea-cell.player { background: #93c5fd; }
-.sea-cell.sailable:not(:disabled) { cursor: pointer; outline: 1px dashed #1f6feb; outline-offset: -2px; }
-.sea-cell.sailable:not(:disabled):hover { filter: brightness(1.12); }
-.sea-msg { margin: 0.5rem 0 0; color: #92400e; }
+.name-form input { padding: 10px 12px; border: 1px solid var(--line-btn); border-radius: 10px; background: var(--bg-panel); color: var(--text); }
+.profile-head { display: flex; gap: 0.6rem; align-items: baseline; font-family: var(--font-head); }
+.rank { color: var(--accent); font: 600 11px var(--font-mono); letter-spacing: .18em; text-transform: uppercase; }
+.xp-row { display: flex; gap: 0.6rem; align-items: center; margin-top: 0.4rem; flex-wrap: wrap; font-size: 14px; }
+.xp-bar { flex: 1 1 140px; min-width: 120px; height: 8px; background: var(--bg-panel); border: 1px solid var(--line-card); border-radius: 5px; overflow: hidden; }
+.xp-fill { height: 100%; background: linear-gradient(90deg, var(--info), var(--info-light)); transition: width 0.4s ease; }
+.pending { display: flex; gap: 0.75rem; align-items: center; border-color: var(--accent); }
+.materials { font-weight: 600; color: var(--warn); }
+.sea-grid { display: grid; gap: 3px; margin-top: 0.75rem; }
+.sea-cell { width: 1.7rem; height: 1.7rem; border: 0; border-radius: 4px; padding: 0; font-size: 0.95rem; line-height: 1; cursor: default; }
+.sea-cell.fog { background: #0a1b23; box-shadow: inset 0 0 0 1px #12303a; }
+.sea-cell.water { background: #0c2029; box-shadow: inset 0 0 0 1px #163540; }
+.sea-cell.island { background: #3b3220; box-shadow: inset 0 0 0 1px #6b5a35; }
+.sea-cell.player { background: #13404a; box-shadow: inset 0 0 0 2px var(--info); }
+.sea-cell.sailable:not(:disabled) { cursor: pointer; outline: 1px dashed var(--info); outline-offset: -3px; }
+.sea-cell.sailable:not(:disabled):hover { filter: brightness(1.3); }
+.sea-msg { margin: 0.5rem 0 0; color: var(--warn); }
 .port h2, .port h3 { margin: 0 0 0.4rem; font-size: 1.05rem; }
 .port h3 { margin-top: 0.8rem; }
 .ships { list-style: none; padding: 0; margin: 0; }
-.ship { display: flex; gap: 0.6rem; align-items: center; padding: 0.25rem 0; flex-wrap: wrap; }
+.ship { display: flex; gap: 0.6rem; align-items: center; padding: 0.3rem 0; flex-wrap: wrap; }
 .ship.dmg .ship-name { opacity: 0.7; }
 .ship-name { min-width: 12rem; }
-.status { font-size: 0.85rem; color: #92400e; }
-.status.ok { color: #15803d; }
-.btn.small { padding: 0.25rem 0.6rem; font-size: 0.85rem; }
+.status { font-size: 0.85rem; color: var(--accent-light); }
+.status.ok { color: var(--info); }
 .islands { list-style: none; padding: 0; margin: 0; }
-.island.locked { opacity: 0.6; background: #f8fafc; }
+.island.locked { opacity: 0.55; }
 .island-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; }
 .island-head h3 { margin: 0; }
-.mode-tag { font-size: 0.8rem; color: #475569; border: 1px solid #cbd5e1; border-radius: 999px; padding: 0.1rem 0.5rem; white-space: nowrap; }
-.desc { color: #334155; margin: 0.4rem 0 0.5rem; }
-.island-meta { display: flex; gap: 0.9rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
-.btn { padding: 0.45rem 0.9rem; background: #1f6feb; color: #fff; border: 0; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; }
-.btn[disabled] { opacity: 0.7; cursor: default; }
-.muted { color: #64748b; font-size: 0.9rem; }
-.err { color: crimson; }
+.mode-tag { font: 600 10px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); border: 1px solid var(--line-btn); border-radius: 999px; padding: 0.15rem 0.55rem; white-space: nowrap; }
+.desc { color: var(--text-desc); margin: 0.4rem 0 0.5rem; }
+.island-meta { display: flex; gap: 0.9rem; margin-bottom: 0.6rem; flex-wrap: wrap; font-size: 14px; }
+.btn { padding: 9px 16px; background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 10px; cursor: pointer; text-decoration: none; display: inline-block; font: 700 14px var(--font-head); }
+.btn.small { padding: 5px 10px; font-size: 12px; border-radius: 8px; background: var(--bg-card-active); color: var(--text); border: 1px solid var(--line-btn); }
+.btn[disabled] { background: var(--bg-disabled); color: var(--text-dim); cursor: not-allowed; }
+.muted { color: var(--text-muted); font-size: 0.9rem; }
+.err { color: var(--danger); }
 </style>

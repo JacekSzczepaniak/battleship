@@ -1,278 +1,495 @@
 <template>
-  <main class="p-6">
-    <h2>Rozstaw flotę</h2>
-    <p>Ułóż klasyczną flotę 10×10: 1×4, 2×3, 3×2, 4×1. Statki nie mogą na siebie nachodzić ani stykać się bokiem/po skosie.</p>
+    <section class="frame setup">
+        <!-- lewa: taca statków -->
+        <div class="tray">
+            <div>
+                <h2>Twoja flota</h2>
+                <p class="muted intro">Przeciągnij jednostki na akwen albo wybierz i kliknij pole. Klik na wybraną kartę lub <kbd>R</kbd> obraca.</p>
+            </div>
+            <div class="ships">
+                <div
+                    v-for="ship in ships"
+                    :key="ship.id"
+                    class="ship-card"
+                    :class="{ placed: !!ship.placed, active: ship.id === selectedId }"
+                    :draggable="!ship.placed"
+                    @dragstart="onDragStart(ship.id, $event)"
+                    @click="onCardClick(ship.id)"
+                >
+                    <div class="ship-head">
+                        <span class="ship-name">{{ shipName(ship.l) }}</span>
+                        <span v-if="ship.placed" class="state placed-state">ROZSTAWIONY</span>
+                        <span v-else-if="ship.id === selectedId" class="state active-state">
+                            {{ orientation === 'h' ? 'POZIOMO' : 'PIONOWO' }} <RotateCw :size="11" />
+                        </span>
+                        <span v-else class="state">DO ROZSTAWIENIA</span>
+                    </div>
+                    <div class="segments">
+                        <span v-for="i in ship.l" :key="i"></span>
+                    </div>
+                    <div v-if="ruleset === 'fun' && carriedWeapon(ship.l)" class="carrier">nośnik · {{ carriedWeapon(ship.l) }}</div>
+                </div>
+            </div>
+        </div>
 
-    <section class="panel">
-      <div class="toolbar">
-        <div class="segment">
-          Orientacja:
-          <label><input type="radio" value="h" v-model="orientation"> Poziomo (→)</label>
-          <label><input type="radio" value="v" v-model="orientation"> Pionowo (↓)</label>
+        <!-- środek: plansza -->
+        <div class="board-col">
+            <div class="board-head">
+                <div class="kicker">TWOJE WODY · {{ width }}×{{ height }}</div>
+                <div v-if="training" class="pills">
+                    <button
+                        v-for="s in TRAINING_SIZES"
+                        :key="s"
+                        class="pill"
+                        :class="{ on: width === s && height === s }"
+                        :disabled="busy"
+                        @click="switchTraining({ size: s })"
+                    >{{ s }}²</button>
+                    <span class="pill-gap"></span>
+                    <button class="pill" :class="{ on: ruleset === 'classic' }" :disabled="busy" @click="switchTraining({ ruleset: 'classic' })">KLASYCZNE</button>
+                    <button class="pill" :class="{ on: ruleset === 'fun' }" :disabled="busy" @click="switchTraining({ ruleset: 'fun' })">BRONIE</button>
+                </div>
+                <div v-else-if="battle" class="kicker island">BITWA · {{ battle.islandName.toUpperCase() }}</div>
+            </div>
+            <div class="board-box">
+                <SeaGrid
+                    :cells="cells"
+                    @cell-click="onCellClick"
+                    @cell-hover="onHover"
+                    @cell-drop="onDrop"
+                    @leave="hover = null"
+                />
+            </div>
+            <p class="hint" :class="{ bad: hintBad }">{{ hint }}</p>
         </div>
-        <div class="segment">
-          Do rozmieszczenia:
-          <span v-for="(cnt,len) in remainingByLen" :key="len" class="pill">
-            {{ len }}×: {{ cnt }}
-          </span>
-        </div>
-        <div class="segment">
-          <button class="btn outline" @click="resetFleet" :disabled="loading">Reset</button>
-        </div>
-      </div>
 
-      <div class="board" role="grid" :style="{ gridTemplateRows: `repeat(${height}, 30px)` }">
-        <div class="row" v-for="y in height" :key="y" :style="{ gridTemplateColumns: `repeat(${width}, 30px)` }">
-          <div
-            class="cell"
-            v-for="x in width"
-            :key="x"
-            :class="cellClass(x-1, y-1)"
-            @click="handlePlace(x-1, y-1)"
-            @mouseenter="hover(x-1, y-1)"
-            @mouseleave="hover(-1, -1)"
-            :title="cellTitle(x-1, y-1)"
-          />
+        <!-- prawa: zasady i akcje -->
+        <div class="side">
+            <div class="card rules">
+                <div class="kicker">ZASADY AKWENU</div>
+                <ul>
+                    <li><Ban :size="14" /> Statki nie mogą się stykać — także po skosie.</li>
+                    <li v-if="ruleset === 'fun'"><Crosshair :size="14" /> Nośniki dają broń: kuter → sonar, niszczyciel → torpeda, lotniskowiec → nalot. Zatopiony nośnik odbiera broń.</li>
+                    <li v-else><Crosshair :size="14" /> Zasady klasyczne: tylko pojedyncze salwy.</li>
+                    <li v-if="battle"><Anchor :size="14" /> Stawka: zatopione jednostki po wygranej idą do remontu, po przegranej przepadają.</li>
+                    <li v-else><Anchor :size="14" /> Trening — bez XP, łupów i strat we flocie.</li>
+                </ul>
+            </div>
+
+            <div class="progress">
+                <div class="progress-head">
+                    <span>Rozstawiono</span>
+                    <b>{{ placedCount }} / {{ ships.length }}</b>
+                </div>
+                <div class="track"><div class="fill" :style="{ width: ships.length ? (placedCount / ships.length * 100) + '%' : '0%' }"></div></div>
+            </div>
+
+            <div class="buttons">
+                <button class="btn btn-secondary" :disabled="busy" @click="shuffle"><Shuffle :size="16" /> Losuj rozstawienie</button>
+                <button class="btn btn-secondary" :disabled="busy || placedCount === 0" @click="clearAll"><Eraser :size="16" /> Wyczyść</button>
+                <button class="btn btn-primary" :disabled="busy || !allPlaced" @click="submitFleet">
+                    <template v-if="allPlaced">{{ busy ? 'Wypływamy…' : 'Do bitwy →' }}</template>
+                    <template v-else>Do bitwy → (rozstaw wszystkie)</template>
+                </button>
+            </div>
+            <p v-if="error" class="err">{{ error }}</p>
+            <router-link :to="{ name: 'home' }" class="back">← Port</router-link>
         </div>
-      </div>
     </section>
-
-    <div class="actions">
-      <button class="btn" :disabled="loading" @click="useClassicFleet">
-        {{ loading ? 'Wysyłanie…' : 'Użyj klasycznej floty' }}
-      </button>
-      <button class="btn success" :disabled="loading || !allPlaced" @click="submitFleet">
-        {{ loading ? 'Wysyłanie…' : 'Zapisz flotę' }}
-      </button>
-      <button class="btn outline" :disabled="loading" @click="goBack">Wróć</button>
-    </div>
-
-    <p v-if="error" class="err">{{ error }}</p>
-    <p v-if="hint" class="hint">{{ hint }}</p>
-  </main>
-
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { getGame, placeFleet, type PlayerFleetItem } from '../api/gameApi'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { Anchor, Ban, Crosshair, Eraser, RotateCw, Shuffle } from 'lucide-vue-next';
+import SeaGrid from '../components/SeaGrid.vue';
+import { createGame, getGame, placeFleet, type PlayerFleetItem, type RulesetName } from '../api/gameApi';
+import { getCurrentBattle } from '../lib/expeditionSession';
+import { TRAINING_SIZES, getTrainingPrefs, setTrainingPrefs } from '../lib/battleSession';
+import { carriedWeapon, cellLabel, fieldsLabel, shipName } from '../lib/ships';
 
-const route = useRoute()
-const router = useRouter()
-const id = String(route.params.id ?? '')
+type Orientation = 'h' | 'v';
+interface SetupShip { id: number; l: number; placed: { x: number; y: number; o: Orientation } | null }
 
-const loading = ref(false)
-const error = ref('')
-const hint = ref('Kliknij pole, aby postawić kolejny statek. Zmieniaj orientację w toolbarze.')
+const route = useRoute();
+const router = useRouter();
+const id = computed(() => String(route.params.id ?? ''));
 
-// wymiary planszy z gry (10×10 to tylko start do czasu odpowiedzi API)
-const width = ref(10)
-const height = ref(10)
+const width = ref(10);
+const height = ref(10);
+const ruleset = ref<RulesetName>('classic');
+const ships = ref<SetupShip[]>([]);
+const selectedId = ref<number | null>(null);
+const orientation = ref<Orientation>('h');
+const hover = ref<{ x: number; y: number } | null>(null);
+const busy = ref(false);
+const error = ref('');
+const hint = ref('');
+const hintBad = ref(false);
+let shuffleCount = 0;
 
-// Inwentarz domyślny (flota klasyczna): 1×4, 2×3, 3×2, 4×1;
-// gra może narzucić inny skład (allowedShips z API — flota wyprawy)
-const CLASSIC_INVENTORY = [4,3,3,2,2,2,1,1,1,1]
+// bitwa wyprawy (plansza i skład narzuca wyspa) vs trening (można zmieniać)
+const battle = computed(() => {
+    const b = getCurrentBattle();
+    return b && b.gameId === id.value ? b : null;
+});
+const training = computed(() => battle.value === null);
 
-function inventoryFrom(allowed: Record<string, number>): number[] {
-  const lengths: number[] = []
-  for (const [len, count] of Object.entries(allowed)) {
-    for (let i = 0; i < count; i++) lengths.push(Number(len))
-  }
-  return lengths.sort((a, b) => b - a)
-}
+const CLASSIC_INVENTORY: Record<string, number> = { 4: 1, 3: 2, 2: 3, 1: 4 };
 
-onMounted(async () => {
-  try {
-    const g = await getGame(id)
-    width.value = g.board.w
-    height.value = g.board.h
-    if (g.allowedShips && Object.keys(g.allowedShips).length > 0) {
-      fullInventory.value = inventoryFrom(g.allowedShips)
-      inventory.value = [...fullInventory.value]
+function buildShips(allowed: Record<string, number>): SetupShip[] {
+    const lengths: number[] = [];
+    for (const [len, count] of Object.entries(allowed)) {
+        for (let i = 0; i < count; i++) lengths.push(Number(len));
     }
-  } catch {
-    // zostają domyślne 10×10 i flota klasyczna; błąd i tak wyjdzie przy zapisie floty
-  }
-})
-
-const fullInventory = ref<number[]>([...CLASSIC_INVENTORY])
-const inventory = ref<number[]>([...CLASSIC_INVENTORY])
-const placed = ref<PlayerFleetItem[]>([])
-const orientation = ref<'h'|'v'>('h')
-const hoverPos = ref<{x:number,y:number}>({x:-1,y:-1})
-
-const remainingByLen = computed<Record<number, number>>(() => {
-  const left: Record<number, number> = {}
-  for (const l of fullInventory.value) left[l] = 0
-  for (const l of inventory.value) left[l] = (left[l] ?? 0) + 1
-  return left
-})
-
-const allPlaced = computed(() => inventory.value.length === 0)
-
-function resetFleet() {
-  placed.value = []
-  inventory.value = [...fullInventory.value]
-  error.value = ''
+    return lengths.sort((a, b) => b - a).map((l, i) => ({ id: i, l, placed: null }));
 }
 
-function cellClass(x: number, y: number) {
-  const isShip = isShipAt(x,y)
-  const preview = isPreviewCell(x,y)
-  const can = canStartHere(hoverPos.value.x, hoverPos.value.y, nextLen(), orientation.value)
-  return {
-    ship: isShip,
-    preview: preview && can && !isShip,
-    previewBad: preview && !can && !isShip,
-  }
-}
-
-function cellTitle(x: number, y: number) {
-  if (isShipAt(x,y)) return 'Statek'
-  if (!inventory.value.length) return 'Wszystkie statki rozmieszczone'
-  return `Postaw ${nextLen()}-masztowiec ${orientation.value === 'h' ? 'poziomo' : 'pionowo'}`
-}
-
-function nextLen(): number { return inventory.value[0] ?? 0 }
-
-function hover(x: number, y: number) { hoverPos.value = { x, y } }
-
-function isPreviewCell(x:number,y:number): boolean {
-  const len = nextLen()
-  if (!len) return false
-  const sx = hoverPos.value.x
-  const sy = hoverPos.value.y
-  if (sx < 0 || sy < 0) return false
-  for (let i=0;i<len;i++) {
-    const cx = sx + (orientation.value === 'h' ? i : 0)
-    const cy = sy + (orientation.value === 'v' ? i : 0)
-    if (cx === x && cy === y) return true
-  }
-  return false
-}
-
-function isShipAt(x: number, y: number): boolean {
-  return placed.value.some(s => {
-    for (let i=0;i<s.l;i++) {
-      const sx = s.x + (s.o === 'h' ? i : 0)
-      const sy = s.y + (s.o === 'v' ? i : 0)
-      if (sx === x && sy === y) return true
+async function load() {
+    error.value = '';
+    try {
+        const g = await getGame(id.value);
+        if (g.status !== 'pending') {
+            // flota już stoi — prosto do bitwy
+            await router.replace({ name: 'game', params: { id: id.value } });
+            return;
+        }
+        width.value = g.board.w;
+        height.value = g.board.h;
+        ruleset.value = g.ruleset;
+        ships.value = buildShips(g.allowedShips && Object.keys(g.allowedShips).length ? g.allowedShips : CLASSIC_INVENTORY);
+        selectNext();
+    } catch (e: any) {
+        error.value = e?.message ?? 'Nie udało się wczytać gry';
     }
-    return false
-  })
 }
 
-function isOccupiedOrAdjacent(x: number, y: number): boolean {
-  // zajęte lub sąsiednie (8-neighborhood)
-  for (const s of placed.value) {
-    for (let i=0;i<s.l;i++) {
-      const sx = s.x + (s.o === 'h' ? i : 0)
-      const sy = s.y + (s.o === 'v' ? i : 0)
-      if (Math.abs(sx - x) <= 1 && Math.abs(sy - y) <= 1) return true
+// --- geometria ---
+
+function shipCells(x: number, y: number, l: number, o: Orientation): [number, number][] {
+    return Array.from({ length: l }, (_, i) => [x + (o === 'h' ? i : 0), y + (o === 'v' ? i : 0)] as [number, number]);
+}
+
+const occupancy = computed(() => {
+    const map = new Map<string, number>();
+    for (const s of ships.value) {
+        if (!s.placed) continue;
+        for (const [x, y] of shipCells(s.placed.x, s.placed.y, s.l, s.placed.o)) map.set(`${x}:${y}`, s.id);
     }
-  }
-  return false
+    return map;
+});
+
+function canPlace(ship: SetupShip, x: number, y: number, o: Orientation, occ = occupancy.value): boolean {
+    for (const [cx, cy] of shipCells(x, y, ship.l, o)) {
+        if (cx < 0 || cy < 0 || cx >= width.value || cy >= height.value) return false;
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+                const other = occ.get(`${cx + dx}:${cy + dy}`);
+                if (other !== undefined && other !== ship.id) return false;
+            }
+        }
+    }
+    return true;
 }
 
-function fitsInside(x: number, y: number, len: number, o: 'h'|'v'): boolean {
-  if (o === 'h') return x >= 0 && y >= 0 && x + len - 1 < width.value && y < height.value
-  return x >= 0 && y >= 0 && x < width.value && y + len - 1 < height.value
+const selected = computed(() => ships.value.find(s => s.id === selectedId.value) ?? null);
+
+const cells = computed<string[][]>(() => {
+    const occ = occupancy.value;
+    const grid = Array.from({ length: height.value }, (_, y) =>
+        Array.from({ length: width.value }, (_, x) => (occ.has(`${x}:${y}`) ? 'ship' : 'water')));
+
+    const ship = selected.value;
+    const h = hover.value;
+    if (ship && !ship.placed && h) {
+        const ok = canPlace(ship, h.x, h.y, orientation.value);
+        for (const [x, y] of shipCells(h.x, h.y, ship.l, orientation.value)) {
+            if (grid[y]?.[x] !== undefined) grid[y][x] += ok ? ' preview-ok' : ' preview-bad';
+        }
+    }
+    return grid;
+});
+
+const placedCount = computed(() => ships.value.filter(s => s.placed).length);
+const allPlaced = computed(() => ships.value.length > 0 && placedCount.value === ships.value.length);
+
+function setHint(text: string, bad = false) {
+    hint.value = text;
+    hintBad.value = bad;
 }
 
-function canStartHere(x: number, y: number, len: number, o: 'h'|'v'): boolean {
-  if (!len) return false
-  if (!fitsInside(x,y,len,o)) return false
-  // brak kolizji i sąsiadowania
-  for (let i=0;i<len;i++) {
-    const cx = x + (o === 'h' ? i : 0)
-    const cy = y + (o === 'v' ? i : 0)
-    if (isOccupiedOrAdjacent(cx, cy)) return false
-  }
-  return true
+function selectNext() {
+    const next = ships.value.find(s => !s.placed) ?? null;
+    selectedId.value = next?.id ?? null;
+    if (next) {
+        setHint(`Ustaw: ${shipName(next.l)} (${fieldsLabel(next.l)}) — ${orientation.value === 'h' ? 'poziomo' : 'pionowo'}.`);
+    } else {
+        setHint('Flota rozstawiona. Kliknij statek na planszy, żeby go podnieść, albo ruszaj do bitwy.');
+    }
 }
 
-function handlePlace(x: number, y: number) {
-  error.value = ''
-  const len = nextLen()
-  if (!len) return
-  if (!canStartHere(x,y,len,orientation.value)) {
-    hint.value = 'Nieprawidłowa pozycja (graniczenie, kolizja lub sąsiedztwo). Wybierz inne pole lub zmień orientację.'
-    return
-  }
-  placed.value.push({ x, y, o: orientation.value, l: len })
-  // usuń zużyty element inwentarza (pierwszy)
-  inventory.value = inventory.value.slice(1)
-  hint.value = inventory.value.length
-    ? `Ustaw następny statek: ${nextLen()}-masztowiec (${orientation.value === 'h' ? 'poziomo' : 'pionowo'})`
-    : 'Wszystkie statki rozmieszczone — zapisz flotę.'
+// --- interakcje ---
+
+function rotate() {
+    orientation.value = orientation.value === 'h' ? 'v' : 'h';
+    if (selected.value && !selected.value.placed) {
+        setHint(`${shipName(selected.value.l)} — ${orientation.value === 'h' ? 'poziomo' : 'pionowo'}.`);
+    }
+}
+
+function onCardClick(shipId: number) {
+    const ship = ships.value.find(s => s.id === shipId);
+    if (!ship) return;
+    if (ship.placed) {
+        pickUp(ship);
+        return;
+    }
+    if (selectedId.value === shipId) {
+        rotate();
+        return;
+    }
+    selectedId.value = shipId;
+    setHint(`Ustaw: ${shipName(ship.l)} (${fieldsLabel(ship.l)}).`);
+}
+
+function pickUp(ship: SetupShip) {
+    if (!ship.placed) return;
+    orientation.value = ship.placed.o;
+    ship.placed = null;
+    selectedId.value = ship.id;
+    setHint(`Podniesiono: ${shipName(ship.l)}. Wskaż nowe miejsce.`);
+}
+
+function tryPlace(x: number, y: number) {
+    const ship = selected.value;
+    if (!ship || ship.placed) return;
+    if (!canPlace(ship, x, y, orientation.value)) {
+        setHint(`${cellLabel(x, y)}: tu się nie zmieści — poza planszą albo styka się z innym statkiem.`, true);
+        return;
+    }
+    ship.placed = { x, y, o: orientation.value };
+    selectNext();
+}
+
+function onCellClick(x: number, y: number) {
+    error.value = '';
+    const owner = occupancy.value.get(`${x}:${y}`);
+    if (owner !== undefined) {
+        const ship = ships.value.find(s => s.id === owner);
+        if (ship) pickUp(ship);
+        return;
+    }
+    tryPlace(x, y);
+}
+
+function onHover(x: number, y: number) {
+    hover.value = { x, y };
+}
+
+function onDragStart(shipId: number, e: DragEvent) {
+    selectedId.value = shipId;
+    e.dataTransfer?.setData('text/plain', String(shipId));
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+}
+
+function onDrop(x: number, y: number) {
+    tryPlace(x, y);
+}
+
+function clearAll() {
+    for (const s of ships.value) s.placed = null;
+    selectNext();
+}
+
+// --- losowanie z seeda (deterministyczne dla gry i numeru losowania) ---
+
+function hashString(s: string): number {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+}
+
+function rng(seed: number): () => number {
+    let state = seed || 1;
+    return () => {
+        // mulberry32
+        state = (state + 0x6d2b79f5) | 0;
+        let t = state;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+function shuffle() {
+    shuffleCount++;
+    const rand = rng(hashString(`${id.value}#${shuffleCount}`));
+    const order = [...ships.value].sort((a, b) => b.l - a.l);
+
+    for (let attempt = 0; attempt < 200; attempt++) {
+        const occ = new Map<string, number>();
+        const result = new Map<number, { x: number; y: number; o: Orientation }>();
+        let ok = true;
+        for (const ship of order) {
+            let placed = false;
+            for (let tries = 0; tries < 300 && !placed; tries++) {
+                const o: Orientation = rand() < 0.5 ? 'h' : 'v';
+                const x = Math.floor(rand() * width.value);
+                const y = Math.floor(rand() * height.value);
+                if (canPlace(ship, x, y, o, occ)) {
+                    for (const [cx, cy] of shipCells(x, y, ship.l, o)) occ.set(`${cx}:${cy}`, ship.id);
+                    result.set(ship.id, { x, y, o });
+                    placed = true;
+                }
+            }
+            if (!placed) { ok = false; break; }
+        }
+        if (ok) {
+            for (const s of ships.value) s.placed = result.get(s.id) ?? null;
+            selectNext();
+            return;
+        }
+    }
+    setHint('Nie udało się wylosować rozstawienia — za mało miejsca na planszy.', true);
+}
+
+// --- zmiana ustawień treningu: nowa gra (rozmiar/zasady są częścią gry) ---
+
+async function switchTraining(change: { size?: number; ruleset?: RulesetName }) {
+    const prefs = getTrainingPrefs();
+    const next = {
+        size: change.size ?? width.value,
+        ruleset: change.ruleset ?? ruleset.value,
+    };
+    if (next.size === width.value && next.size === height.value && next.ruleset === ruleset.value) return;
+    busy.value = true;
+    error.value = '';
+    try {
+        const g = await createGame(next.ruleset, next.size);
+        setTrainingPrefs({ ...prefs, ...next });
+        shuffleCount = 0;
+        await router.replace({ name: 'place-fleet', params: { id: g.id } });
+        await load();
+    } catch (e: any) {
+        error.value = e?.message ?? 'Nie udało się zmienić ustawień bitwy';
+    } finally {
+        busy.value = false;
+    }
 }
 
 async function submitFleet() {
-  if (!id || !allPlaced.value) return
-  loading.value = true
-  error.value = ''
-  try {
-    await placeFleet(id, placed.value)
-    await router.push({ name: 'game', params: { id } })
-  } catch (e: any) {
-    error.value = e?.message ?? 'Nie udało się rozstawić floty (backend odrzucił pozycje).'
-  } finally {
-    loading.value = false
-  }
+    if (!allPlaced.value) return;
+    busy.value = true;
+    error.value = '';
+    try {
+        const payload: PlayerFleetItem[] = ships.value.map(s => ({ x: s.placed!.x, y: s.placed!.y, o: s.placed!.o, l: s.l }));
+        await placeFleet(id.value, payload);
+        await router.push({ name: 'game', params: { id: id.value } });
+    } catch (e: any) {
+        error.value = e?.message ?? 'Backend odrzucił rozstawienie floty';
+    } finally {
+        busy.value = false;
+    }
 }
 
-// Klasyczna flota 10×10 zgodna z Tests\Support\FleetFactory::classic10x10Array()
-function classicFleet(): PlayerFleetItem[] {
-  return [
-    { x: 0, y: 0, o: 'h', l: 4 },
-    { x: 0, y: 2, o: 'h', l: 3 },
-    { x: 6, y: 0, o: 'v', l: 3 },
-    { x: 5, y: 4, o: 'h', l: 2 },
-    { x: 9, y: 0, o: 'v', l: 2 },
-    { x: 3, y: 6, o: 'v', l: 2 },
-    { x: 0, y: 6, o: 'h', l: 1 },
-    { x: 1, y: 8, o: 'h', l: 1 },
-    { x: 5, y: 9, o: 'h', l: 1 },
-    { x: 8, y: 8, o: 'h', l: 1 },
-  ]
+function onKey(e: KeyboardEvent) {
+    const target = e.target as HTMLElement | null;
+    if (target && ['INPUT', 'TEXTAREA'].includes(target.tagName)) return;
+    if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        rotate();
+    } else if (e.key === 'Enter' && allPlaced.value && !busy.value) {
+        e.preventDefault();
+        submitFleet();
+    }
 }
 
-async function useClassicFleet() {
-  if (!id) return
-  loading.value = true
-  error.value = ''
-  try {
-    await placeFleet(id, classicFleet())
-    await router.push({ name: 'game', params: { id } })
-  } catch (e: any) {
-    error.value = e?.message ?? 'Nie udało się rozstawić floty'
-  } finally {
-    loading.value = false
-  }
-}
-
-function goBack() { router.back() }
+onMounted(() => {
+    window.addEventListener('keydown', onKey);
+    load();
+});
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 </script>
 
 <style scoped>
-.panel { margin: 1rem 0; }
-.toolbar { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: .75rem; }
-.toolbar .segment { display: flex; gap: .5rem; align-items: center; }
-.pill { display: inline-block; padding: .15rem .4rem; border-radius: 10px; background: #f2f2f2; border: 1px solid #ddd; margin-right: .25rem; }
+.frame {
+    min-height: 812px;
+    border-radius: 18px;
+    border: 1px solid var(--line-card);
+    background: linear-gradient(160deg, var(--bg-frame-a), var(--bg-frame-b));
+    padding: 36px;
+    display: grid;
+    grid-template-columns: 300px 1fr 300px;
+    gap: 28px;
+}
 
-.board { display: grid; gap: 2px; }
-.row { display: grid; gap: 2px; }
-.cell { width: 30px; height: 30px; border: 1px solid #cbd5e1; background: #f8fafc; cursor: pointer; }
-.cell.ship { background: #94a3b8; }
-.cell.preview { outline: 2px solid #16a34a; outline-offset: -2px; background: #dcfce7; }
-.cell.previewBad { outline: 2px dashed #ef4444; outline-offset: -2px; background: #fee2e2; }
+.tray { display: flex; flex-direction: column; gap: 16px; }
+h2 { font: 700 22px var(--font-head); margin: 0; }
+.intro { font-size: 13px; margin: 4px 0 0; }
+kbd { font: 600 10px var(--font-mono); padding: 1px 5px; border-radius: 4px; border: 1px solid var(--line-btn); color: var(--text-2); }
+.ships { display: flex; flex-direction: column; gap: 11px; overflow-y: auto; max-height: 640px; padding-right: 4px; }
+.ship-card {
+    padding: 14px;
+    border-radius: 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--line-btn);
+    cursor: grab;
+    transition: border-color .15s, background .15s, opacity .15s;
+}
+.ship-card:hover { border-color: var(--info); }
+.ship-card.placed { opacity: .5; cursor: pointer; }
+.ship-card.active { background: var(--bg-card-active); border-color: var(--accent); opacity: 1; }
+.ship-head { display: flex; justify-content: space-between; align-items: center; }
+.ship-name { font: 600 14px var(--font-head); }
+.state { font: 600 10px var(--font-mono); color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; }
+.placed-state { color: var(--info); }
+.active-state { color: var(--accent); }
+.segments { display: flex; gap: 4px; margin-top: 9px; }
+.segments span { width: 22px; height: 12px; border-radius: 3px; background: #33596a; }
+.ship-card.active .segments span { background: #4b7a89; }
+.carrier { margin-top: 7px; font: 500 10px var(--font-mono); color: var(--text-muted); }
 
-.actions { display: flex; gap: .5rem; margin: 1rem 0; }
-.btn { padding: 0.5rem 1rem; background: #1f6feb; color: #fff; border: 0; border-radius: 4px; cursor: pointer; }
-.btn.success { background: #16a34a; }
-.btn.outline { background: transparent; color: #1f6feb; border: 1px solid #1f6feb; }
-.btn[disabled] { opacity: 0.7; cursor: default; }
-.err { color: crimson; margin-top: 0.5rem; }
-.hint { color: #475569; margin-top: .25rem; }
+.board-col { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+.board-head { align-self: stretch; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.board-head .kicker { font-size: 12px; letter-spacing: .18em; }
+.board-head .island { color: var(--accent); }
+.pills { display: flex; gap: 8px; align-items: center; }
+.pill {
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: var(--bg-card);
+    border: 1px solid var(--line-card);
+    font: 600 11px var(--font-mono);
+    color: var(--text-muted);
+    cursor: pointer;
+}
+.pill:hover:not(:disabled) { color: var(--text); }
+.pill.on { background: var(--bg-card-active); border-color: var(--info); color: var(--info); }
+.pill:disabled { cursor: wait; }
+.pill-gap { width: 6px; }
+.board-box { padding: 16px; border-radius: 14px; background: var(--bg-panel); border: 1px solid var(--line); }
+.hint { margin: 0; min-height: 20px; font: 500 12px var(--font-mono); color: var(--text-muted); text-align: center; }
+.hint.bad { color: var(--danger); }
+
+.side { display: flex; flex-direction: column; gap: 16px; }
+.rules .kicker { margin-bottom: 10px; letter-spacing: .18em; }
+.rules ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; font: 400 13px var(--font-body); color: var(--text-2); }
+.rules li { display: flex; gap: 9px; align-items: flex-start; }
+.rules li svg { flex: none; margin-top: 3px; color: var(--info); }
+.progress-head { display: flex; justify-content: space-between; font: 500 12px var(--font-mono); color: var(--text-muted); }
+.progress-head b { color: var(--text); }
+.track { height: 7px; border-radius: 4px; background: var(--bg-card); border: 1px solid var(--line-card); margin-top: 8px; overflow: hidden; }
+.fill { height: 100%; background: linear-gradient(90deg, var(--info), var(--info-light)); transition: width .3s ease-out; }
+.buttons { display: flex; flex-direction: column; gap: 10px; margin-top: auto; }
+.buttons .btn-secondary { justify-content: flex-start; }
+.back { font: 500 12px var(--font-mono); color: var(--text-muted); }
+
+@media (max-width: 1200px) {
+    .frame { grid-template-columns: 1fr; }
+    .ships { flex-direction: row; flex-wrap: wrap; max-height: none; }
+    .ship-card { flex: 1 1 180px; }
+}
 </style>

@@ -1,79 +1,128 @@
+/* Tokeny projektu UI „Statki — UI flow" (ciemny, morski kierunek). */
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+    /* tła */
+    --bg-page: #071319;
+    --bg-page-hi: #0e2a34;
+    --bg-frame-a: #0b2129;
+    --bg-frame-b: #081820;
+    --bg-panel: #081a21;
+    --bg-panel-a: #081a2199;
+    --bg-card: #0d2530;
+    --bg-card-active: #123039;
+    --bg-card-off: #0a1a22;
+    --bg-nav: #0f2630;
+    --bg-disabled: #2c4a55;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+    /* obramowania */
+    --line: #143743;
+    --line-card: #1c3b46;
+    --line-btn: #24505e;
+    --line-strong: #2b5866;
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+    /* tekst */
+    --text: #e8f0f0;
+    --text-2: #c3d3d6;
+    --text-desc: #a9c0c5;
+    --text-muted: #8fa6ab;
+    --text-dim: #7d949a;
+    --text-label: #5f8089;
+    --text-axis: #6f8b93;
+
+    /* akcenty */
+    --accent: #e8843c;
+    --accent-ink: #0a1a24;
+    --accent-light: #e8b48a;
+    --info: #3fb6c4;
+    --info-light: #59d0dd;
+    --warn: #d8ae4c;
+    --danger: #c8624a;
+
+    /* surowce */
+    --res-wood: #8a6a3e;
+    --res-steel: #7d8b93;
+    --res-gold: #d8ae4c;
+
+    --font-head: 'Space Grotesk', system-ui, sans-serif;
+    --font-body: 'Archivo', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+    color-scheme: dark;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { margin: 0; }
 
 body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+    min-height: 100vh;
+    background: radial-gradient(1200px 700px at 70% -10%, var(--bg-page-hi) 0%, var(--bg-page) 60%) fixed, var(--bg-page);
+    color: var(--text);
+    font-family: var(--font-body);
+    line-height: 1.45;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+a { color: var(--info); text-decoration: none; }
+a:hover { color: var(--accent); }
+
+button { font-family: inherit; color: inherit; }
+
+:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+/* ---- wspólne klocki ---- */
+
+.kicker {
+    font: 600 11px var(--font-mono);
+    letter-spacing: .2em;
+    color: var(--text-label);
+    text-transform: uppercase;
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border-radius: 14px;
+    font: 600 15px var(--font-head);
+    cursor: pointer;
+    text-decoration: none;
+    transition: filter .15s, border-color .15s, background .15s;
 }
-button:hover {
-  border-color: #646cff;
+.btn-primary {
+    padding: 18px 30px;
+    border: none;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 700;
 }
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+.btn-primary:hover:not(:disabled) { filter: brightness(1.08); color: var(--accent-ink); }
+.btn-secondary {
+    padding: 17px 20px;
+    border: 1px solid var(--line-btn);
+    background: var(--bg-card);
+    color: var(--text);
 }
+.btn-secondary:hover:not(:disabled) { border-color: var(--info); color: var(--text); }
+.btn:disabled {
+    background: var(--bg-disabled);
+    color: var(--text-dim);
+    border-color: transparent;
+    cursor: not-allowed;
+}
+.btn-small { padding: 7px 12px; border-radius: 8px; font: 600 11px var(--font-mono); letter-spacing: .04em; }
 
 .card {
-  padding: 2em;
+    padding: 18px;
+    border-radius: 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--line-card);
 }
 
-#app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
-}
+.muted { color: var(--text-muted); }
+.err { color: var(--danger); }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
-}
+.res-dot { width: 14px; height: 14px; border-radius: 3px; flex: none; display: inline-block; }

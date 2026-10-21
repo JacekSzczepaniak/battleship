@@ -3,7 +3,7 @@
 Żywy dokument — rama, nie specyfikacja. Decyzje kierunkowe oznaczamy ✅,
 otwarte pytania trzymamy na końcu. Wersja 2 po burzach mózgów 2026-07-12/13;
 uzupełnienie 2026-07-15 (planowanie): rozszerzona drabina rang, specjalizacje,
-pobojowisko, warianty statków.
+pobojowisko, warianty statków; 2026-10-21: progi drabiny rang, stan „co działa”.
 
 ## Wizja jednym zdaniem
 
@@ -17,15 +17,20 @@ wyspa:  wydobycie → transport → stocznia/osada → technologia
         └── wszystko, co daje wyspa, wraca na morze ──┘
 ```
 
-## Co już działa (zrealizowany „wstęp", stan po 2026-07-12)
+## Co już działa (zrealizowany „wstęp", stan po 2026-10-21)
 
 Bitwa (classic/fun, bronie specjalne z nośników: sonar=kuter, torpeda=
 niszczyciel, nalot=lotniskowiec; zatopiony nośnik odbiera broń) · profil
-kapitana (XP nigdy nie maleje, rangi rozbitek→marynarz→kapitan→admirał) ·
-flota jako majątek (budowa/remont, stocznie, wygrana→remont / przegrana→
-strata) · wolne morze 12×12 z mgłą, deterministyczne z seeda profilu ·
-kartografia pasywna · sztormy w niezbadanych wodach · geografia=logistyka
-(bitwa/stocznia wymagają obecności). Szczegóły: git log + testy.
+kapitana (XP nigdy nie maleje, 9 rang od rozbitka do admirała — progi
+w Filarze VIII; licznik zatopionych jednostek wroga) · flota jako majątek
+(budowa/remont, stocznie, wygrana→remont / przegrana→strata) · wolne morze
+12×12 z mgłą, deterministyczne z seeda profilu · kartografia pasywna ·
+sztormy w niezbadanych wodach · geografia=logistyka (bitwa/stocznia
+wymagają obecności) · UI flow bitwy: port → rozstawianie → bitwa → wynik
+(projekt: `docs/design/ui-flow/`). Elementy projektu UI bez pokrycia
+w silniku czekają w zadaniach: energia i „Zakończ turę” (#59), ruch statku
+w bitwie (#60), trzy surowce w UI (#49), abordaż (#55), mapa akwenu jako
+łup (#56). Szczegóły: git log + testy, uruchomienie: `README.md`.
 
 ## Filar I — Świat: łańcuch akwenów ✅
 
@@ -141,13 +146,38 @@ Spotkania na morzu jak sztormy: deterministycznie z `seed+moveCount`.
 
 ## Filar VIII — Kapitan: rangi i specjalizacje ✅
 
-**Rozszerzona drabina rang** — obecne 4 stopnie to za mało na świat
-z akwenami; celujemy w ~9, np.:
-rozbitek → majtek → marynarz → bosman → sternik → porucznik → kapitan →
-komandor → admirał.
-Ranga nadal bramkuje typy statków i dostęp do wysp/akwenów — więcej stopni
-= gładsza progresja i częstsze nagrody. XP bez zmian: nigdy nie maleje,
-ranga wynika z XP (istniejące profile automatycznie dostają nową rangę).
+**Rozszerzona drabina rang** ✅ (2026-10-21) — 4 stopnie to za mało na
+świat z akwenami, więc 9. Ranga bramkuje typy statków i dostęp do
+wysp/akwenów — więcej stopni = gładsza progresja i częstsze nagrody. XP bez
+zmian: nigdy nie maleje, ranga wynika z XP (nie jest zapisywana).
+
+| ranga | próg XP | bramka dziś |
+|---|---|---|
+| rozbitek | 0 | tratwa, kuter, wyspy I poziomu |
+| majtek | 30 | — |
+| marynarz | 80 | niszczyciel, wyspy II poziomu |
+| bosman | 150 | — |
+| sternik | 250 | — |
+| porucznik | 400 | — |
+| kapitan | 600 | lotniskowiec, wyspy III poziomu |
+| komandor | 900 | — |
+| admirał | 1300 | — (endgame akwenów) |
+
+- **Zysk XP do kolejnej rangi rośnie** (30 → 400): pierwsza wygrana daje
+  od razu majtka, później awans co 1–4 wygrane; admirał po 15 wygranych
+  (rachunek: same wygrane, zawsze najlepsza dostępna wyspa Akwenu 1;
+  XP za porażki skraca drogę).
+- **Bramki zostają przy nazwach rang** ✅ (wariant B): lotniskowiec i wyspy
+  III poziomu wymagają kapitana, który wypada przy 600 XP zamiast 250.
+  Skutek: profile z 250–599 XP spadły z kapitana na sternika/porucznika
+  i do 600 XP nie zbudują lotniskowca ani nie zaatakują wysp III poziomu.
+  Odrzucony wariant A przenosił bramkę na sternika (250 XP), żeby nikt nic
+  nie tracił — kosztem nazwy „kapitan” bez znaczenia w grze.
+- **Luka 250–600 XP:** na obecnym Akwenie 1 między sternikiem a kapitanem
+  dostępne są tylko wyspy II poziomu (70–80 XP za wygraną, ok. 5 wygranych).
+  Do zapełnienia treścią (wyspy, akwen 2) — patrz otwarte pytania.
+- Rangi bez bramki (majtek, bosman, sternik, porucznik, komandor, admirał)
+  czekają na treść kolejnych akwenów.
 
 **Specjalizacje — rozwój obok rangi:** ✅ dwie równoległe ścieżki,
 rozwijane przez to, co gracz faktycznie robi (nie przez wybór z listy):
@@ -196,7 +226,7 @@ Akwenu 1 zacznie uwierać.
 
 - Budynki osady: konkretna lista i koszty (tartak/kopalnia/uczelnia/fort — co jeszcze?)
 - Kształt drzewka: ile węzłów na start, które questowe?
-- Rangi vs akweny: progi XP dla ~9 stopni; czy rosną z liczbą akwenów; gdzie osiągalny admirał?
+- Rangi vs akweny: czy progi rosną z liczbą akwenów; gdzie osiągalny admirał; czym zapełnić lukę 250–600 XP (dziś tylko wyspy II poziomu) i które rangi bramkują akwen 2?
 - Specjalizacje: konkretne perki i progi; czy bojowa wpływa na samą bitwę, czy tylko na otoczkę (remont, zwiad)?
 - Pobojowisko: procent odzysku, po ilu tikach resztki znikają?
 - Kontrataki: częstość, siła, co się dzieje przy utracie osady?

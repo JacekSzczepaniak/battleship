@@ -42,6 +42,6 @@ konwencja FEX-N) tu NIE obowiązują.
   snapshot stanu w polu `aiState` gry). Nie dodawać drugiej ścieżki AI.
 - `BoardReadModel` ma `width()`/`height()` (plansze prostokątne); `TargetBoard`
   wciąż zakłada kwadrat (używany tylko przez `TurnLoop`/demo).
-- Znane zadania: fix geometrii `Game::sendAirRaid()` (x/y pomylone z width/height,
-  clamp pomija wiersz/kolumnę 0), `FleetGenerator` zamiast odczytu `$_ENV` w
-  `Application/Game/PlaceFleet`, UI dla trybu fun (torpeda/sonar/nalot są tylko w API).
+- Zadania: tablica GitHub Projects nr 1 — tutaj nie trzymamy listy, bo się rozjeżdża
+  (poprzednia wymieniała jako otwarte rzeczy zrobione w #14, #15 i #9).
+- Uruchomienie, testy, architektura i lista API: `README.md`.

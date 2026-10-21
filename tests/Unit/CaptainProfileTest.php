@@ -144,3 +144,37 @@ it('rekord bitwy sprzed licznika zatopień liczy się jako zero', function () {
     expect($profile->enemyShipsSunk())->toBe(0)
         ->and($profile->battleStats('zatoka-rozbitka'))->toBe(['wins' => 1, 'losses' => 0]);
 });
+
+it('rejs i start bitwy kosztują tik, rozliczenie nie', function () {
+    $profile = CaptainProfile::create('Jacek');
+    expect($profile->tick())->toBe(0);
+
+    $world = App\Domain\Expedition\WorldMap::generate($profile->worldSeed(), ['zatoka-rozbitka', 'mielizny']);
+    $profile->ensureWorldState($world);
+    $pos = $profile->position();
+    $profile->sail($pos['x'] + ($pos['x'] > 0 ? -1 : 1), $pos['y'], $world);
+    expect($profile->tick())->toBe(1)
+        ->and($profile->moveCount())->toBe(1);
+
+    $gameId = GameId::new();
+    $profile->startBattle('zatoka-rozbitka', $gameId);
+    expect($profile->tick())->toBe(2)
+        ->and($profile->moveCount())->toBe(1); // moveCount liczy tylko rejsy
+
+    $profile->settleBattle($gameId, 'won', 40, 20);
+    expect($profile->tick())->toBe(2);
+});
+
+it('profil sprzed tiku dostaje tik z historii: rejsy + zarejestrowane bitwy', function () {
+    $id = CaptainProfile::create('Jacek')->id();
+    $battles = [
+        (string) GameId::new() => ['island' => 'zatoka-rozbitka', 'settled' => true, 'result' => 'won'],
+        (string) GameId::new() => ['island' => 'zatoka-rozbitka', 'settled' => false, 'result' => null],
+    ];
+
+    $legacy = CaptainProfile::fromSnapshot($id, 'Jacek', 40, $battles, null, null, null, null, null, 5);
+    $current = CaptainProfile::fromSnapshot($id, 'Jacek', 40, $battles, null, null, null, null, null, 5, 11);
+
+    expect($legacy->tick())->toBe(7)
+        ->and($current->tick())->toBe(11);
+});

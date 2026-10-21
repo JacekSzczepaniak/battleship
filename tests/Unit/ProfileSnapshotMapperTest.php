@@ -31,3 +31,18 @@ it('snapshot bez klucza enemySunk (profil sprzed licznika) daje zero zatopień',
     expect($restored->enemyShipsSunk())->toBe(0)
         ->and($restored->battleStats('zatoka-rozbitka'))->toBe(['wins' => 1, 'losses' => 0]);
 });
+
+it('round-tripuje tik, a snapshot bez klucza tick liczy go z historii', function () {
+    $m = new ProfileSnapshotMapper();
+    $profile = CaptainProfile::create('Jacek');
+    $gameId = GameId::new();
+    $profile->startBattle('zatoka-rozbitka', $gameId);
+
+    $state = $m->toArray($profile);
+    expect($m->toDomain((string) $profile->id(), $state)->tick())->toBe(1);
+
+    unset($state['tick']);
+    $state['moveCount'] = 3;
+    // 3 rejsy + 1 zarejestrowana bitwa
+    expect($m->toDomain((string) $profile->id(), $state)->tick())->toBe(4);
+});

@@ -157,3 +157,25 @@ function sort_sectors(array $sectors): array
 
     return $sectors;
 }
+
+it('sztorm losuje się z seed+tik, nie z liczby rejsów', function () {
+    $storms = 0;
+    for ($seed = 1; $seed <= 40; ++$seed) {
+        $world = WorldMap::generate($seed, SEA_ISLANDS);
+        $start = $world->startPosition();
+        // snapshot bez odkryć: sąsiad startu jest niezbadany, więc rejs losuje sztorm;
+        // moveCount (7) celowo różny od tiku (1) — po rejsie tik = 2, moveCount = 8
+        $profile = CaptainProfile::fromSnapshot(
+            CaptainProfile::create('Jacek')->id(), 'Jacek', 0, [], null, null, $seed, $start, [], 7, 1,
+        );
+        $target = ['x' => $start['x'] + ($start['x'] < WorldMap::WIDTH - 1 ? 1 : -1), 'y' => $start['y']];
+
+        $event = $profile->sail($target['x'], $target['y'], $world)['event'];
+
+        $expectedStorm = crc32("$seed:2") % 100 < 20;
+        expect(null !== $event)->toBe($expectedStorm);
+        $storms += $expectedStorm ? 1 : 0;
+    }
+
+    expect($storms)->toBeGreaterThan(0); // próbka ma sens tylko, gdy jakiś sztorm wypadł
+});

@@ -87,6 +87,7 @@
                         <Anchor :size="14" />
                         <span v-if="currentIsland">W porcie: <b>{{ currentIsland.name }}</b></span>
                         <span v-else>Na pełnym morzu · sektor {{ expedition.world.position.x }}:{{ expedition.world.position.y }}</span>
+                        <span class="tick" title="Tik — każdy rejs i każda bitwa to jedna akcja morska">TIK {{ expedition.world.tick }}</span>
                     </div>
 
                     <div class="fleet">
@@ -470,6 +471,7 @@ h1 span { color: var(--info); }
 
 .where { display: flex; align-items: center; gap: 8px; font: 500 12px var(--font-mono); color: var(--text-muted); }
 .where b { color: var(--text); font-weight: 600; }
+.where .tick { margin-left: auto; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line-card); color: var(--text-2); letter-spacing: .12em; }
 
 .fleet { flex: 1; }
 .fleet .kicker { margin-bottom: 10px; }

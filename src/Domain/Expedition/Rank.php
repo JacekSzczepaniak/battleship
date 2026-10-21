@@ -4,13 +4,23 @@ namespace App\Domain\Expedition;
 
 /**
  * Ranga kapitana wynikająca wprost z XP (progi rosnące). XP nigdy nie ginie,
- * więc ranga też nie spada. Bramkuje dostęp do wysp (docelowo też typów statków).
+ * więc ranga też nie spada. Bramkuje dostęp do wysp i typów statków.
+ *
+ * Drabina 9 stopni (GAME_DESIGN.md, filar VIII): zysk XP do kolejnej rangi
+ * rośnie (30 → 400), więc jedna wygrana nie daje dwóch awansów naraz.
+ * Rangi bez bramki (majtek, bosman, sternik, porucznik, komandor, admirał)
+ * czekają na treść kolejnych akwenów.
  */
 enum Rank: string
 {
     case Rozbitek = 'rozbitek';
+    case Majtek = 'majtek';
     case Marynarz = 'marynarz';
+    case Bosman = 'bosman';
+    case Sternik = 'sternik';
+    case Porucznik = 'porucznik';
     case Kapitan = 'kapitan';
+    case Komandor = 'komandor';
     case Admiral = 'admiral';
 
     /** Minimalny XP wymagany dla rangi. */
@@ -18,9 +28,14 @@ enum Rank: string
     {
         return match ($this) {
             self::Rozbitek => 0,
+            self::Majtek => 30,
             self::Marynarz => 80,
-            self::Kapitan => 250,
-            self::Admiral => 500,
+            self::Bosman => 150,
+            self::Sternik => 250,
+            self::Porucznik => 400,
+            self::Kapitan => 600,
+            self::Komandor => 900,
+            self::Admiral => 1300,
         };
     }
 
@@ -39,7 +54,10 @@ enum Rank: string
     /** @return list<self> rangi od najniższej do najwyższej */
     public static function ordered(): array
     {
-        return [self::Rozbitek, self::Marynarz, self::Kapitan, self::Admiral];
+        return [
+            self::Rozbitek, self::Majtek, self::Marynarz, self::Bosman, self::Sternik,
+            self::Porucznik, self::Kapitan, self::Komandor, self::Admiral,
+        ];
     }
 
     public function atLeast(self $required): bool

@@ -32,7 +32,7 @@ final class ExpeditionApiTest extends WebTestCase
         self::assertSame('zatoka-rozbitka', $islands[0]['id']);
         self::assertTrue($islands[0]['unlocked']);
         self::assertFalse(end($islands)['unlocked']);
-        self::assertSame(['rank' => 'marynarz', 'xpNeeded' => 80], $expedition['profile']['nextRank']);
+        self::assertSame(['rank' => 'majtek', 'xpNeeded' => 30], $expedition['profile']['nextRank']);
         self::assertSame(20, $expedition['profile']['materials']);
         self::assertCount(4, $expedition['fleet']);
         self::assertSame(1, $islands[0]['shipyardLevel']);

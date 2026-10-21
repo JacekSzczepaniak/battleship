@@ -26,6 +26,7 @@ final class ProfileSnapshotMapper
             'position' => $profile->hasWorldState() ? $profile->position() : null,
             'discovered' => $profile->discoveredSectors(),
             'moveCount' => $profile->moveCount(),
+            'tick' => $profile->tick(),
         ];
     }
 
@@ -86,6 +87,8 @@ final class ProfileSnapshotMapper
             $position,
             $discovered,
             (int) ($state['moveCount'] ?? 0),
+            // brak klucza = profil sprzed tiku; CaptainProfile wyliczy go z historii
+            isset($state['tick']) ? (int) $state['tick'] : null,
         );
     }
 }

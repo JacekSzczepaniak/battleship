@@ -108,6 +108,8 @@ export interface WorldDTO {
     discovered: string[]; // sektory "x:y"
     atIsland: string | null;
     stormChance: number;
+    // zegar świata: liczba akcji morskich (rejs, bitwa)
+    tick: number;
 }
 
 export interface SailResultDTO {

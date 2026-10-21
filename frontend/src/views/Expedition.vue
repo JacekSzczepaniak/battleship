@@ -57,7 +57,7 @@
             <section class="card sea">
                 <div class="island-head">
                     <h2>🗺️ Morze</h2>
-                    <span class="muted">niezbadane wody: ryzyko sztormu {{ expedition.world.stormChance }}%</span>
+                    <span class="muted">tik {{ expedition.world.tick }} · niezbadane wody: ryzyko sztormu {{ expedition.world.stormChance }}%</span>
                 </div>
                 <div class="sea-grid" :style="{ gridTemplateColumns: `repeat(${expedition.world.width}, 1.7rem)` }">
                     <button

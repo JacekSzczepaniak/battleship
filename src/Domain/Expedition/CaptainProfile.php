@@ -47,6 +47,9 @@ final class CaptainProfile
     /** Licznik ruchów — wejście do deterministycznych rzutów eventów podróży. */
     private int $moveCount = 0;
 
+    /** Tik = akcja morska (rejs, bitwa); zegar świata — GAME_DESIGN.md, filar II. */
+    private int $tick = 0;
+
     private function __construct(
         private ProfileId $id,
         private string $name,
@@ -237,6 +240,11 @@ final class CaptainProfile
         return $this->moveCount;
     }
 
+    public function tick(): int
+    {
+        return $this->tick;
+    }
+
     /** Czy kapitan stoi na sektorze danej wyspy. */
     public function isAt(WorldMap $world, string $islandId): bool
     {
@@ -248,7 +256,7 @@ final class CaptainProfile
 
     /**
      * Żegluga o jeden sektor. Wpłynięcie w niezbadane wody grozi sztormem
-     * (deterministycznie z seed+moveCount — przeładowanie strony nie zmienia
+     * (deterministycznie z seed+tik — przeładowanie strony nie zmienia
      * losu); nowe sektory dają dochód kartograficzny. Żegluga NIGDY nie
      * wymaga sprawnej floty — uszkodzone statki dopłyną (bezpiecznik:
      * z morza zawsze wrócisz do stoczni).
@@ -269,6 +277,7 @@ final class CaptainProfile
         }
 
         ++$this->moveCount;
+        ++$this->tick;
 
         // sztorm łapie w drodze — tylko na niezbadanych wodach
         $event = $this->isDiscovered($x, $y) ? null : $this->rollStorm();
@@ -296,11 +305,11 @@ final class CaptainProfile
     /** @return array<string,mixed>|null zdarzenie sztormu (deterministyczne) albo spokojna żegluga */
     private function rollStorm(): ?array
     {
-        if (crc32("{$this->worldSeed}:{$this->moveCount}") % 100 >= self::STORM_CHANCE) {
+        if (crc32("{$this->worldSeed}:{$this->tick}") % 100 >= self::STORM_CHANCE) {
             return null;
         }
 
-        $effectRoll = crc32("{$this->worldSeed}:{$this->moveCount}:effect");
+        $effectRoll = crc32("{$this->worldSeed}:{$this->tick}:effect");
         $active = $this->activeFleet();
 
         if (1 === $effectRoll % 2 && [] !== $active) {
@@ -334,7 +343,8 @@ final class CaptainProfile
     // --- Bitwy ---
 
     /**
-     * Rejestruje rozpoczętą bitwę o wyspę (jedna gra = jedna bitwa).
+     * Rejestruje rozpoczętą bitwę o wyspę (jedna gra = jedna bitwa). Bitwa
+     * kosztuje tik od razu przy starcie — porzucona też zajęła czas.
      *
      * @param list<string> $shipIds statki, które wypłynęły (do rozliczenia strat)
      */
@@ -346,6 +356,7 @@ final class CaptainProfile
         }
 
         $this->battles[$key] = ['island' => $islandId, 'settled' => false, 'result' => null, 'ships' => $shipIds];
+        ++$this->tick;
     }
 
     /** Wyspa, o którą toczy się dana gra; null gdy gra nie należy do profilu. */
@@ -478,6 +489,7 @@ final class CaptainProfile
      * @param int|null                                                                                                    $worldSeed  null = seed wyprowadzony z id (stabilny dla starych profili)
      * @param array{x:int,y:int}|null                                                                                     $position   null = start ustali ensureWorldState
      * @param list<string>|null                                                                                           $discovered sektory "x:y"
+     * @param int|null                                                                                                    $tick       null = profil sprzed tiku: rejsy + zarejestrowane bitwy
      */
     public static function fromSnapshot(
         ProfileId $id,
@@ -490,6 +502,7 @@ final class CaptainProfile
         ?array $position = null,
         ?array $discovered = null,
         int $moveCount = 0,
+        ?int $tick = null,
     ): self {
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
@@ -499,6 +512,8 @@ final class CaptainProfile
         $self->position = $position;
         $self->discovered = null !== $discovered ? array_fill_keys($discovered, true) : [];
         $self->moveCount = max(0, $moveCount);
+        // profil sprzed tiku: rejsy + zarejestrowane bitwy, żeby zegar nie cofnął się względem historii
+        $self->tick = max(0, $tick ?? $self->moveCount + count($battles));
 
         return $self;
     }

@@ -102,6 +102,8 @@ final class GetExpedition
                 'discovered' => $profile->discoveredSectors(),
                 'atIsland' => $world->islandAt($position['x'], $position['y']),
                 'stormChance' => 20,
+                // zegar świata: rejs i bitwa kosztują tik
+                'tick' => $profile->tick(),
             ],
         ];
     }

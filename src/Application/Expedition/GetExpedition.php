@@ -18,8 +18,9 @@ final class GetExpedition
     }
 
     /**
-     * Stan wyprawy: profil (XP, ranga, ładownia), flota, katalog typów
-     * statków (do UI stoczni) i wyspy z kłódkami, stoczniami i złożami.
+     * Stan wyprawy: profil (XP, ranga, ładownia, liczba bander), flota, katalog
+     * typów statków (do UI stoczni) i wyspy z kłódkami, banderami, stoczniami
+     * i złożami.
      *
      * @return array{profile: array<string,mixed>, fleet: list<array<string,mixed>>, shipTypes: list<array<string,mixed>>, islands: list<array<string,mixed>>, world: array<string,mixed>}
      */
@@ -38,8 +39,11 @@ final class GetExpedition
         $position = $profile->position();
 
         $islands = [];
+        $owned = 0;
         foreach ($this->islands->all() as $island) {
             $stats = $profile->battleStats($island->id);
+            $isOwned = $profile->ownsIsland($island->id);
+            $owned += (int) $isOwned;
             $islandPos = $world->islandPosition($island->id);
             $discovered = null !== $islandPos && $profile->isDiscovered($islandPos['x'], $islandPos['y']);
             $islands[] = [
@@ -57,11 +61,13 @@ final class GetExpedition
                 'lootLoss' => $island->lootLoss->toArray(),
                 // 0 = brak stoczni (na każdej wyspie zbudujesz tylko tratwę)
                 'shipyardLevel' => $island->shipyardLevel,
-                // złoże: urobek na tik, limit czekający w magazynie, czy pracuje (po pierwszej wygranej)
+                // bandera kapitana: pierwsza wygrana bitwa o wyspę ją zdobywa
+                'owned' => $isOwned,
+                // złoże: urobek na tik, limit czekający w magazynie, czy pracuje (pod banderą)
                 'deposit' => $island->hasDeposit() ? [
                     'yield' => $island->depositYield->toArray(),
                     'cap' => $island->depositCap()->toArray(),
-                    'active' => $stats['wins'] > 0,
+                    'active' => $isOwned,
                 ] : null,
                 'board' => ['w' => $island->boardWidth, 'h' => $island->boardHeight],
                 // ile pól planszy może zająć skład bitewny (#73)
@@ -105,6 +111,8 @@ final class GetExpedition
                 'cargo' => $profile->cargo()->toArray(),
                 'cargoCapacity' => $profile->cargoCapacity(),
                 'enemyShipsSunk' => $profile->enemyShipsSunk(),
+                // wyspy pod banderą (z katalogu wysp)
+                'ownedIslands' => $owned,
             ],
             'fleet' => $fleet,
             'shipTypes' => $shipTypes,

@@ -26,7 +26,7 @@ final class ResourceIslandsApiTest extends WebTestCase
         $client = static::createClient();
         $profileId = $this->post($client, '/api/profiles', ['name' => 'Jacek'])['id'];
 
-        // kapitan zakotwiczony na Mieliznach, wygrał o nie bitwę na tiku 4, teraz tik 10
+        // kapitan zakotwiczony na Mieliznach, zdobył je na tiku 4, teraz tik 10
         $repository = static::getContainer()->get(ProfileRepository::class);
         $profile = $repository->get(new ProfileId($profileId));
         $world = static::getContainer()->get(WorldFactory::class)->worldFor($profile);
@@ -34,7 +34,7 @@ final class ResourceIslandsApiTest extends WebTestCase
             $profile->id(), $profile->name(), 40,
             [(string) GameId::new() => ['island' => 'mielizny', 'settled' => true, 'result' => 'won']],
             $profile->fleet(), Resources::none(), $profile->worldSeed(), $world->islandPosition('mielizny'),
-            tick: 10, depositTicks: ['mielizny' => 4],
+            tick: 10, depositTicks: ['mielizny' => 4], ownedIslands: ['mielizny' => 4],
         ));
 
         $client->request('GET', "/api/profiles/$profileId/expedition");

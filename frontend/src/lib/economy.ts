@@ -5,7 +5,7 @@
 import type { IslandDTO, ResourcesDTO } from '../api/expeditionApi';
 import { RESOURCES, formatResources, isEmpty } from './resources';
 
-/** none = wyspa bez złoża; idle = czeka na pierwszą wygraną; full = urobek sięgnął limitu w magazynie. */
+/** none = wyspa bez złoża; idle = wyspa bez bandery; full = urobek sięgnął limitu w magazynie. */
 export type DepositState = 'none' | 'idle' | 'working' | 'full';
 
 export function depositState(island: IslandDTO): DepositState {
@@ -16,12 +16,12 @@ export function depositState(island: IslandDTO): DepositState {
     return full ? 'full' : 'working';
 }
 
-/** „+3 drewna/tik”, „stoi — magazyn pełny (30 drewna)”, „3 drewna/tik po pierwszej wygranej”. */
+/** „+3 drewna/tik”, „stoi — magazyn pełny (30 drewna)”, „3 drewna/tik pod banderą”. */
 export function depositLabel(island: IslandDTO): string {
     const d = island.deposit;
     if (!d) return '';
     switch (depositState(island)) {
-        case 'idle': return `${formatResources(d.yield)}/tik po pierwszej wygranej`;
+        case 'idle': return `${formatResources(d.yield)}/tik pod banderą`;
         case 'full': return `stoi — magazyn pełny (${formatResources(d.cap)})`;
         default: return `+${formatResources(d.yield)}/tik (do ${formatResources(d.cap)})`;
     }

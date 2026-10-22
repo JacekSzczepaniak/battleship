@@ -34,6 +34,8 @@ final class ProfileSnapshotMapper
             'unplaced' => $profile->unplacedResources()?->toArray(),
             // złoża wysp: tik ostatniego naliczenia urobku
             'depositTicks' => $profile->depositTicks(),
+            // wyspy pod banderą: id wyspy → tik zdobycia
+            'ownedIslands' => $profile->ownedIslands(),
         ];
     }
 
@@ -50,6 +52,9 @@ final class ProfileSnapshotMapper
                 'settled' => (bool) ($battle['settled'] ?? false),
                 'result' => isset($battle['result']) ? (string) $battle['result'] : null,
             ];
+            if (isset($battle['kind'])) {
+                $entry['kind'] = (string) $battle['kind'];
+            }
             if (isset($battle['ships']) && is_array($battle['ships'])) {
                 $entry['ships'] = array_values(array_map('strval', $battle['ships']));
             }
@@ -103,6 +108,8 @@ final class ProfileSnapshotMapper
             $this->stockpilesFrom($state),
             $this->unplacedFrom($state, $cargo),
             array_map('intval', (array) ($state['depositTicks'] ?? [])),
+            // brak klucza = brak bander (bez migracji — stare profile są testowe, #77)
+            array_map('intval', (array) ($state['ownedIslands'] ?? [])),
         );
     }
 

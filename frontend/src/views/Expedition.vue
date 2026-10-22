@@ -68,7 +68,7 @@
                         :disabled="busy || !cell.sailable"
                         :title="cell.title"
                         @click="onSail(cell.x, cell.y)"
-                    >{{ cell.glyph }}<small v-if="cell.badge" class="badge">{{ cell.badge }}</small></button>
+                    >{{ cell.glyph }}<small v-if="cell.flag" class="flag">🚩</small><small v-if="cell.badge" class="badge">{{ cell.badge }}</small></button>
                 </div>
                 <p v-if="unescortedConvoy" class="convoy-warn">⚠️ Konwój bez eskorty — podwójne straty w sztormie. Eskortuje sprawny kuter, niszczyciel albo lotniskowiec.</p>
                 <p v-if="seaMsg" class="sea-msg">{{ seaMsg }}</p>
@@ -81,7 +81,7 @@
                     <thead><tr><th>wyspa</th><th>stocznia</th><th>złoże</th><th>magazyn</th></tr></thead>
                     <tbody>
                         <tr v-for="island in economy" :key="island.id" :class="{ here: island.present }">
-                            <th>{{ island.present ? '📍' : '' }} {{ island.name }}</th>
+                            <th>{{ island.present ? '📍' : '' }} {{ island.name }}<span v-if="island.owned" title="pod Twoją banderą"> 🚩</span></th>
                             <td>{{ island.shipyardLevel > 0 ? `🏗️ poz. ${island.shipyardLevel}` : '—' }}</td>
                             <td :class="`dep-${depositState(island)}`">{{ island.deposit ? `⛏️ ${depositLabel(island)}` : '—' }}</td>
                             <td>{{ formatResources(island.stockpile, 'pusto') }}</td>
@@ -162,6 +162,7 @@
                 >
                     <div class="island-head">
                         <h3>{{ island.unlocked ? '🏝️' : '🔒' }} {{ island.name }}</h3>
+                        <span v-if="island.owned" class="flag-tag">🚩 pod Twoją banderą</span>
                         <span class="mode-tag">{{ island.mode === 'fun' ? 'bronie specjalne' : 'klasyczna bitwa' }}</span>
                     </div>
                     <p class="desc">{{ island.description }}</p>
@@ -285,7 +286,7 @@ const discoveredIslands = computed<IslandDTO[]>(
 
 interface SeaCell {
     key: string; x: number; y: number;
-    cls: Record<string, boolean>; glyph: string; badge: string; title: string; sailable: boolean;
+    cls: Record<string, boolean>; glyph: string; badge: string; flag: boolean; title: string; sailable: boolean;
 }
 
 const seaCells = computed<SeaCell[]>(() => {
@@ -315,8 +316,10 @@ const seaCells = computed<SeaCell[]>(() => {
                 cls: { fog: !discovered, water: discovered && !island, island: !!island, player: isPlayer, sailable, risk: stormRisk },
                 glyph: isPlayer ? '⛵' : island ? (island.unlocked ? '🏝️' : '🔒') : '',
                 badge: island ? (island.deposit ? '⛏' : island.shipyardLevel > 0 ? '🏗' : '') : '',
+                flag: island?.owned ?? false,
                 title: [
                     island ? island.name : discovered ? `${x}:${y}` : 'niezbadane wody',
+                    island?.owned ? 'pod Twoją banderą' : '',
                     island && island.shipyardLevel > 0 ? `stocznia poz. ${island.shipyardLevel}` : '',
                     island?.deposit ? `złoże: ${depositLabel(island)}` : '',
                     island && !isEmpty(island.stockpile) ? `magazyn: ${formatResources(island.stockpile)}` : '',
@@ -606,6 +609,7 @@ h2, h3 { font-family: var(--font-head); }
 .sea-grid { display: grid; gap: 3px; margin-top: 0.75rem; }
 .sea-cell { position: relative; width: 1.7rem; height: 1.7rem; border: 0; border-radius: 4px; padding: 0; font-size: 0.95rem; line-height: 1; cursor: default; }
 .sea-cell .badge { position: absolute; right: -2px; bottom: -3px; font-size: 0.6rem; }
+.sea-cell .flag { position: absolute; left: -2px; top: -3px; font-size: 0.6rem; }
 .sea-cell.fog { background: #0a1b23; box-shadow: inset 0 0 0 1px #12303a; }
 .sea-cell.water { background: #0c2029; box-shadow: inset 0 0 0 1px #163540; }
 .sea-cell.island { background: #3b3220; box-shadow: inset 0 0 0 1px #6b5a35; }
@@ -626,6 +630,7 @@ h2, h3 { font-family: var(--font-head); }
 .island.locked { opacity: 0.55; }
 .island-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; }
 .island-head h3 { margin: 0; }
+.flag-tag { font: 600 10px var(--font-mono); color: var(--text); white-space: nowrap; margin-left: auto; }
 .mode-tag { font: 600 10px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); border: 1px solid var(--line-btn); border-radius: 999px; padding: 0.15rem 0.55rem; white-space: nowrap; }
 .desc { color: var(--text-desc); margin: 0.4rem 0 0.5rem; }
 .island-meta { display: flex; gap: 0.9rem; margin-bottom: 0.6rem; flex-wrap: wrap; font-size: 14px; }

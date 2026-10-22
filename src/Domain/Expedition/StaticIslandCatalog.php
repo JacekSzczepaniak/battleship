@@ -6,7 +6,8 @@ namespace App\Domain\Expedition;
  * Stały katalog wysp plastra A/B: liniowa trasa 6 wysp, kolejne bramkowane
  * rangą; wczesne wyspy mają mniejsze plansze (krótsze polowanie małą flotą).
  * Stocznie tylko na dwóch wyspach (Zatoka — start, Sygnałowa — hub), złoża
- * na trzech innych: surowce trzeba dowieźć do stoczni (#48).
+ * na trzech innych: surowce trzeba dowieźć do stoczni (#48). Zatoka to
+ * bezpieczna przystań — wyspa startowa, której kontrataki nie dotyczą (#77).
  * Docelowo (plaster C) katalog będzie generowany z seeda świata.
  */
 final class StaticIslandCatalog implements IslandCatalog
@@ -30,6 +31,7 @@ final class StaticIslandCatalog implements IslandCatalog
                 shipyardLevel: 1,
                 boardWidth: 7,
                 boardHeight: 7,
+                safeHarbor: true,
             ),
             new Island(
                 id: 'mielizny',

@@ -23,13 +23,13 @@ final class SettleBattle
     /**
      * Rozlicza zakończoną bitwę: wynik i straty czytane ze stanu gry (nie od
      * klienta), XP i surowce wg definicji wyspy, idempotentnie (ponowne
-     * wywołanie → zera). Zatopione statki: wygrana → do remontu, przegrana →
-     * stracone.
+     * wywołanie → zera). Pierwsza wygrana o wyspę stawia banderę. Zatopione
+     * statki: wygrana → do remontu, przegrana → stracone.
      *
      * @return array{result:string, awarded:int, xp:int, rank:string, rankUp:bool,
      *     loot:array{wood:int, steel:int, gold:int}, stockpile:array{wood:int, steel:int, gold:int},
      *     cargo:array{wood:int, steel:int, gold:int}, cargoLost:array{wood:int, steel:int, gold:int},
-     *     lostShips:list<string>, damagedShips:list<string>,
+     *     lostShips:list<string>, damagedShips:list<string>, captured:bool,
      *     depositStarted:array{wood:int, steel:int, gold:int}|null}
      */
     public function handle(string $profileId, string $gameId): array
@@ -62,7 +62,6 @@ final class SettleBattle
         $rankBefore = $profile->rank();
         // urobek złóż do bieżącego tiku liczy się przed łupem, który trafia do tego samego magazynu
         $profile->ensureWorldState($this->worldFactory->worldFor($profile));
-        $winsBefore = $profile->battleStats($islandId)['wins'];
 
         $outcome = $profile->settleBattle(
             $game->id(),
@@ -87,10 +86,10 @@ final class SettleBattle
             'cargoLost' => $outcome['cargoLost']->toArray(),
             'lostShips' => $outcome['lost'],
             'damagedShips' => $outcome['damaged'],
-            // pierwsza wygrana o wyspę ze złożem uruchamia wydobycie: urobek na tik
-            'depositStarted' => $island->hasDeposit() && 0 === $winsBefore && $profile->battleStats($islandId)['wins'] > 0
-                ? $island->depositYield->toArray()
-                : null,
+            // wygrana postawiła banderę na wyspie
+            'captured' => $outcome['captured'],
+            // zdobycie wyspy ze złożem uruchamia wydobycie: urobek na tik
+            'depositStarted' => $outcome['captured'] && $island->hasDeposit() ? $island->depositYield->toArray() : null,
         ];
     }
 

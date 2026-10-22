@@ -26,11 +26,13 @@ const emit = defineEmits<{
 const EFFECTS: Record<BuildingTypeName, string> = {
     tartak: 'podwaja urobek złoża drewna',
     kopalnia: 'podwaja urobek złoża stali i złota',
+    'rozbudowa-stoczni': 'podnosi poziom stoczni o 1',
 };
 
 const SITES: Record<BuildingTypeName, string> = {
     tartak: 'stawia się tylko przy złożu drewna',
     kopalnia: 'stawia się tylko przy złożu stali albo złota',
+    'rozbudowa-stoczni': 'tylko przy istniejącej stoczni poziomu 1–2',
 };
 
 const standing = computed(() => props.buildingTypes.filter(t => props.island.buildings.includes(t.type)));

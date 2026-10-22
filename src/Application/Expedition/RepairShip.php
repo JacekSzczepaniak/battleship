@@ -18,7 +18,7 @@ final class RepairShip
 
     /**
      * Remontuje statek w stoczni wyspy, na której kapitan stoi — te same
-     * bramki co budowa (obecność, poziom stoczni), koszt egzekwuje domena.
+     * bramki co budowa (obecność, poziom stoczni z rozbudową), koszt egzekwuje domena.
      */
     public function handle(string $profileId, string $islandId, string $shipId): OwnedShip
     {
@@ -42,7 +42,7 @@ final class RepairShip
                 break;
             }
         }
-        if (null !== $ship && $island->shipyardLevel < $ship->type->requiredShipyardLevel()) {
+        if (null !== $ship && $profile->shipyardLevel($island) < $ship->type->requiredShipyardLevel()) {
             throw new \DomainException('Shipyard level too low for this ship type');
         }
 

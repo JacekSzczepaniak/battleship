@@ -147,7 +147,8 @@ gry — idempotentnie (drugie wywołanie zwraca zera). Pierwsza wygrana o wyspę
 kapitana; złoże pracuje tylko na wyspie pod banderą. Wyspa pod banderą nie przyjmuje kolejnych bitew
 o zdobycie — walczy się tam tylko w obronie przed zapowiedzianym kontratakiem. Napastnik (AI) oddaje
 wtedy pierwszą salwę zaraz po rozstawieniu floty gracza. Na posiadanej wyspie stawia się budynki
-osady (tartak i kopalnia podwajają urobek złoża); bez bandery budynki stoją nieczynne.
+osady (tartak i kopalnia podwajają urobek złoża, rozbudowa stoczni podnosi jej poziom o 1);
+bez bandery budynki stoją nieczynne.
 
 ## API
 

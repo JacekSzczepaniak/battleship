@@ -2,6 +2,7 @@
 
 namespace App\Application\Expedition;
 
+use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\ProfileRepository;
@@ -19,11 +20,12 @@ final class GetExpedition
     }
 
     /**
-     * Stan wyprawy: profil (XP, ranga, ładownia, liczba bander), flota, katalog
-     * typów statków (do UI stoczni), wyspy z kłódkami, banderami, stoczniami
-     * i złożami oraz kontratak w toku i ostatnie rozstrzygnięcie (#78).
+     * Stan wyprawy: profil (XP, ranga, ładownia, liczba bander), flota, katalogi
+     * typów statków (do UI stoczni) i budynków (do panelu osady), wyspy
+     * z kłódkami, banderami, stoczniami, złożami i budynkami oraz kontratak
+     * w toku i ostatnie rozstrzygnięcie (#78).
      *
-     * @return array{profile: array<string,mixed>, fleet: list<array<string,mixed>>, shipTypes: list<array<string,mixed>>, islands: list<array<string,mixed>>, world: array<string,mixed>, counterattack: array<string,mixed>}
+     * @return array{profile: array<string,mixed>, fleet: list<array<string,mixed>>, shipTypes: list<array<string,mixed>>, buildingTypes: list<array<string,mixed>>, islands: list<array<string,mixed>>, world: array<string,mixed>, counterattack: array<string,mixed>}
      */
     public function handle(string $profileId): array
     {
@@ -64,12 +66,18 @@ final class GetExpedition
                 'shipyardLevel' => $island->shipyardLevel,
                 // bandera kapitana: pierwsza wygrana bitwa o wyspę ją zdobywa
                 'owned' => $isOwned,
-                // złoże: urobek na tik, limit czekający w magazynie, czy pracuje (pod banderą)
+                // złoże: urobek na tik (z tartakiem/kopalnią), limit czekający w magazynie, czy pracuje (pod banderą)
                 'deposit' => $island->hasDeposit() ? [
-                    'yield' => $island->depositYield->toArray(),
-                    'cap' => $island->depositCap()->toArray(),
+                    'yield' => $profile->depositYield($island)->toArray(),
+                    'cap' => $profile->depositCap($island)->toArray(),
                     'active' => $isOwned,
                 ] : null,
+                // osada: stojące budynki (czynne pod banderą) i powód blokady budowy każdego typu (null = można)
+                'buildings' => array_map(static fn (BuildingType $t) => $t->value, $profile->buildingsOn($island->id)),
+                'buildBlockers' => array_combine(
+                    array_map(static fn (BuildingType $t) => $t->value, BuildingType::cases()),
+                    array_map(static fn (BuildingType $t) => $profile->buildingBlocker($t, $island, $world)?->value, BuildingType::cases()),
+                ),
                 'board' => ['w' => $island->boardWidth, 'h' => $island->boardHeight],
                 // ile pól planszy może zająć skład bitewny (#73)
                 'squadLimit' => $island->squadCellLimit(),
@@ -100,6 +108,11 @@ final class GetExpedition
             'requiredShipyardLevel' => $type->requiredShipyardLevel(),
         ], ShipType::cases());
 
+        $buildingTypes = array_map(static fn (BuildingType $type) => [
+            'type' => $type->value,
+            'buildCost' => $type->buildCost()->toArray(),
+        ], BuildingType::cases());
+
         return [
             'profile' => [
                 'id' => (string) $profile->id(),
@@ -117,6 +130,7 @@ final class GetExpedition
             ],
             'fleet' => $fleet,
             'shipTypes' => $shipTypes,
+            'buildingTypes' => $buildingTypes,
             'islands' => $islands,
             'world' => [
                 'width' => WorldMap::WIDTH,

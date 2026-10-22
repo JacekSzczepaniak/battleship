@@ -71,8 +71,12 @@ powroty. Odrzucone: czas rzeczywisty i hybrydy czasowe.
 - **Surowcowa** — złoża do wydobycia; surowiec trzeba **odebrać i przewieźć**
 - **Neutralna (handlowa)** — rynek (surowce, mapy, technologie), questy,
   tubylcy; tu się nie walczy
-- **Osada gracza** — zdobyta wyspa rozwijana budynkami (tartak, kopalnia,
-  uczelnia, fort)
+- **Osada gracza** ✅ (Epic F): budynki na posiadanej wyspie, każdy typ raz,
+  bez poziomów, budowa natychmiastowa. Tartak i kopalnia przy złożu swojego
+  surowca podwajają urobek. Fort chroni wyspę pod nieobecność floty: kontratak
+  kończy się grabieżą połowy magazynu zamiast utraty wyspy. Rozbudowa stoczni
+  podnosi istniejącą stocznię o poziom (Zatoka 1→2). Uczelnia wchodzi
+  z drzewkiem (Epic G). Po utracie wyspy budynki stoją nieczynne do odbicia.
 - **Dzika/questowa** — wraki, ekspedycje, sekrety (czarna perła)
 
 ✅ (#48) Morze Rozbitków: stocznie tylko na Zatoce Rozbitka (poziom 1)
@@ -253,7 +257,6 @@ Akwenu 1 zacznie uwierać.
 
 ## Otwarte pytania
 
-- Budynki osady: konkretna lista i koszty (tartak/kopalnia/uczelnia/fort — co jeszcze?)
 - Kształt drzewka: ile węzłów na start, które questowe?
 - Rangi vs akweny: czy progi rosną z liczbą akwenów; gdzie osiągalny admirał; czym zapełnić lukę 250–600 XP (dziś tylko wyspy II poziomu) i które rangi bramkują akwen 2?
 - Specjalizacje: konkretne perki i progi; czy bojowa wpływa na samą bitwę, czy tylko na otoczkę (remont, zwiad)?
@@ -261,7 +264,8 @@ Akwenu 1 zacznie uwierać.
 - Ile akwenów na start (2–3?) i rozmiar planszy akwenu (12×12 wystarczy?)
 - Balans z obserwacji: pełna utrata floty przy przegranej, sztormy 20%, koszty statków
 - Abordaż: dokładna mechanika rozstrzygnięcia (rzut? mini-plansza? koszt?)
-- Garnizon: jak broni się wyspa bez floty na miejscu (fort, załoga) i czy kiedyś dzielimy flotę na zespoły?
+- Czy kiedyś dzielimy flotę na zespoły z własną pozycją?
+- Budowa trwająca N tików (filar II): kiedy i czy jednocześnie dla statków i budynków?
 
 ## Poczekalnia (pomysły wciąż aktualne, poza głównym torem)
 

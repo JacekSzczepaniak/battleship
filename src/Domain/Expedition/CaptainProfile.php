@@ -76,6 +76,14 @@ final class CaptainProfile
     private array $depositTicks = [];
 
     /**
+     * Budynki osady (Epic F): stoją także po utracie wyspy, ale działają tylko
+     * pod banderą.
+     *
+     * @var array<string, list<BuildingType>> klucz: id wyspy
+     */
+    private array $buildings = [];
+
+    /**
      * Kontratak w toku (najwyżej jeden): wyspa celu, tik zapowiedzi, tik
      * uderzenia i gra obrony, gdy kapitan ją przyjął — rozpoczęta obrona
      * wstrzymuje termin do rozliczenia bitwy.
@@ -413,6 +421,78 @@ final class CaptainProfile
         return null;
     }
 
+    // --- Osada: budynki na posiadanych wyspach ---
+
+    /** @return list<BuildingType> budynki stojące na wyspie (także nieczynne, bez bandery) */
+    public function buildingsOn(string $islandId): array
+    {
+        return $this->buildings[$islandId] ?? [];
+    }
+
+    /** @return array<string, list<BuildingType>> budynki wszystkich wysp (klucz: id wyspy) */
+    public function buildings(): array
+    {
+        return $this->buildings;
+    }
+
+    /** Budynek stoi i działa — wyspa jest pod banderą kapitana. */
+    public function hasActiveBuilding(string $islandId, BuildingType $type): bool
+    {
+        return $this->ownsIsland($islandId) && in_array($type, $this->buildingsOn($islandId), true);
+    }
+
+    /**
+     * Dlaczego budynku nie da się teraz postawić; null = można budować.
+     * Kolejność jak w budowie: bandera, jeden budynek typu, warunek miejsca,
+     * obecność kapitana, koszt (magazyn wyspy i ładownia).
+     */
+    public function buildingBlocker(BuildingType $type, Island $island, WorldMap $world): ?BuildingBlock
+    {
+        return match (true) {
+            !$this->ownsIsland($island->id) => BuildingBlock::NotOwned,
+            in_array($type, $this->buildingsOn($island->id), true) => BuildingBlock::AlreadyBuilt,
+            !$type->fitsSite($island) => BuildingBlock::Site,
+            !$this->isAt($world, $island->id) => BuildingBlock::NotPresent,
+            !$this->stockpile($island->id)->add($this->cargo)->covers($type->buildCost()) => BuildingBlock::Resources,
+            default => null,
+        };
+    }
+
+    /**
+     * Stawia budynek na posiadanej wyspie, na której stoi kapitan. Budowa jest
+     * natychmiastowa i nie kosztuje tiku, płatność jak przy budowie statku.
+     */
+    public function buildBuilding(BuildingType $type, Island $island, WorldMap $world): void
+    {
+        // urobek złoża do bieżącego tiku liczy się jeszcze bez nowego budynku
+        $this->ensureWorldState($world);
+
+        $blocker = $this->buildingBlocker($type, $island, $world);
+        if (null !== $blocker) {
+            throw new \DomainException($blocker->message());
+        }
+
+        $this->pay($island->id, $type->buildCost());
+        $this->buildings[$island->id][] = $type;
+    }
+
+    /** Urobek złoża na tik pod banderą, z budynkami stojącymi na wyspie (tartak, kopalnia). */
+    public function depositYield(Island $island): Resources
+    {
+        $yield = $island->depositYield;
+        foreach ($this->buildingsOn($island->id) as $building) {
+            $yield = $yield->add($building->depositBoost($island->depositYield));
+        }
+
+        return $yield;
+    }
+
+    /** Ile urobku może czekać w magazynie wyspy: limit rośnie razem z urobkiem. */
+    public function depositCap(Island $island): Resources
+    {
+        return $this->depositYield($island)->times(Island::DEPOSIT_BUFFER_TICKS);
+    }
+
     // --- Wolne morze: żegluga, mgła świata, kartografia ---
 
     public function worldSeed(): int
@@ -514,9 +594,10 @@ final class CaptainProfile
 
     /**
      * Złoża wysp pod banderą produkują co tik do magazynu wyspy, aż urobek
-     * sięgnie limitu (Island::depositCap()). Liczone leniwie z różnicy tików —
-     * deterministycznie, bez zegara. Wyspa bez bandery nie produkuje; posiadana
-     * bez tiku naliczenia zaczyna od bieżącego, bez wyrównania wstecz.
+     * sięgnie limitu (depositCap()). Tartak i kopalnia podwajają urobek i limit.
+     * Liczone leniwie z różnicy tików — deterministycznie, bez zegara. Wyspa
+     * bez bandery nie produkuje (jej budynki też nie); posiadana bez tiku
+     * naliczenia zaczyna od bieżącego, bez wyrównania wstecz.
      */
     private function accrueDeposits(WorldMap $world): void
     {
@@ -540,8 +621,8 @@ final class CaptainProfile
             return;
         }
         $stock = $this->stockpile($islandId)->toArray();
-        $cap = $island->depositCap()->toArray();
-        $output = $island->depositYield->times($ticks)->toArray();
+        $cap = $this->depositCap($island)->toArray();
+        $output = $this->depositYield($island)->times($ticks)->toArray();
         foreach ($output as $resource => $amount) {
             $output[$resource] = min($amount, max(0, $cap[$resource] - $stock[$resource]));
         }
@@ -1021,6 +1102,7 @@ final class CaptainProfile
      * @param Resources|null                                                                                                             $unplaced     surowce czekające na magazyn wyspy (też jeden magazyn profilu sprzed ładowni) — rozłożone przy ensureWorldState()
      * @param array<string, int>                                                                                                         $depositTicks tik ostatniego naliczenia urobku złoża (klucz: id wyspy)
      * @param array<string, int>                                                                                                         $ownedIslands wyspy pod banderą: id wyspy → tik zdobycia
+     * @param array<string, list<BuildingType>>                                                                                          $buildings    budynki osady (klucz: id wyspy)
      */
     public static function fromSnapshot(
         ProfileId $id,
@@ -1040,6 +1122,7 @@ final class CaptainProfile
         array $depositTicks = [],
         array $ownedIslands = [],
         ?array $counterattacks = null,
+        array $buildings = [],
     ): self {
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
@@ -1047,6 +1130,7 @@ final class CaptainProfile
         $self->stockpiles = $stockpiles;
         $self->depositTicks = $depositTicks;
         $self->ownedIslands = $ownedIslands;
+        $self->buildings = $buildings;
         $self->unplacedResources = $unplaced ?? (null === $cargo ? new Resources(wood: self::STARTING_WOOD) : null);
         // ładunek ponad pojemność (np. zapisany, zanim tratwa straciła ładownię)
         // nie przepada — czeka na magazyn wyspy

@@ -51,6 +51,26 @@ export const SHIP_ICONS: Record<ShipTypeName, string> = {
     transportowiec: '⛴️',
 };
 
+export type BuildingTypeName = 'tartak' | 'kopalnia';
+
+export const BUILDING_LABELS: Record<BuildingTypeName, string> = {
+    tartak: 'Tartak',
+    kopalnia: 'Kopalnia',
+};
+
+export const BUILDING_ICONS: Record<BuildingTypeName, string> = {
+    tartak: '🪚',
+    kopalnia: '⚒️',
+};
+
+// powód blokady budowy (Domain/Expedition/BuildingBlock); null = można budować
+export type BuildingBlockCode = 'not-owned' | 'already-built' | 'site' | 'not-present' | 'resources';
+
+export interface BuildingTypeDTO {
+    type: BuildingTypeName;
+    buildCost: ResourcesDTO;
+}
+
 export interface ResourcesDTO {
     wood: number;
     steel: number;
@@ -109,8 +129,12 @@ export interface IslandDTO {
     shipyardLevel: number;
     // bandera kapitana: pierwsza wygrana bitwa o wyspę ją zdobywa
     owned: boolean;
-    // złoże: urobek na tik trafia do magazynu wyspy (do limitu), dopóki wyspa jest pod banderą
+    // złoże: urobek na tik trafia do magazynu wyspy (do limitu), dopóki wyspa jest pod banderą;
+    // tartak i kopalnia podwajają urobek i limit
     deposit: { yield: ResourcesDTO; cap: ResourcesDTO; active: boolean } | null;
+    // osada: stojące budynki (bez bandery nieczynne) i powód blokady budowy każdego typu
+    buildings: BuildingTypeName[];
+    buildBlockers: Record<BuildingTypeName, BuildingBlockCode | null>;
     board: { w: number; h: number };
     // ile pól planszy może zająć skład bitewny (20% planszy, #73)
     squadLimit: number;
@@ -174,6 +198,7 @@ export interface ExpeditionDTO {
     profile: ExpeditionProfileDTO;
     fleet: FleetShipDTO[];
     shipTypes: ShipTypeDTO[];
+    buildingTypes: BuildingTypeDTO[];
     islands: IslandDTO[];
     world: WorldDTO;
     counterattack: { pending: PendingCounterattackDTO | null; last: LastCounterattackDTO | null };
@@ -223,6 +248,19 @@ export async function buildShip(profileId: string, islandId: string, type: ShipT
 
 export async function repairShip(profileId: string, islandId: string, shipId: string): Promise<FleetShipDTO> {
     return http.post<FleetShipDTO>(`/profiles/${profileId}/ships/${shipId}/repair`, { islandId });
+}
+
+export interface BuildBuildingDTO {
+    island: string;
+    building: BuildingTypeName;
+    buildings: BuildingTypeName[];
+    stockpile: ResourcesDTO;
+    cargo: ResourcesDTO;
+}
+
+/** Budowa natychmiastowa na posiadanej wyspie, na której stoi kapitan; płaci magazyn wyspy, resztę ładownia. */
+export async function buildBuilding(profileId: string, islandId: string, type: BuildingTypeName): Promise<BuildBuildingDTO> {
+    return http.post<BuildBuildingDTO>(`/profiles/${profileId}/islands/${islandId}/buildings`, { type });
 }
 
 export interface CargoTransferDTO {

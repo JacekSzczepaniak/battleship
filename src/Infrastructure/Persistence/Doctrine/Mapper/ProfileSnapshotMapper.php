@@ -2,6 +2,7 @@
 
 namespace App\Infrastructure\Persistence\Doctrine\Mapper;
 
+use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\OwnedShip;
 use App\Domain\Expedition\Resources;
@@ -38,6 +39,11 @@ final class ProfileSnapshotMapper
             'ownedIslands' => $profile->ownedIslands(),
             // kontratak w toku, spokój, rzuty i ostatnie rozstrzygnięcie (#78)
             'counterattacks' => $profile->counterattackState(),
+            // budynki osady: id wyspy → typy budynków
+            'buildings' => array_map(
+                static fn (array $types) => array_map(static fn (BuildingType $t) => $t->value, $types),
+                $profile->buildings(),
+            ),
         ];
     }
 
@@ -114,7 +120,35 @@ final class ProfileSnapshotMapper
             array_map('intval', (array) ($state['ownedIslands'] ?? [])),
             // brak klucza = profil sprzed kontrataków; CaptainProfile zacznie rzuty od bieżącego tiku
             $this->counterattacksFrom($state),
+            $this->buildingsFrom($state),
         );
+    }
+
+    /**
+     * Budynki osady; brak klucza = profil sprzed osad, bez budynków. Nieznany
+     * typ i powtórzony typ na tej samej wyspie są pomijane.
+     *
+     * @param array<string,mixed> $state
+     *
+     * @return array<string, list<BuildingType>>
+     */
+    private function buildingsFrom(array $state): array
+    {
+        $out = [];
+        foreach ((array) ($state['buildings'] ?? []) as $islandId => $types) {
+            $island = [];
+            foreach ((array) $types as $value) {
+                $type = BuildingType::tryFrom((string) $value);
+                if (null !== $type && !in_array($type, $island, true)) {
+                    $island[] = $type;
+                }
+            }
+            if ([] !== $island) {
+                $out[(string) $islandId] = $island;
+            }
+        }
+
+        return $out;
     }
 
     /**

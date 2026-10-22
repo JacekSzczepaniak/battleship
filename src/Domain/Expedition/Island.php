@@ -13,7 +13,11 @@ namespace App\Domain\Expedition;
  */
 final class Island
 {
-    /** Urobek czeka w magazynie wyspy najwyżej tyle tików produkcji — potem złoże staje. */
+    /**
+     * Urobek czeka w magazynie wyspy najwyżej tyle tików produkcji — potem złoże
+     * staje. Limit liczy profil (CaptainProfile::depositCap()), bo budynki osady
+     * podnoszą urobek.
+     */
     public const DEPOSIT_BUFFER_TICKS = 10;
 
     public function __construct(
@@ -60,12 +64,6 @@ final class Island
     public function hasDeposit(): bool
     {
         return !$this->depositYield->isZero();
-    }
-
-    /** Ile urobku może czekać w magazynie wyspy, zanim złoże stanie. */
-    public function depositCap(): Resources
-    {
-        return $this->depositYield->times(self::DEPOSIT_BUFFER_TICKS);
     }
 
     public function isAccessibleFor(Rank $rank): bool

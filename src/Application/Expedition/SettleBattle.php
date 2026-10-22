@@ -90,8 +90,8 @@ final class SettleBattle
             'damagedShips' => $outcome['damaged'],
             // wygrana postawiła banderę na wyspie
             'captured' => $outcome['captured'],
-            // zdobycie wyspy ze złożem uruchamia wydobycie: urobek na tik
-            'depositStarted' => $outcome['captured'] && $island->hasDeposit() ? $island->depositYield->toArray() : null,
+            // zdobycie wyspy ze złożem uruchamia wydobycie: urobek na tik (odbita wyspa z tartakiem — podwojony)
+            'depositStarted' => $outcome['captured'] && $island->hasDeposit() ? $profile->depositYield($island)->toArray() : null,
             // obrona przed kontratakiem: czy bandera została i co przepadło z magazynu
             'defense' => null !== $outcome['defense']
                 ? ['held' => $outcome['defense']['held'], 'stockpileLost' => $outcome['defense']['stockpileLost']->toArray()]

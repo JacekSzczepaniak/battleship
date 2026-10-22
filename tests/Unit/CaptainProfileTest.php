@@ -40,12 +40,13 @@ it('nalicza XP i surowce także za przegraną — doświadczenia się nie traci'
     $profile = CaptainProfile::create('Jacek');
     $gameId = GameId::new();
     $profile->startBattle('mielizny', $gameId);
+    $cargo = $profile->cargo();
 
     $outcome = $profile->settleBattle($gameId, 'lost', 12, new Resources(wood: 6));
 
     expect($outcome['xp'])->toBe(12)
         ->and($profile->xp())->toBe(12)
-        ->and($profile->cargo()->wood)->toBe(20) // ładownia bez zmian
+        ->and($profile->cargo())->toEqual($cargo) // ładownia bez zmian
         ->and($profile->stockpile('mielizny')->wood)->toBe(6) // łup leży w magazynie wyspy bitwy
         ->and($profile->battleStats('mielizny'))->toBe(['wins' => 0, 'losses' => 1]);
 });
@@ -98,10 +99,11 @@ it('round-tripuje przez snapshot', function () {
         $profile->fleet(),
         $profile->cargo(),
         stockpiles: $profile->stockpiles(),
+        unplaced: $profile->unplacedResources(),
     );
 
     expect($restored->xp())->toBe(40)
-        ->and($restored->cargo()->wood)->toBe(20) // drewno startowe w ładowni
+        ->and($restored->unplacedResources())->toEqual(new Resources(wood: 20)) // drewno startowe czeka na magazyn wyspy
         ->and($restored->stockpile('zatoka-rozbitka')->wood)->toBe(20) // łup w magazynie wyspy
         ->and($restored->battleStats('zatoka-rozbitka'))->toBe(['wins' => 1, 'losses' => 0])
         ->and($restored->settleBattle($gameId, 'won', 40, new Resources(wood: 20)))->toEqual(noAwards());

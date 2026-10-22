@@ -14,6 +14,7 @@ enum ShipType: string
     case Kuter = 'kuter';
     case Niszczyciel = 'niszczyciel';
     case Lotniskowiec = 'lotniskowiec';
+    case Transportowiec = 'transportowiec';
 
     /** Długość statku na planszy bitwy. */
     public function length(): int
@@ -23,20 +24,36 @@ enum ShipType: string
             self::Kuter => 2,
             self::Niszczyciel => 3,
             self::Lotniskowiec => 4,
+            // długość spoza nośników broni (Game::*_CARRIER_LENGTH) — w bitwie zwykły cel
+            self::Transportowiec => 5,
+        };
+    }
+
+    /**
+     * Nośnik broni w bitwie (kuter: sonar, niszczyciel: torpeda, lotniskowiec:
+     * nalot) — tylko taki statek eskortuje konwój.
+     */
+    public function isArmed(): bool
+    {
+        return match ($this) {
+            self::Kuter, self::Niszczyciel, self::Lotniskowiec => true,
+            self::Tratwa, self::Transportowiec => false,
         };
     }
 
     /**
      * Pojemność ładowni (suma surowców). Okręty wojenne wożą mało — duża
-     * ładownia to rola transportowca (#47).
+     * ładownia to rola transportowca (#47). Tratwa nie wozi nic: jest darmowa,
+     * więc ładownia na tratwach byłaby darmowym transportem.
      */
     public function cargoCapacity(): int
     {
         return match ($this) {
-            self::Tratwa => 5,
+            self::Tratwa => 0,
             self::Kuter => 15,
             self::Niszczyciel => 20,
             self::Lotniskowiec => 30,
+            self::Transportowiec => 60,
         };
     }
 
@@ -48,6 +65,7 @@ enum ShipType: string
             self::Kuter => new Resources(wood: 20),
             self::Niszczyciel => new Resources(wood: 30, steel: 20),
             self::Lotniskowiec => new Resources(wood: 60, steel: 60),
+            self::Transportowiec => new Resources(wood: 40, steel: 10),
         };
     }
 
@@ -59,6 +77,7 @@ enum ShipType: string
             self::Kuter => new Resources(wood: 8),
             self::Niszczyciel => new Resources(wood: 10, steel: 10),
             self::Lotniskowiec => new Resources(wood: 20, steel: 25),
+            self::Transportowiec => new Resources(wood: 15, steel: 5),
         };
     }
 
@@ -67,7 +86,7 @@ enum ShipType: string
     {
         return match ($this) {
             self::Tratwa, self::Kuter => Rank::Rozbitek,
-            self::Niszczyciel => Rank::Marynarz,
+            self::Niszczyciel, self::Transportowiec => Rank::Marynarz,
             self::Lotniskowiec => Rank::Kapitan,
         };
     }
@@ -77,7 +96,7 @@ enum ShipType: string
     {
         return match ($this) {
             self::Tratwa, self::Kuter => 1,
-            self::Niszczyciel => 2,
+            self::Niszczyciel, self::Transportowiec => 2,
             self::Lotniskowiec => 3,
         };
     }

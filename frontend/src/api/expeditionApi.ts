@@ -33,13 +33,14 @@ export const RANK_LABELS_GENITIVE: Record<RankName, string> = {
     admiral: 'admirała',
 };
 
-export type ShipTypeName = 'tratwa' | 'kuter' | 'niszczyciel' | 'lotniskowiec';
+export type ShipTypeName = 'tratwa' | 'kuter' | 'niszczyciel' | 'lotniskowiec' | 'transportowiec';
 
 export const SHIP_LABELS: Record<ShipTypeName, string> = {
     tratwa: 'Tratwa',
     kuter: 'Kuter',
     niszczyciel: 'Niszczyciel',
     lotniskowiec: 'Lotniskowiec',
+    transportowiec: 'Transportowiec',
 };
 
 export const SHIP_ICONS: Record<ShipTypeName, string> = {
@@ -47,6 +48,7 @@ export const SHIP_ICONS: Record<ShipTypeName, string> = {
     kuter: '🚤',
     niszczyciel: '🚢',
     lotniskowiec: '🛳️',
+    transportowiec: '⛴️',
 };
 
 export interface ResourcesDTO {
@@ -82,6 +84,9 @@ export interface FleetShipDTO {
 export interface ShipTypeDTO {
     type: ShipTypeName;
     length: number;
+    cargoCapacity: number;
+    // nośnik broni — tylko taki statek eskortuje konwój
+    armed: boolean;
     buildCost: ResourcesDTO;
     repairCost: ResourcesDTO;
     requiredRank: RankName;
@@ -130,7 +135,8 @@ export interface SailResultDTO {
     cartography: number;
     // dochód kartograficzny, który nie zmieścił się w ładowni
     cartographyLost: number;
-    event: { type: string; effect: string; ship?: ShipTypeName; wood?: number; cargoLost?: ResourcesDTO } | null;
+    // effect: 'cargo-lost' (fale zabrały część ładunku) | 'ship-damaged'; unescorted = konwój bez eskorty, podwójne straty
+    event: { type: string; effect: string; ship?: ShipTypeName; cargoLost?: ResourcesDTO; unescorted?: boolean } | null;
     cargo: ResourcesDTO;
     cargoCapacity: number;
     atIsland: string | null;

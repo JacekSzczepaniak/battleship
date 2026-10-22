@@ -70,6 +70,7 @@
                         @click="onSail(cell.x, cell.y)"
                     >{{ cell.glyph }}</button>
                 </div>
+                <p v-if="unescortedConvoy" class="convoy-warn">⚠️ Konwój bez eskorty — podwójne straty w sztormie. Eskortuje sprawny kuter, niszczyciel albo lotniskowiec.</p>
                 <p v-if="seaMsg" class="sea-msg">{{ seaMsg }}</p>
             </section>
 
@@ -127,6 +128,7 @@
                     <ul class="ships">
                         <li v-for="t in expedition.shipTypes" :key="t.type" class="ship">
                             <span class="ship-name">{{ SHIP_ICONS[t.type] }} {{ SHIP_LABELS[t.type] }} ({{ t.length }}-masztowiec)</span>
+                            <span class="muted">ładownia {{ t.cargoCapacity }}{{ t.armed ? '' : ' · bez broni' }}</span>
                             <button
                                 class="btn small"
                                 :disabled="busy || buildBlock(t) !== null"
@@ -175,8 +177,9 @@
                         <span :class="{ over: activeCells > island.squadLimit }">
                             skład: {{ squadCells(squadFor(island)) }} / {{ island.squadLimit }} pól
                             <template v-if="activeCells > island.squadLimit"> · flota ma {{ activeCells }} pól — część zostanie w porcie</template>
+                            <template v-else-if="!squadPick && leavesShipsInPort(island)"> · transportowiec płynie tylko wybrany ręcznie</template>
                         </span>
-                        <button v-if="activeCells > island.squadLimit" class="btn small" @click="togglePicker(island)">
+                        <button v-if="activeCells > island.squadLimit || leavesShipsInPort(island)" class="btn small" @click="togglePicker(island)">
                             {{ squadPick ? 'skład domyślny' : 'wybierz skład' }}
                         </button>
                         <ul v-if="squadPick" class="squad-pick">
@@ -188,15 +191,16 @@
                                         :disabled="!squadPick.has(ship.id) && squadCells(squadFor(island)) + ship.length > island.squadLimit"
                                         @change="toggleShip(ship.id)"
                                     />
-                                    {{ SHIP_ICONS[ship.type] }} {{ SHIP_LABELS[ship.type] }} · {{ ship.length }} {{ ship.length === 1 ? 'pole' : 'pola' }}
+                                    {{ SHIP_ICONS[ship.type] }} {{ SHIP_LABELS[ship.type] }} · {{ fieldsLabel(ship.length) }}
                                 </label>
                             </li>
                         </ul>
+                        <span v-if="convoyBlocked(island)" class="over">⚠️ konwój bez eskorty nie zaatakuje wyspy — dobierz kuter, niszczyciel albo lotniskowiec</span>
                     </div>
                     <button
                         v-if="island.unlocked && island.present"
                         class="btn"
-                        :disabled="starting !== null || pendingBattle !== null || (squadPick !== null && squadPick.size === 0)"
+                        :disabled="starting !== null || pendingBattle !== null || squadFor(island).length === 0 || convoyBlocked(island)"
                         @click="onStartBattle(island)"
                     >
                         {{ starting === island.id ? 'Stawianie żagli…' : '⚔️ Bitwa' }}
@@ -222,7 +226,8 @@ import {
     clearCurrentBattle, clearProfileId, getCurrentBattle, getProfileId,
     setCurrentBattle, setProfileId, type CurrentBattle,
 } from '../lib/expeditionSession';
-import { defaultSquad, squadCells } from '../lib/squad';
+import { defaultSquad, isUnescortedConvoy, squadCells } from '../lib/squad';
+import { fieldsLabel } from '../lib/ships';
 import {
     RESOURCES, addResources, covers, formatResources, isEmpty, missing, totalResources, type ResourceKey,
 } from '../lib/resources';
@@ -320,9 +325,14 @@ async function onSail(x: number, y: number) {
         const parts: string[] = [];
         if (result.cartography > 0) parts.push(`+${result.cartography - result.cartographyLost} drewna za nowe mapy`);
         if (result.cartographyLost > 0) parts.push(`ładownia pełna — ${result.cartographyLost} drewna przepadło`);
-        if (result.event?.effect === 'wood-lost') parts.push(`🌩️ Sztorm! Fale zabrały ${result.event.wood} drewna`);
-        if (result.event?.effect === 'ship-damaged') parts.push(`🌩️ Sztorm! ${SHIP_LABELS[result.event.ship!]} uszkodzony`);
-        if (result.event?.cargoLost && !isEmpty(result.event.cargoLost)) parts.push(`za burtą: ${formatResources(result.event.cargoLost)}`);
+        if (result.event?.effect === 'cargo-lost') {
+            const convoy = result.event.unescorted ? ' (konwój bez eskorty — podwójne straty)' : '';
+            parts.push(`🌩️ Sztorm! Fale zabrały ${formatResources(result.event.cargoLost!, 'nic — ładownia była pusta')}${convoy}`);
+        }
+        if (result.event?.effect === 'ship-damaged') {
+            parts.push(`🌩️ Sztorm! ${SHIP_LABELS[result.event.ship!]} uszkodzony`);
+            if (result.event.cargoLost && !isEmpty(result.event.cargoLost)) parts.push(`za burtą: ${formatResources(result.event.cargoLost)}`);
+        }
         seaMsg.value = parts.join(' · ');
         expedition.value = await getExpedition(profileId);
     } catch (e: any) {
@@ -489,6 +499,20 @@ const squadPick = ref<Set<string> | null>(null);
 const activeShips = computed(() => (expedition.value?.fleet ?? []).filter(s => !s.damaged));
 const activeCells = computed(() => squadCells(activeShips.value));
 
+// konwój w rejsie: sprawna flota z transportowcem bez statku z bronią
+const unescortedConvoy = computed(() => isUnescortedConvoy(activeShips.value));
+
+/** Dobór domyślny zostawia w porcie statki spoza priorytetu (transportowiec), choć jest miejsce. */
+function leavesShipsInPort(island: IslandDTO): boolean {
+    return defaultSquad(expedition.value?.fleet ?? [], island.squadLimit).length < activeShips.value.length;
+}
+
+/** Konwój bez eskorty nie atakuje — także gdy sprawne są same transportowce (dobór domyślny jest pusty). */
+function convoyBlocked(island: IslandDTO): boolean {
+    const squad = squadFor(island);
+    return isUnescortedConvoy(squad.length ? squad : activeShips.value);
+}
+
 function squadFor(island: IslandDTO): FleetShipDTO[] {
     if (squadPick.value) return activeShips.value.filter(s => squadPick.value!.has(s.id));
     return defaultSquad(expedition.value?.fleet ?? [], island.squadLimit);
@@ -541,6 +565,7 @@ h2, h3 { font-family: var(--font-head); }
 .stock { font-weight: 600; color: var(--warn); }
 .squad { display: flex; flex-wrap: wrap; gap: 0.5rem 0.8rem; align-items: center; margin-bottom: 0.6rem; font: 500 12px var(--font-mono); color: var(--text-muted); }
 .squad .over { color: var(--warn); }
+.convoy-warn { margin: 0.5rem 0 0; font: 500 12px var(--font-mono); color: var(--warn); }
 .squad-pick { list-style: none; padding: 0; margin: 0; width: 100%; display: flex; flex-wrap: wrap; gap: 6px 14px; }
 .squad-pick label { cursor: pointer; color: var(--text-2); }
 .squad-pick label.off { opacity: .45; cursor: not-allowed; }

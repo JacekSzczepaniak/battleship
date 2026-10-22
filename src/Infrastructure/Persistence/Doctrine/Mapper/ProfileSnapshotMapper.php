@@ -30,6 +30,8 @@ final class ProfileSnapshotMapper
             'moveCount' => $profile->moveCount(),
             'tick' => $profile->tick(),
             'visited' => $profile->visitedSectors(),
+            // surowce czekające na magazyn wyspy — rozłoży je ensureWorldState()
+            'unplaced' => $profile->unplacedResources()?->toArray(),
         ];
     }
 
@@ -97,8 +99,7 @@ final class ProfileSnapshotMapper
             // brak klucza = profil sprzed odwiedzin; CaptainProfile przyjmie obecną pozycję
             isset($state['visited']) && is_array($state['visited']) ? array_values(array_map('strval', $state['visited'])) : null,
             $this->stockpilesFrom($state),
-            // brak ładowni w snapshotcie = profil sprzed #46: jego magazyn rozłoży ensureWorldState()
-            null === $cargo ? $this->legacyResourcesFrom($state) : null,
+            $this->unplacedFrom($state, $cargo),
         );
     }
 
@@ -117,6 +118,21 @@ final class ProfileSnapshotMapper
         }
 
         return $out;
+    }
+
+    /**
+     * Surowce czekające na magazyn wyspy; brak ładowni w snapshotcie = profil
+     * sprzed #46, którego jeden magazyn też rozłoży ensureWorldState().
+     *
+     * @param array<string,mixed> $state
+     */
+    private function unplacedFrom(array $state, ?Resources $cargo): ?Resources
+    {
+        if (isset($state['unplaced']) && is_array($state['unplaced'])) {
+            return Resources::fromArray($state['unplaced']);
+        }
+
+        return null === $cargo ? $this->legacyResourcesFrom($state) : null;
     }
 
     /**

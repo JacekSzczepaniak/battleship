@@ -77,6 +77,9 @@ final class GetExpedition
         $shipTypes = array_map(static fn (ShipType $type) => [
             'type' => $type->value,
             'length' => $type->length(),
+            'cargoCapacity' => $type->cargoCapacity(),
+            // nośnik broni = eskorta konwoju (#47)
+            'armed' => $type->isArmed(),
             'buildCost' => $type->buildCost()->toArray(),
             'repairCost' => $type->repairCost()->toArray(),
             'requiredRank' => $type->requiredRank()->value,

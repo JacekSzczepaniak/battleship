@@ -131,7 +131,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
 import { useRouter } from 'vue-router';
-import { Anchor, Compass, Map as MapIcon, Plane, Radar, Settings, Ship, Sailboat, Wrench, Crosshair } from 'lucide-vue-next';
+import { Anchor, Compass, Container, Map as MapIcon, Plane, Radar, Settings, Ship, Sailboat, Wrench, Crosshair } from 'lucide-vue-next';
 import {
     createProfile, getExpedition, settleBattle, startIslandBattle,
     RANK_LABELS, RANK_LABELS_GENITIVE, SHIP_LABELS,
@@ -144,7 +144,7 @@ import {
     setCurrentBattle, setProfileId, type CurrentBattle,
 } from '../lib/expeditionSession';
 import { getTrainingPrefs } from '../lib/battleSession';
-import { carriedWeapon } from '../lib/ships';
+import { carriedWeapon, shipTypeForLength } from '../lib/ships';
 import { RESOURCES, formatResources, totalResources } from '../lib/resources';
 
 const router = useRouter();
@@ -207,6 +207,7 @@ function unitsWord(n: number): string {
 
 function shipIcon(length: number): Component {
     switch (length) {
+        case 5: return Container;
         case 4: return Plane;
         case 3: return Crosshair;
         case 2: return Radar;
@@ -217,7 +218,8 @@ function shipIcon(length: number): Component {
 
 function shipRole(length: number): string {
     const weapon = carriedWeapon(length);
-    return weapon ? `nośnik · ${weapon}` : `${length}-masztowiec`;
+    if (weapon) return `nośnik · ${weapon}`;
+    return shipTypeForLength(length) === 'transportowiec' ? 'ładownia · bez broni' : `${length}-masztowiec`;
 }
 
 // --- główna akcja: bitwa o wyspę, powrót do bitwy albo trening ---

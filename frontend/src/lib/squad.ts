@@ -4,18 +4,20 @@
 import type { FleetShipDTO, ShipTypeName } from '../api/expeditionApi';
 
 const PRIORITY: ShipTypeName[] = ['lotniskowiec', 'niszczyciel', 'kuter', 'tratwa'];
+const ARMED: ShipTypeName[] = ['lotniskowiec', 'niszczyciel', 'kuter'];
 
 export function squadCells(ships: FleetShipDTO[]): number {
     return ships.reduce((sum, s) => sum + s.length, 0);
 }
 
-/** Nośniki broni od największego, potem tratwy, do limitu; tylko sprawne statki. */
+/**
+ * Nośniki broni od największego, potem tratwy, do limitu; tylko sprawne statki.
+ * Transportowiec płynie do bitwy tylko wybrany ręcznie.
+ */
 export function defaultSquad(fleet: FleetShipDTO[], limit: number): FleetShipDTO[] {
-    const rank = (s: FleetShipDTO) => {
-        const i = PRIORITY.indexOf(s.type);
-        return i === -1 ? PRIORITY.length : i;
-    };
-    const candidates = fleet.filter(s => !s.damaged).sort((a, b) => rank(a) - rank(b));
+    const candidates = fleet
+        .filter(s => !s.damaged && PRIORITY.includes(s.type))
+        .sort((a, b) => PRIORITY.indexOf(a.type) - PRIORITY.indexOf(b.type));
     const squad: FleetShipDTO[] = [];
     let cells = 0;
     for (const ship of candidates) {
@@ -25,4 +27,12 @@ export function defaultSquad(fleet: FleetShipDTO[], limit: number): FleetShipDTO
         }
     }
     return squad;
+}
+
+/**
+ * Konwój (statki z transportowcem) bez eskorty — statku z bronią. Lustro
+ * CaptainProfile::isUnescortedConvoy(): nie atakuje wyspy, w sztormie traci 2×.
+ */
+export function isUnescortedConvoy(ships: FleetShipDTO[]): boolean {
+    return ships.some(s => s.type === 'transportowiec') && !ships.some(s => ARMED.includes(s.type));
 }

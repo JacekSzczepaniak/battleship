@@ -2,6 +2,7 @@
 
 namespace App\Infrastructure\Http\Controller;
 
+use App\Domain\Game\FleetComposition;
 use App\Domain\Game\GameRepository;
 use App\Domain\Shared\GameId;
 use App\Infrastructure\Http\Error\ApiException;
@@ -97,6 +98,9 @@ final class GameQueryController
             'allowedShips' => $game->ruleset()->allowedShips(),
             // skład floty przeciwnika; różni się od allowedShips przy bonusie pełnej bandery (#79)
             'opponentShips' => $game->ruleset()->opponentShips(),
+            // warianty wyposażenia (#95/#99): długość => wyposażenia odbiegające od domyślnego
+            'variants' => FleetComposition::variantsToArray($game->ruleset()->variants()),
+            'opponentVariants' => FleetComposition::variantsToArray($game->ruleset()->opponentVariants()),
             'weapons' => $game->weaponsState(),
             'opponentWeapons' => $game->opponentWeaponsState(),
             'mode' => $game->mode(),

@@ -118,8 +118,8 @@
                             <li v-for="ship in sortedFleet" :key="ship.id">
                                 <component :is="shipIcon(ship.length)" :size="15" class="ship-ico" />
                                 <div class="ship-txt">
-                                    <div class="ship-name">{{ SHIP_LABELS[ship.type] }}</div>
-                                    <div class="ship-role">{{ shipRole(ship.length) }}</div>
+                                    <div class="ship-name">{{ fleetShipLabel(ship) }}</div>
+                                    <div class="ship-role">{{ shipRole(ship) }}</div>
                                 </div>
                                 <div class="cond" :title="ship.damaged ? 'uszkodzony — wozi ładunek, nie walczy; do remontu' : 'sprawny'">
                                     <div :class="{ dmg: ship.damaged }"></div>
@@ -158,8 +158,8 @@ import { useRouter } from 'vue-router';
 import { Anchor, Compass, Container, Map as MapIcon, Plane, Radar, Settings, Ship, Sailboat, Wrench, Crosshair } from 'lucide-vue-next';
 import {
     createProfile, getExpedition, settleBattle, startIslandBattle,
-    RANK_LABELS, RANK_LABELS_GENITIVE, SHIP_LABELS,
-    type ExpeditionDTO, type IslandDTO, type RankName,
+    RANK_LABELS, RANK_LABELS_GENITIVE, fleetShipLabel,
+    type ExpeditionDTO, type FleetShipDTO, type IslandDTO, type RankName,
 } from '../api/expeditionApi';
 import { createGame } from '../api/gameApi';
 import { ApiError } from '../api/http';
@@ -168,7 +168,7 @@ import {
     setCurrentBattle, setProfileId, type CurrentBattle,
 } from '../lib/expeditionSession';
 import { getTrainingPrefs } from '../lib/battleSession';
-import { carriedWeapon, shipTypeForLength } from '../lib/ships';
+import { VARIANTS, carriedWeapon, shipTypeForLength } from '../lib/ships';
 import { RESOURCES, formatResources, isEmpty, totalResources } from '../lib/resources';
 import { depositLabel, depositState, economyIslands } from '../lib/economy';
 import { canDefend, FORT_GUARD, FULL_FLAG_BONUS, lastIcon, lastLabel, pendingLabel, ticksLabel } from '../lib/counterattack';
@@ -258,8 +258,10 @@ function shipIcon(length: number): Component {
     }
 }
 
-function shipRole(length: number): string {
-    const weapon = carriedWeapon(length);
+function shipRole(ship: FleetShipDTO): string {
+    const { length } = ship;
+    // wariant (#99) niesie własne wyposażenie, np. zwiadowca 2 sonary
+    const weapon = carriedWeapon(length, ship.variant ? VARIANTS[ship.variant].w : undefined);
     if (weapon) return `nośnik · ${weapon}`;
     return shipTypeForLength(length) === 'transportowiec' ? 'ładownia · bez broni' : `${length}-masztowiec`;
 }

@@ -410,17 +410,25 @@ final class CaptainProfile
     }
 
     /**
-     * Buduje statek: bramka rangi + koszt z magazynu wyspy i ładowni
-     * (obecność i stocznię sprawdza warstwa aplikacji).
+     * Buduje statek: bramka rangi, wariant odblokowany technologią + koszt
+     * typu z magazynu wyspy i ładowni (obecność i stocznię sprawdza warstwa
+     * aplikacji). Bez wskazanego wariantu statek dostaje domyślny.
      */
-    public function buildShip(ShipType $type, string $islandId): OwnedShip
+    public function buildShip(ShipType $type, string $islandId, ?ShipVariant $variant = null): OwnedShip
     {
         if (!$this->rank()->atLeast($type->requiredRank())) {
             throw new \DomainException(sprintf('Ship type locked: requires rank %s', $type->requiredRank()->value));
         }
+        if (null !== $variant && $variant->type() !== $type) {
+            throw new \InvalidArgumentException('Ship variant not available for this ship type');
+        }
+        $technology = $variant?->requiredTechnology();
+        if (null !== $technology && !$this->hasResearched($technology)) {
+            throw new \DomainException(sprintf('Ship variant locked: requires technology %s', $technology->value));
+        }
         $this->pay($islandId, $type->buildCost());
 
-        $ship = OwnedShip::build($type);
+        $ship = OwnedShip::build($type, $variant);
         $this->fleet[] = $ship;
 
         return $ship;
@@ -1106,12 +1114,14 @@ final class CaptainProfile
      * zatopione statki po wygranej wymagają remontu, po przegranej są stracone;
      * ładunek ponad nową pojemność przepada. Idempotentne: druga próba zwraca zera.
      *
-     * @param list<int> $sunkLengths    długości statków gracza zatopionych w bitwie
-     * @param int       $enemyShipsSunk liczba jednostek wroga zatopionych w bitwie (statystyka kapitana)
+     * @param list<int>               $sunkLengths    długości statków gracza zatopionych w bitwie
+     * @param int                     $enemyShipsSunk liczba jednostek wroga zatopionych w bitwie (statystyka kapitana)
+     * @param array<int, ShipVariant> $sunkVariants   wariant zatopionego statku, klucz = indeks w $sunkLengths;
+     *                                                bez wpisu stratę ponosi dowolny statek tej długości
      *
      * @return array{xp:int, loot:Resources, lost:list<string>, damaged:list<string>, cargoLost:Resources, captured:bool, defense: array{held:bool, stockpileLost:Resources}|null}
      */
-    public function settleBattle(GameId $gameId, string $result, int $xpAward, ?Resources $loot = null, array $sunkLengths = [], int $enemyShipsSunk = 0): array
+    public function settleBattle(GameId $gameId, string $result, int $xpAward, ?Resources $loot = null, array $sunkLengths = [], int $enemyShipsSunk = 0, array $sunkVariants = []): array
     {
         $loot ??= Resources::none();
         if (!in_array($result, ['won', 'lost'], true)) {
@@ -1151,7 +1161,7 @@ final class CaptainProfile
         }
         $this->stockpiles[$battle['island']] = $this->stockpile($battle['island'])->add($loot);
 
-        [$lost, $damaged] = $this->applyLosses($battle['ships'] ?? [], $result, $sunkLengths);
+        [$lost, $damaged] = $this->applyLosses($battle['ships'] ?? [], $result, $sunkLengths, $sunkVariants);
         $cargoLost = $this->trimCargo();
 
         return ['xp' => $xpAward, 'loot' => $loot, 'lost' => $lost, 'damaged' => $damaged, 'cargoLost' => $cargoLost, 'captured' => $captured, 'defense' => $defense];
@@ -1223,24 +1233,30 @@ final class CaptainProfile
      * Dobiera zatopione statki bitwy do egzemplarzy floty po długości
      * (bitwa zna tylko długości) i aplikuje straty.
      *
-     * @param list<string> $battleShipIds
-     * @param list<int>    $sunkLengths
+     * @param list<string>            $battleShipIds
+     * @param list<int>               $sunkLengths
+     * @param array<int, ShipVariant> $sunkVariants
      *
      * @return array{0: list<string>, 1: list<string>} [stracone typy, uszkodzone typy]
      */
-    private function applyLosses(array $battleShipIds, string $result, array $sunkLengths): array
+    private function applyLosses(array $battleShipIds, string $result, array $sunkLengths, array $sunkVariants = []): array
     {
         $lost = [];
         $damaged = [];
         $processed = [];
 
-        foreach ($sunkLengths as $length) {
+        foreach ($sunkLengths as $i => $length) {
+            $variant = $sunkVariants[$i] ?? null;
             foreach ($battleShipIds as $shipId) {
                 if (isset($processed[$shipId])) {
                     continue;
                 }
                 $ship = $this->shipById($shipId);
                 if (null === $ship || $ship->type->length() !== $length || $ship->isDamaged()) {
+                    continue;
+                }
+                // zatopiony zwiadowca nie uszkadza niszczyciela torpedowego z tego samego składu
+                if (null !== $variant && $ship->variant !== $variant) {
                     continue;
                 }
 

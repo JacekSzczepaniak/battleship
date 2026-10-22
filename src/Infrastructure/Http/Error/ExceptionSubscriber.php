@@ -100,6 +100,9 @@ final class ExceptionSubscriber implements EventSubscriberInterface
         if (str_starts_with($message, 'Ship type locked')) {
             return ['SHIP_TYPE_LOCKED', 403];
         }
+        if (str_starts_with($message, 'Ship variant locked')) {
+            return ['SHIP_VARIANT_LOCKED', 403];
+        }
         if (str_starts_with($message, 'Technology locked')) {
             return ['TECHNOLOGY_LOCKED', 403];
         }

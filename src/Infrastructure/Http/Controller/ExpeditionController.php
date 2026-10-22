@@ -16,6 +16,7 @@ use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\OwnedShip;
 use App\Domain\Expedition\Resources;
 use App\Domain\Expedition\ShipType;
+use App\Domain\Expedition\ShipVariant;
 use App\Domain\Expedition\Technology;
 use App\Infrastructure\Http\Error\ApiException;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -130,8 +131,14 @@ final class ExpeditionController
         if (null === $type || !is_string($islandId)) {
             throw new ApiException('Missing or invalid fields: type:ship-type, islandId:string', 'VALIDATION_ERROR', 400);
         }
+        // wariant opcjonalny: bez niego statek dostaje domyślny (#99)
+        $variant = null;
+        if (isset($payload['variant'])) {
+            $variant = ShipVariant::tryFrom((string) $payload['variant'])
+                ?? throw new ApiException('Invalid field: variant:ship-variant', 'VALIDATION_ERROR', 400);
+        }
 
-        $ship = $this->buildShip->handle($id, $islandId, $type);
+        $ship = $this->buildShip->handle($id, $islandId, $type, $variant);
 
         return new JsonResponse($this->shipView($ship), 201);
     }
@@ -208,6 +215,7 @@ final class ExpeditionController
             'id' => $ship->id,
             'type' => $ship->type->value,
             'length' => $ship->type->length(),
+            'variant' => $ship->variant?->value,
             'damaged' => $ship->isDamaged(),
         ];
     }

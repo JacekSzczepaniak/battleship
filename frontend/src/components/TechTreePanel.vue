@@ -31,6 +31,7 @@ const EFFECTS: Record<TechnologyName, string> = {
     'pojemne-ladownie': 'ładownia każdego statku +50% (w dół)',
     'dok-remontowy': 'remont za połowę ceny (w górę)',
     'lepsze-narzedzia': 'złoże +1 na tik; tartak i kopalnia podwajają powiększony urobek',
+    'niszczyciel-zwiadowczy': 'stocznia buduje niszczyciel zwiadowczy: 2 sonary zamiast torpedy',
 };
 
 const current = computed(() => props.research.current);

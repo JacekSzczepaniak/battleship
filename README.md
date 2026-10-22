@@ -164,7 +164,7 @@ Wszystkie ścieżki pod `/api`, JSON. Pełna lista: `docker compose exec app php
 | metoda | ścieżka | co robi |
 |---|---|---|
 | `POST` | `/games` | nowa gra: `mode` (`classic`/`fun`), `width`, `height`, opcjonalnie `ships` i `variants` (`{"3": [{"sonar": 2}]}`) |
-| `GET` | `/games/{id}` | projekcja gry: plansze, mgła wroga, bronie (`used`/`limit`, sonar też `radius`), tura |
+| `GET` | `/games/{id}` | projekcja gry: plansze, mgła wroga, bronie (`used`/`limit`, sonar też `radius`), warianty obu stron (`variants`/`opponentVariants`), tura |
 | `POST` | `/games/{id}/fleet` | rozstawienie floty gracza; statek z wariantem niesie `w` (`{"sonar": 2}`) |
 | `POST` | `/games/{id}/shots` | salwa w pole `x`, `y` |
 | `GET` | `/games/{id}/shots` | strzały gracza z wynikami |
@@ -178,7 +178,7 @@ Wszystkie ścieżki pod `/api`, JSON. Pełna lista: `docker compose exec app php
 | `POST` | `/profiles/{id}/islands/{islandId}/buildings` | budynek osady (`type`) na posiadanej wyspie |
 | `POST` | `/profiles/{id}/islands/{islandId}/research` | start badania (`technology`) w uczelni wyspy, na której stoi kapitan |
 | `POST` | `/profiles/{id}/battles/{gameId}/settle` | rozliczenie zakończonej bitwy |
-| `POST` | `/profiles/{id}/ships` | budowa statku w stoczni |
+| `POST` | `/profiles/{id}/ships` | budowa statku w stoczni (`type`, `islandId`, opcjonalnie `variant` niszczyciela: `torpedowy`/`zwiadowczy`) |
 | `POST` | `/profiles/{id}/ships/{shipId}/repair` | remont statku |
 
 Poza `/api`: `GET /healthz`.

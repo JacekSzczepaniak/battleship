@@ -20,7 +20,8 @@ wyspa:  wydobycie → transport → stocznia/osada → technologia
 ## Co już działa (zrealizowany „wstęp", stan po 2026-10-22)
 
 Bitwa (classic/fun, bronie specjalne z nośników: sonar=kuter, torpeda=
-niszczyciel, nalot=lotniskowiec; zatopiony nośnik odbiera broń) · profil
+niszczyciel, nalot=lotniskowiec, wyposażenie per statek; zatopiony nośnik
+odbiera broń) · profil
 kapitana (XP nigdy nie maleje, 9 rang od rozbitka do admirała — progi
 w Filarze VIII; licznik zatopionych jednostek wroga) · flota jako majątek
 (budowa/remont, stocznie, wygrana→remont / przegrana→strata; uszkodzony
@@ -31,7 +32,9 @@ nieobecność przy kontrataku to grabież połowy magazynu, wyspa zostaje) · wo
 sztormy przy pierwszym wpłynięciu na sektor · geografia=logistyka (bitwa/stocznia
 wymagają obecności) · bandery na wyspach i kontrataki z bitwą obronną; pełna
 bandera daje obrońcy pierwszy strzał i odbiera napastnikowi największy statek
-(Epic E) · UI flow bitwy: port → rozstawianie → bitwa → wynik
+(Epic E) · drzewko technologii (Epic G: uczelnia, 8 technologii w 4
+gałęziach, niszczyciel zwiadowczy jako pierwszy wariant statku) · UI flow
+bitwy: port → rozstawianie → bitwa → wynik
 (projekt: `docs/design/ui-flow/`). Elementy projektu UI bez pokrycia
 w silniku czekają w zadaniach: energia i „Zakończ turę” (#59), ruch statku
 w bitwie (#60), trzy surowce w UI (#49), abordaż (#55), mapa akwenu jako
@@ -191,6 +194,14 @@ inny loadout, np. trójmasztowiec torpedowy vs zwiadowczy (lepszy sonar
 kosztem torped), lotniskowiec klasyczny (nalot) vs śmigłowcowy (zwalczanie
 okrętów podwodnych). Balans przez wybór przy budowie: wariant to trade-off,
 nie ulepszenie. Techniczna droga wejścia: WeaponSpec + koszt w stoczni.
+
+- ✅ (#99) **Niszczyciel zwiadowczy** (Uzbrojenie, poziom 2): po zbadaniu
+  stocznia buduje niszczyciel w wariancie torpedowym (1 torpeda) albo
+  zwiadowczym (2 sonary, bez torpedy). Koszt budowy i remontu jak niszczyciela,
+  wariant jest stały. Sonar zwiadowcy ma promień sonaru gracza. Wariant to
+  skład, a nie technologia, więc lustrzana flota wroga go przejmuje.
+- ⏸️ **Lotniskowiec śmigłowcowy** czeka na okręty podwodne: bez nich nie ma
+  czego zwalczać (Epic G, D5).
 
 ## Filar VI — NPC i reputacja
 

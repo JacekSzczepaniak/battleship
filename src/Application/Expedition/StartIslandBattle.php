@@ -8,6 +8,7 @@ use App\Domain\Expedition\ProfileRepository;
 use App\Domain\Expedition\Technology;
 use App\Domain\Game\FleetComposition;
 use App\Domain\Game\Game;
+use App\Domain\Game\Weapon\Loadout;
 use App\Domain\Game\Weapon\SonarSpec;
 use App\Domain\Shared\ProfileId;
 
@@ -66,10 +67,17 @@ final class StartIslandBattle
         }
         $squad = $profile->battleSquad($shipIds, $island->squadCellLimit());
 
+        // warianty statków (#99) idą do bitwy jako wyposażenie odbiegające od
+        // domyślnego; lustro wroga dostaje je razem ze składem (#54, D6)
         $composition = [];
+        $variants = [];
         foreach ($squad as $ship) {
             $length = $ship->type->length();
             $composition[$length] = ($composition[$length] ?? 0) + 1;
+            $loadout = $ship->variant?->loadout();
+            if (null !== $loadout && !$loadout->equals(Loadout::defaultFor($length))) {
+                $variants[$length][] = $loadout;
+            }
         }
 
         // pełna bandera (#79): obrońca strzela pierwszy, napastnik płynie bez
@@ -80,7 +88,7 @@ final class StartIslandBattle
 
         $sonarRadius = $profile->hasResearched(Technology::SonarDalekiegoZasiegu) ? SonarSpec::LONG_RANGE_RADIUS : null;
 
-        $game = $this->createGame->handle($island->boardWidth, $island->boardHeight, $island->mode, $composition, $firstTurn, $opponentComposition, sonarRadius: $sonarRadius);
+        $game = $this->createGame->handle($island->boardWidth, $island->boardHeight, $island->mode, $composition, $firstTurn, $opponentComposition, $variants ?: null, $sonarRadius);
         $shipIds = array_map(static fn ($s) => $s->id, $squad);
         $defense
             ? $profile->startDefense($island->id, $game->id(), $shipIds)

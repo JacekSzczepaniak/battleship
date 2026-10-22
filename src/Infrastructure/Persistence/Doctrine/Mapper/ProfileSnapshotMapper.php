@@ -7,6 +7,7 @@ use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\OwnedShip;
 use App\Domain\Expedition\Resources;
 use App\Domain\Expedition\ShipType;
+use App\Domain\Expedition\ShipVariant;
 use App\Domain\Expedition\Technology;
 use App\Domain\Shared\ProfileId;
 
@@ -21,11 +22,13 @@ final class ProfileSnapshotMapper
             'battles' => $profile->battles(),
             'cargo' => $profile->cargo()->toArray(),
             'stockpiles' => array_map(static fn (Resources $r) => $r->toArray(), $profile->stockpiles()),
-            'fleet' => array_map(static fn (OwnedShip $ship) => [
+            // wariant tylko przy statku typu z wariantami; brak klucza = wariant domyślny (#99)
+            'fleet' => array_map(static fn (OwnedShip $ship) => array_filter([
                 'id' => $ship->id,
                 'type' => $ship->type->value,
                 'damaged' => $ship->isDamaged(),
-            ], $profile->fleet()),
+                'variant' => $ship->variant?->value,
+            ], static fn ($v) => null !== $v), $profile->fleet()),
             'worldSeed' => $profile->worldSeed(),
             'position' => $profile->hasWorldState() ? $profile->position() : null,
             'discovered' => $profile->discoveredSectors(),
@@ -84,7 +87,9 @@ final class ProfileSnapshotMapper
                 if (null === $type || !isset($ship['id'])) {
                     continue;
                 }
-                $fleet[] = new OwnedShip((string) $ship['id'], $type, (bool) ($ship['damaged'] ?? false));
+                // niszczyciel sprzed wariantów jest torpedowy; wariant obcego typu się pomija
+                $variant = ShipVariant::tryFrom((string) ($ship['variant'] ?? ''));
+                $fleet[] = new OwnedShip((string) $ship['id'], $type, (bool) ($ship['damaged'] ?? false), $variant?->type() === $type ? $variant : null);
             }
         }
 

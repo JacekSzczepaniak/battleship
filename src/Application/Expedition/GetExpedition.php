@@ -7,6 +7,7 @@ use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\ProfileRepository;
 use App\Domain\Expedition\ShipType;
+use App\Domain\Expedition\ShipVariant;
 use App\Domain\Expedition\TechBranch;
 use App\Domain\Expedition\TechLevel;
 use App\Domain\Expedition\Technology;
@@ -96,6 +97,8 @@ final class GetExpedition
             'id' => $ship->id,
             'type' => $ship->type->value,
             'length' => $ship->type->length(),
+            // wariant stały od budowy; null = typ bez wariantów (#99)
+            'variant' => $ship->variant?->value,
             'damaged' => $ship->isDamaged(),
             'repairCost' => $profile->repairCost($ship->type)->toArray(),
         ], $profile->fleet());
@@ -110,6 +113,12 @@ final class GetExpedition
             'repairCost' => $profile->repairCost($type)->toArray(),
             'requiredRank' => $type->requiredRank()->value,
             'requiredShipyardLevel' => $type->requiredShipyardLevel(),
+            // warianty do wyboru przy budowie; zablokowany czeka na technologię
+            'variants' => array_map(static fn (ShipVariant $variant) => [
+                'variant' => $variant->value,
+                'requiredTechnology' => $variant->requiredTechnology()?->value,
+                'unlocked' => null === $variant->requiredTechnology() || $profile->hasResearched($variant->requiredTechnology()),
+            ], ShipVariant::forType($type)),
         ], ShipType::cases());
 
         $buildingTypes = array_map(static fn (BuildingType $type) => [

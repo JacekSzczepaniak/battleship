@@ -17,7 +17,7 @@
                     @click="onCardClick(ship.id)"
                 >
                     <div class="ship-head">
-                        <span class="ship-name">{{ shipName(ship.l) }}</span>
+                        <span class="ship-name">{{ shipName(ship.l, ship.w) }}</span>
                         <span v-if="ship.placed" class="state placed-state">ROZSTAWIONY</span>
                         <span v-else-if="ship.id === selectedId" class="state active-state">
                             {{ orientation === 'h' ? 'POZIOMO' : 'PIONOWO' }} <RotateCw :size="11" />
@@ -27,7 +27,7 @@
                     <div class="segments">
                         <span v-for="i in ship.l" :key="i"></span>
                     </div>
-                    <div v-if="ruleset === 'fun' && carriedWeapon(ship.l)" class="carrier">nośnik · {{ carriedWeapon(ship.l) }}</div>
+                    <div v-if="ruleset === 'fun' && carriedWeapon(ship.l, ship.w)" class="carrier">nośnik · {{ carriedWeapon(ship.l, ship.w) }}</div>
                 </div>
             </div>
         </div>
@@ -69,7 +69,7 @@
                 <div class="kicker">ZASADY AKWENU</div>
                 <ul>
                     <li><Ban :size="14" /> Statki nie mogą się stykać — także po skosie.</li>
-                    <li v-if="ruleset === 'fun'"><Crosshair :size="14" /> Nośniki dają broń: kuter → sonar, niszczyciel → torpeda, lotniskowiec → nalot. Zatopiony nośnik odbiera broń.</li>
+                    <li v-if="ruleset === 'fun'"><Crosshair :size="14" /> Nośniki dają broń: kuter → sonar, niszczyciel → torpeda<template v-if="ships.some(s => variantOf(s.l, s.w) === 'zwiadowczy')">, niszczyciel zwiadowczy → 2 sonary</template>, lotniskowiec → nalot. Zatopiony nośnik odbiera broń.</li>
                     <li v-else><Crosshair :size="14" /> Zasady klasyczne: tylko pojedyncze salwy.</li>
                     <li v-if="battle"><Anchor :size="14" /> Stawka: zatopione jednostki po wygranej idą do remontu, po przegranej przepadają.</li>
                     <li v-else><Anchor :size="14" /> Trening — bez XP, łupów i strat we flocie.</li>
@@ -103,13 +103,14 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Anchor, Ban, Crosshair, Eraser, RotateCw, Shuffle } from 'lucide-vue-next';
 import SeaGrid from '../components/SeaGrid.vue';
-import { createGame, getGame, placeFleet, type PlayerFleetItem, type RulesetName } from '../api/gameApi';
+import { createGame, getGame, placeFleet, type GameViewDTO, type Loadout, type PlayerFleetItem, type RulesetName } from '../api/gameApi';
 import { getCurrentBattle } from '../lib/expeditionSession';
 import { TRAINING_SIZES, getTrainingPrefs, setTrainingPrefs } from '../lib/battleSession';
-import { carriedWeapon, cellLabel, fieldsLabel, shipName } from '../lib/ships';
+import { carriedWeapon, cellLabel, fieldsLabel, shipName, variantOf } from '../lib/ships';
 
 type Orientation = 'h' | 'v';
-interface SetupShip { id: number; l: number; placed: { x: number; y: number; o: Orientation } | null }
+// w = wyposażenie wariantu (#99); bez niego statek ma domyślne dla długości
+interface SetupShip { id: number; l: number; w?: Loadout; placed: { x: number; y: number; o: Orientation } | null }
 
 const route = useRoute();
 const router = useRouter();
@@ -137,12 +138,14 @@ const training = computed(() => battle.value === null);
 
 const CLASSIC_INVENTORY: Record<string, number> = { 4: 1, 3: 2, 2: 3, 1: 4 };
 
-function buildShips(allowed: Record<string, number>): SetupShip[] {
-    const lengths: number[] = [];
+function buildShips(allowed: Record<string, number>, variants: GameViewDTO['variants']): SetupShip[] {
+    const items: { l: number; w?: Loadout }[] = [];
     for (const [len, count] of Object.entries(allowed)) {
-        for (let i = 0; i < count; i++) lengths.push(Number(len));
+        // warianty dostają pierwsze statki danej długości (FleetComposition::roster)
+        const own = (variants && !Array.isArray(variants) ? variants[len] : undefined) ?? [];
+        for (let i = 0; i < count; i++) items.push({ l: Number(len), w: own[i] });
     }
-    return lengths.sort((a, b) => b - a).map((l, i) => ({ id: i, l, placed: null }));
+    return items.sort((a, b) => b.l - a.l).map((s, i) => ({ id: i, ...s, placed: null }));
 }
 
 async function load() {
@@ -157,7 +160,7 @@ async function load() {
         width.value = g.board.w;
         height.value = g.board.h;
         ruleset.value = g.ruleset;
-        ships.value = buildShips(g.allowedShips && Object.keys(g.allowedShips).length ? g.allowedShips : CLASSIC_INVENTORY);
+        ships.value = buildShips(g.allowedShips && Object.keys(g.allowedShips).length ? g.allowedShips : CLASSIC_INVENTORY, g.variants);
         selectNext();
     } catch (e: any) {
         error.value = e?.message ?? 'Nie udało się wczytać gry';
@@ -222,7 +225,7 @@ function selectNext() {
     const next = ships.value.find(s => !s.placed) ?? null;
     selectedId.value = next?.id ?? null;
     if (next) {
-        setHint(`Ustaw: ${shipName(next.l)} (${fieldsLabel(next.l)}) — ${orientation.value === 'h' ? 'poziomo' : 'pionowo'}.`);
+        setHint(`Ustaw: ${shipName(next.l, next.w)} (${fieldsLabel(next.l)}) — ${orientation.value === 'h' ? 'poziomo' : 'pionowo'}.`);
     } else {
         setHint('Flota rozstawiona. Kliknij statek na planszy, żeby go podnieść, albo ruszaj do bitwy.');
     }
@@ -233,7 +236,7 @@ function selectNext() {
 function rotate() {
     orientation.value = orientation.value === 'h' ? 'v' : 'h';
     if (selected.value && !selected.value.placed) {
-        setHint(`${shipName(selected.value.l)} — ${orientation.value === 'h' ? 'poziomo' : 'pionowo'}.`);
+        setHint(`${shipName(selected.value.l, selected.value.w)} — ${orientation.value === 'h' ? 'poziomo' : 'pionowo'}.`);
     }
 }
 
@@ -249,7 +252,7 @@ function onCardClick(shipId: number) {
         return;
     }
     selectedId.value = shipId;
-    setHint(`Ustaw: ${shipName(ship.l)} (${fieldsLabel(ship.l)}).`);
+    setHint(`Ustaw: ${shipName(ship.l, ship.w)} (${fieldsLabel(ship.l)}).`);
 }
 
 function pickUp(ship: SetupShip) {
@@ -257,7 +260,7 @@ function pickUp(ship: SetupShip) {
     orientation.value = ship.placed.o;
     ship.placed = null;
     selectedId.value = ship.id;
-    setHint(`Podniesiono: ${shipName(ship.l)}. Wskaż nowe miejsce.`);
+    setHint(`Podniesiono: ${shipName(ship.l, ship.w)}. Wskaż nowe miejsce.`);
 }
 
 function tryPlace(x: number, y: number) {
@@ -385,7 +388,7 @@ async function submitFleet() {
     busy.value = true;
     error.value = '';
     try {
-        const payload: PlayerFleetItem[] = ships.value.map(s => ({ x: s.placed!.x, y: s.placed!.y, o: s.placed!.o, l: s.l }));
+        const payload: PlayerFleetItem[] = ships.value.map(s => ({ x: s.placed!.x, y: s.placed!.y, o: s.placed!.o, l: s.l, ...(s.w ? { w: s.w } : {}) }));
         await placeFleet(id.value, payload);
         await router.push({ name: 'game', params: { id: id.value } });
     } catch (e: any) {

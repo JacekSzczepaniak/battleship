@@ -6,6 +6,7 @@ use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\OwnedShip;
 use App\Domain\Expedition\ProfileRepository;
 use App\Domain\Expedition\ShipType;
+use App\Domain\Expedition\ShipVariant;
 use App\Domain\Shared\ProfileId;
 
 final class BuildShip
@@ -20,10 +21,10 @@ final class BuildShip
     /**
      * Buduje statek w stoczni wyspy, na której kapitan STOI (geografia =
      * logistyka); stocznia musi być wystarczająco duża (z rozbudową pod
-     * banderą, #82), a bramkę rangi typu
+     * banderą, #82), a bramkę rangi typu, technologię wariantu
      * i koszt (magazyn wyspy, potem ładownia) egzekwuje domena (CaptainProfile::buildShip).
      */
-    public function handle(string $profileId, string $islandId, ShipType $type): OwnedShip
+    public function handle(string $profileId, string $islandId, ShipType $type, ?ShipVariant $variant = null): OwnedShip
     {
         $profile = $this->profiles->get(new ProfileId($profileId));
         if (null === $profile) {
@@ -41,7 +42,7 @@ final class BuildShip
             throw new \DomainException('Shipyard level too low for this ship type');
         }
 
-        $ship = $profile->buildShip($type, $island->id);
+        $ship = $profile->buildShip($type, $island->id, $variant);
         $this->profiles->save($profile);
 
         return $ship;

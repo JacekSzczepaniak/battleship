@@ -121,7 +121,7 @@
                 <h2>⚓ Flota</h2>
                 <ul class="ships">
                     <li v-for="ship in expedition.fleet" :key="ship.id" class="ship" :class="{ dmg: ship.damaged }">
-                        <span class="ship-name">{{ SHIP_ICONS[ship.type] }} {{ SHIP_LABELS[ship.type] }}</span>
+                        <span class="ship-name">{{ SHIP_ICONS[ship.type] }} {{ fleetShipLabel(ship) }}</span>
                         <template v-if="ship.damaged">
                             <span class="status" title="wozi ładunek, ale nie walczy i nie eskortuje — do remontu w stoczni">🔧 uszkodzony</span>
                             <button
@@ -154,7 +154,21 @@
                         <li v-for="t in expedition.shipTypes" :key="t.type" class="ship">
                             <span class="ship-name">{{ SHIP_ICONS[t.type] }} {{ SHIP_LABELS[t.type] }} ({{ t.length }}-masztowiec)</span>
                             <span class="muted">ładownia {{ t.cargoCapacity }}{{ t.armed ? '' : ' · bez broni' }}</span>
+                            <!-- wariant wybiera się przy budowie i zostaje na stałe (#99) -->
+                            <template v-if="t.variants.length">
+                                <button
+                                    v-for="v in t.variants"
+                                    :key="v.variant"
+                                    class="btn small"
+                                    :disabled="busy || buildBlock(t, v) !== null"
+                                    :title="buildBlock(t, v) ?? `nośnik: ${carriedWeapon(t.length, VARIANTS[v.variant].w)} · wariant stały`"
+                                    @click="onBuild(t, v.variant)"
+                                >
+                                    Buduj {{ SHIP_VARIANT_LABELS[v.variant] }} · {{ carriedWeapon(t.length, VARIANTS[v.variant].w) }} ({{ formatResources(t.buildCost) }})
+                                </button>
+                            </template>
                             <button
+                                v-else
                                 class="btn small"
                                 :disabled="busy || buildBlock(t) !== null"
                                 :title="buildBlock(t) ?? ''"
@@ -163,6 +177,9 @@
                                 Buduj ({{ formatResources(t.buildCost) }})
                             </button>
                             <span v-if="buildBlock(t)" class="muted">{{ buildBlock(t) }}</span>
+                            <span v-for="v in lockedVariants(t)" :key="v.variant" class="muted">
+                                {{ SHIP_VARIANT_LABELS[v.variant] }}: po zbadaniu „{{ TECH_LABELS[v.requiredTechnology!] }}”
+                            </span>
                         </li>
                     </ul>
 
@@ -236,7 +253,7 @@
                                         :disabled="!squadPick.has(ship.id) && squadCells(squadFor(island)) + ship.length > island.squadLimit"
                                         @change="toggleShip(ship.id)"
                                     />
-                                    {{ SHIP_ICONS[ship.type] }} {{ SHIP_LABELS[ship.type] }} · {{ fieldsLabel(ship.length) }}
+                                    {{ SHIP_ICONS[ship.type] }} {{ fleetShipLabel(ship) }} · {{ fieldsLabel(ship.length) }}
                                 </label>
                             </li>
                         </ul>
@@ -279,8 +296,9 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
     buildBuilding, buildShip, createProfile, getExpedition, repairShip, sail, settleBattle, startIslandBattle, startResearch, transferCargo,
-    BUILDING_LABELS, RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, TECH_LABELS,
+    BUILDING_LABELS, RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, SHIP_VARIANT_LABELS, TECH_LABELS, fleetShipLabel,
     type BuildingTypeName, type TechnologyName, type ExpeditionDTO, type FleetShipDTO, type IslandDTO, type RankName, type ResourcesDTO, type ShipTypeDTO,
+    type ShipVariantDTO, type ShipVariantName,
 } from '../api/expeditionApi';
 import { ApiError } from '../api/http';
 import {
@@ -288,7 +306,7 @@ import {
     setCurrentBattle, setProfileId, type CurrentBattle,
 } from '../lib/expeditionSession';
 import { defaultSquad, isUnescortedConvoy, squadCells } from '../lib/squad';
-import { fieldsLabel } from '../lib/ships';
+import { VARIANTS, carriedWeapon, fieldsLabel } from '../lib/ships';
 import { depositLabel, depositState, economyIslands, whereToFind } from '../lib/economy';
 import CargoPanel from '../components/CargoPanel.vue';
 import SettlementPanel from '../components/SettlementPanel.vue';
@@ -427,12 +445,13 @@ async function onSail(x: number, y: number) {
 }
 
 /** Powód blokady budowy typu; null = można budować. */
-function buildBlock(t: ShipTypeDTO): string | null {
+function buildBlock(t: ShipTypeDTO, variant?: ShipVariantDTO): string | null {
     const profile = expedition.value?.profile;
     const island = currentIsland.value;
     if (!profile || !island) return 'dopłyń do portu';
     if (!rankAtLeast(profile.rank, t.requiredRank)) return `wymaga rangi: ${rankLabel(t.requiredRank)}`;
     if (island.shipyardLevel < t.requiredShipyardLevel) return shipyardMissing(island, t.requiredShipyardLevel);
+    if (variant && !variant.unlocked) return `wymaga technologii: ${TECH_LABELS[variant.requiredTechnology!]}`;
     const available = addResources(island.stockpile, profile.cargo);
     if (!covers(available, t.buildCost)) return withSources(available, t.buildCost);
     return null;
@@ -469,14 +488,19 @@ function repairBlock(ship: FleetShipDTO): string | null {
     return null;
 }
 
-async function onBuild(t: ShipTypeDTO) {
+/** Warianty czekające na technologię — podpowiedź, gdy sam typ da się już budować. */
+function lockedVariants(t: ShipTypeDTO): ShipVariantDTO[] {
+    return buildBlock(t) === null ? t.variants.filter(v => !v.unlocked) : [];
+}
+
+async function onBuild(t: ShipTypeDTO, variant?: ShipVariantName) {
     const profileId = getProfileId();
     const island = currentIsland.value;
     if (!profileId || !island) return;
     busy.value = true;
     error.value = '';
     try {
-        await buildShip(profileId, island.id, t.type);
+        await buildShip(profileId, island.id, t.type, variant);
         expedition.value = await getExpedition(profileId);
     } catch (e: any) {
         error.value = e?.message ?? 'Budowa nie powiodła się';

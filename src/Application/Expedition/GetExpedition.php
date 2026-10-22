@@ -18,7 +18,7 @@ final class GetExpedition
     }
 
     /**
-     * Stan wyprawy: profil (XP, ranga, materiały), flota, katalog typów
+     * Stan wyprawy: profil (XP, ranga, surowce), flota, katalog typów
      * statków (do UI stoczni) i wyspy z kłódkami.
      *
      * @return array{profile: array<string,mixed>, fleet: list<array<string,mixed>>, shipTypes: list<array<string,mixed>>, islands: list<array<string,mixed>>, world: array<string,mixed>}
@@ -53,8 +53,8 @@ final class GetExpedition
                 'requiredRank' => $island->requiredRank->value,
                 'xpWin' => $island->xpWin,
                 'xpLoss' => $island->xpLoss,
-                'materialsWin' => $island->materialsWin,
-                'materialsLoss' => $island->materialsLoss,
+                'lootWin' => $island->lootWin->toArray(),
+                'lootLoss' => $island->lootLoss->toArray(),
                 'shipyardLevel' => $island->shipyardLevel,
                 'board' => ['w' => $island->boardWidth, 'h' => $island->boardHeight],
                 'unlocked' => $island->isAccessibleFor($rank),
@@ -68,14 +68,14 @@ final class GetExpedition
             'type' => $ship->type->value,
             'length' => $ship->type->length(),
             'damaged' => $ship->isDamaged(),
-            'repairCost' => $ship->type->repairCost(),
+            'repairCost' => $ship->type->repairCost()->toArray(),
         ], $profile->fleet());
 
         $shipTypes = array_map(static fn (ShipType $type) => [
             'type' => $type->value,
             'length' => $type->length(),
-            'buildCost' => $type->buildCost(),
-            'repairCost' => $type->repairCost(),
+            'buildCost' => $type->buildCost()->toArray(),
+            'repairCost' => $type->repairCost()->toArray(),
             'requiredRank' => $type->requiredRank()->value,
             'requiredShipyardLevel' => $type->requiredShipyardLevel(),
         ], ShipType::cases());
@@ -89,7 +89,7 @@ final class GetExpedition
                 'nextRank' => null !== $next
                     ? ['rank' => $next->value, 'xpNeeded' => max(0, $next->threshold() - $profile->xp())]
                     : null,
-                'materials' => $profile->materials(),
+                'resources' => $profile->resources()->toArray(),
                 'enemyShipsSunk' => $profile->enemyShipsSunk(),
             ],
             'fleet' => $fleet,

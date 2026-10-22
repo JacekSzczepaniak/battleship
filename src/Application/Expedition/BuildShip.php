@@ -20,7 +20,7 @@ final class BuildShip
     /**
      * Buduje statek w stoczni wyspy, na której kapitan STOI (geografia =
      * logistyka); stocznia musi być wystarczająco duża, a bramkę rangi typu
-     * i koszt materiałów egzekwuje domena (CaptainProfile::buildShip).
+     * i koszt w surowcach egzekwuje domena (CaptainProfile::buildShip).
      */
     public function handle(string $profileId, string $islandId, ShipType $type): OwnedShip
     {

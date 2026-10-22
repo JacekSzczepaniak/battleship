@@ -4,7 +4,7 @@ namespace App\Domain\Expedition;
 
 /**
  * Definicja wyspy wyprawy: bitwa o zadanych zasadach, bramkowana rangą,
- * z nagrodami XP i materiałów za wygraną i (mniejszymi) za przegraną —
+ * z nagrodami XP i surowców za wygraną i (mniejszymi) za przegraną —
  * z porażek też się uczymy. Stocznia na wyspie buduje i remontuje flotę;
  * jej poziom ogranicza dostępne typy statków.
  */
@@ -18,8 +18,8 @@ final class Island
         public readonly string $mode, // 'classic' | 'fun' — wariant zasad bitwy
         public readonly int $xpWin,
         public readonly int $xpLoss,
-        public readonly int $materialsWin,
-        public readonly int $materialsLoss,
+        public readonly Resources $lootWin,
+        public readonly Resources $lootLoss,
         public readonly int $shipyardLevel,
         public readonly int $boardWidth,
         public readonly int $boardHeight,
@@ -30,8 +30,8 @@ final class Island
         if ($xpWin < 0 || $xpLoss < 0 || $xpLoss > $xpWin) {
             throw new \InvalidArgumentException('Invalid island XP rewards');
         }
-        if ($materialsWin < 0 || $materialsLoss < 0 || $materialsLoss > $materialsWin) {
-            throw new \InvalidArgumentException('Invalid island material rewards');
+        if ($lootLoss->total() > $lootWin->total()) {
+            throw new \InvalidArgumentException('Invalid island resource rewards');
         }
         if ($shipyardLevel < 0 || $boardWidth < 5 || $boardHeight < 5) {
             throw new \InvalidArgumentException('Invalid island parameters');

@@ -26,25 +26,25 @@ enum ShipType: string
         };
     }
 
-    /** Koszt budowy w materiałach. */
-    public function buildCost(): int
+    /** Koszt budowy: kadłub z drewna, większe jednostki także stal na uzbrojenie. */
+    public function buildCost(): Resources
     {
         return match ($this) {
-            self::Tratwa => 0,
-            self::Kuter => 20,
-            self::Niszczyciel => 50,
-            self::Lotniskowiec => 120,
+            self::Tratwa => Resources::none(),
+            self::Kuter => new Resources(wood: 20),
+            self::Niszczyciel => new Resources(wood: 30, steel: 20),
+            self::Lotniskowiec => new Resources(wood: 60, steel: 60),
         };
     }
 
-    /** Koszt remontu uszkodzonego statku w materiałach. */
-    public function repairCost(): int
+    /** Koszt remontu uszkodzonego statku. */
+    public function repairCost(): Resources
     {
         return match ($this) {
-            self::Tratwa => 0,
-            self::Kuter => 8,
-            self::Niszczyciel => 20,
-            self::Lotniskowiec => 45,
+            self::Tratwa => Resources::none(),
+            self::Kuter => new Resources(wood: 8),
+            self::Niszczyciel => new Resources(wood: 10, steel: 10),
+            self::Lotniskowiec => new Resources(wood: 20, steel: 25),
         };
     }
 

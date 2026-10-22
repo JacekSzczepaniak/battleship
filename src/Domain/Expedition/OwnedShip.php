@@ -6,7 +6,7 @@ use Symfony\Component\Uid\Uuid;
 
 /**
  * Egzemplarz statku we flocie kapitana. Uszkodzony statek nie wypływa
- * do bitwy — wymaga remontu w stoczni (za materiały).
+ * do bitwy — wymaga remontu w stoczni (za surowce).
  */
 final class OwnedShip
 {

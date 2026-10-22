@@ -13,15 +13,16 @@ use App\Domain\Shared\ProfileId;
  */
 final class CaptainProfile
 {
-    private const STARTING_MATERIALS = 20;
+    /** Surowce na start: drewno na kuter (stal i złoto przychodzą z bitew). */
+    private const STARTING_WOOD = 20;
 
     /** Szansa sztormu przy wpłynięciu w NIEZBADANY sektor (w %). */
     private const STORM_CHANCE = 20;
 
-    /** Górny limit materiałów zabieranych przez sztorm. */
-    private const STORM_MATERIALS_LOSS = 5;
+    /** Górny limit drewna zabieranego przez sztorm. */
+    private const STORM_WOOD_LOSS = 5;
 
-    /** Nagroda kartograficzna: materiały za nowy sektor / bonus za odkrycie wyspy. */
+    /** Nagroda kartograficzna w drewnie: za nowy sektor / bonus za odkrycie wyspy. */
     private const CARTOGRAPHY_SECTOR_REWARD = 1;
     private const CARTOGRAPHY_ISLAND_BONUS = 5;
 
@@ -31,7 +32,7 @@ final class CaptainProfile
     /** @var list<OwnedShip> */
     private array $fleet = [];
 
-    private int $materials = 0;
+    private Resources $resources;
 
     // --- Wolne morze ---
 
@@ -72,7 +73,7 @@ final class CaptainProfile
         }
 
         $self = new self(ProfileId::new(), $name);
-        $self->materials = self::STARTING_MATERIALS;
+        $self->resources = new Resources(wood: self::STARTING_WOOD);
         $self->fleet = self::startingFleet();
         $self->worldSeed = crc32((string) $self->id) & 0x7FFFFFFF;
 
@@ -115,11 +116,11 @@ final class CaptainProfile
         return Rank::fromXp($this->xp);
     }
 
-    // --- Flota i materiały ---
+    // --- Flota i surowce ---
 
-    public function materials(): int
+    public function resources(): Resources
     {
-        return $this->materials;
+        return $this->resources;
     }
 
     /** @return list<OwnedShip> */
@@ -134,21 +135,13 @@ final class CaptainProfile
         return array_values(array_filter($this->fleet, static fn (OwnedShip $s) => !$s->isDamaged()));
     }
 
-    public function addMaterials(int $amount): void
-    {
-        if ($amount < 0) {
-            throw new \InvalidArgumentException('Negative materials amount');
-        }
-        $this->materials += $amount;
-    }
-
-    /** Buduje statek: bramka rangi + koszt w materiałach (stocznię sprawdza warstwa aplikacji). */
+    /** Buduje statek: bramka rangi + koszt w surowcach (stocznię sprawdza warstwa aplikacji). */
     public function buildShip(ShipType $type): OwnedShip
     {
         if (!$this->rank()->atLeast($type->requiredRank())) {
             throw new \DomainException(sprintf('Ship type locked: requires rank %s', $type->requiredRank()->value));
         }
-        $this->spendMaterials($type->buildCost());
+        $this->resources = $this->resources->subtract($type->buildCost());
 
         $ship = OwnedShip::build($type);
         $this->fleet[] = $ship;
@@ -156,7 +149,7 @@ final class CaptainProfile
         return $ship;
     }
 
-    /** Remontuje uszkodzony statek za materiały. */
+    /** Remontuje uszkodzony statek za surowce. */
     public function repairShip(string $shipId): OwnedShip
     {
         $ship = $this->shipById($shipId);
@@ -167,7 +160,7 @@ final class CaptainProfile
             throw new \DomainException('Ship is not damaged');
         }
 
-        $this->spendMaterials($ship->type->repairCost());
+        $this->resources = $this->resources->subtract($ship->type->repairCost());
         $ship->repair();
 
         return $ship;
@@ -182,14 +175,6 @@ final class CaptainProfile
         }
 
         return null;
-    }
-
-    private function spendMaterials(int $cost): void
-    {
-        if ($this->materials < $cost) {
-            throw new \DomainException('Not enough materials');
-        }
-        $this->materials -= $cost;
     }
 
     // --- Wolne morze: żegluga, mgła świata, kartografia ---
@@ -320,7 +305,7 @@ final class CaptainProfile
                 $cartography += self::CARTOGRAPHY_ISLAND_BONUS;
             }
         }
-        $this->materials += $cartography;
+        $this->resources = $this->resources->add(new Resources(wood: $cartography));
 
         return ['discoveredNow' => $discoveredNow, 'cartography' => $cartography, 'event' => $event];
     }
@@ -342,10 +327,10 @@ final class CaptainProfile
             return ['type' => 'storm', 'effect' => 'ship-damaged', 'ship' => $ship->type->value];
         }
 
-        $loss = min(self::STORM_MATERIALS_LOSS, $this->materials);
-        $this->materials -= $loss;
+        $loss = min(self::STORM_WOOD_LOSS, $this->resources->wood);
+        $this->resources = $this->resources->subtract(new Resources(wood: $loss));
 
-        return ['type' => 'storm', 'effect' => 'materials-lost', 'materials' => $loss];
+        return ['type' => 'storm', 'effect' => 'wood-lost', 'wood' => $loss];
     }
 
     /** @return list<array{0:int,1:int}> sektor + sąsiedztwo (promień 1) w granicach mapy */
@@ -389,21 +374,22 @@ final class CaptainProfile
     }
 
     /**
-     * Rozlicza bitwę: XP i materiały nigdy nie giną (przyznawane też za porażkę),
+     * Rozlicza bitwę: XP i surowce nigdy nie giną (przyznawane też za porażkę),
      * straty dotykają floty — zatopione statki po wygranej wymagają remontu,
      * po przegranej są stracone. Idempotentne: druga próba zwraca zera.
      *
      * @param list<int> $sunkLengths    długości statków gracza zatopionych w bitwie
      * @param int       $enemyShipsSunk liczba jednostek wroga zatopionych w bitwie (statystyka kapitana)
      *
-     * @return array{xp:int, materials:int, lost:list<string>, damaged:list<string>}
+     * @return array{xp:int, loot:Resources, lost:list<string>, damaged:list<string>}
      */
-    public function settleBattle(GameId $gameId, string $result, int $xpAward, int $materialsAward = 0, array $sunkLengths = [], int $enemyShipsSunk = 0): array
+    public function settleBattle(GameId $gameId, string $result, int $xpAward, ?Resources $loot = null, array $sunkLengths = [], int $enemyShipsSunk = 0): array
     {
+        $loot ??= Resources::none();
         if (!in_array($result, ['won', 'lost'], true)) {
             throw new \InvalidArgumentException('Result must be won|lost');
         }
-        if ($xpAward < 0 || $materialsAward < 0) {
+        if ($xpAward < 0) {
             throw new \InvalidArgumentException('Negative battle award');
         }
         if ($enemyShipsSunk < 0) {
@@ -413,7 +399,7 @@ final class CaptainProfile
         $key = (string) $gameId;
         $battle = $this->battles[$key] ?? throw new \DomainException('Battle not registered for this profile');
         if ($battle['settled']) {
-            return ['xp' => 0, 'materials' => 0, 'lost' => [], 'damaged' => []];
+            return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => []];
         }
 
         $battle['settled'] = true;
@@ -422,11 +408,11 @@ final class CaptainProfile
         $this->battles[$key] = $battle;
 
         $this->xp += $xpAward;
-        $this->materials += $materialsAward;
+        $this->resources = $this->resources->add($loot);
 
         [$lost, $damaged] = $this->applyLosses($battle['ships'] ?? [], $result, $sunkLengths);
 
-        return ['xp' => $xpAward, 'materials' => $materialsAward, 'lost' => $lost, 'damaged' => $damaged];
+        return ['xp' => $xpAward, 'loot' => $loot, 'lost' => $lost, 'damaged' => $damaged];
     }
 
     /**
@@ -508,7 +494,7 @@ final class CaptainProfile
     /**
      * @param array<string, array{island: string, settled: bool, result: ?string, ships?: list<string>, enemySunk?: int}> $battles
      * @param list<OwnedShip>|null                                                                                        $fleet      null = profil sprzed ekonomii — dostaje flotę startową
-     * @param int|null                                                                                                    $materials  null = materiały startowe
+     * @param Resources|null                                                                                              $resources  null = surowce startowe
      * @param int|null                                                                                                    $worldSeed  null = seed wyprowadzony z id (stabilny dla starych profili)
      * @param array{x:int,y:int}|null                                                                                     $position   null = start ustali ensureWorldState
      * @param list<string>|null                                                                                           $discovered sektory "x:y"
@@ -521,7 +507,7 @@ final class CaptainProfile
         int $xp,
         array $battles,
         ?array $fleet = null,
-        ?int $materials = null,
+        ?Resources $resources = null,
         ?int $worldSeed = null,
         ?array $position = null,
         ?array $discovered = null,
@@ -532,7 +518,7 @@ final class CaptainProfile
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
         $self->fleet = $fleet ?? self::startingFleet();
-        $self->materials = $materials ?? self::STARTING_MATERIALS;
+        $self->resources = $resources ?? new Resources(wood: self::STARTING_WOOD);
         $self->worldSeed = $worldSeed ?? (crc32((string) $id) & 0x7FFFFFFF);
         $self->position = $position;
         $self->discovered = null !== $discovered ? array_fill_keys($discovered, true) : [];

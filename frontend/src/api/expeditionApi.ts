@@ -49,6 +49,12 @@ export const SHIP_ICONS: Record<ShipTypeName, string> = {
     lotniskowiec: '🛳️',
 };
 
+export interface ResourcesDTO {
+    wood: number;
+    steel: number;
+    gold: number;
+}
+
 export interface ProfileDTO {
     id: string;
     name: string;
@@ -58,7 +64,7 @@ export interface ProfileDTO {
 
 export interface ExpeditionProfileDTO extends ProfileDTO {
     nextRank: { rank: RankName; xpNeeded: number } | null;
-    materials: number;
+    resources: ResourcesDTO;
     // jednostki wroga zatopione we wszystkich rozliczonych bitwach
     enemyShipsSunk: number;
 }
@@ -68,14 +74,14 @@ export interface FleetShipDTO {
     type: ShipTypeName;
     length: number;
     damaged: boolean;
-    repairCost: number;
+    repairCost: ResourcesDTO;
 }
 
 export interface ShipTypeDTO {
     type: ShipTypeName;
     length: number;
-    buildCost: number;
-    repairCost: number;
+    buildCost: ResourcesDTO;
+    repairCost: ResourcesDTO;
     requiredRank: RankName;
     requiredShipyardLevel: number;
 }
@@ -88,8 +94,8 @@ export interface IslandDTO {
     requiredRank: RankName;
     xpWin: number;
     xpLoss: number;
-    materialsWin: number;
-    materialsLoss: number;
+    lootWin: ResourcesDTO;
+    lootLoss: ResourcesDTO;
     shipyardLevel: number;
     board: { w: number; h: number };
     unlocked: boolean;
@@ -117,8 +123,8 @@ export interface SailResultDTO {
     position: { x: number; y: number };
     discoveredNow: string[];
     cartography: number;
-    event: { type: string; effect: string; ship?: ShipTypeName; materials?: number } | null;
-    materials: number;
+    event: { type: string; effect: string; ship?: ShipTypeName; wood?: number } | null;
+    resources: ResourcesDTO;
     atIsland: string | null;
 }
 
@@ -136,8 +142,8 @@ export interface SettleResultDTO {
     xp: number;
     rank: RankName;
     rankUp: boolean;
-    materialsAwarded: number;
-    materials: number;
+    loot: ResourcesDTO;
+    resources: ResourcesDTO;
     lostShips: ShipTypeName[];
     damagedShips: ShipTypeName[];
 }

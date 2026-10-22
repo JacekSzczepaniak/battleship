@@ -39,7 +39,7 @@
                 </div>
                 <div class="xp-row">
                     <span>{{ expedition.profile.xp }} XP</span>
-                    <span class="materials">🔩 {{ expedition.profile.materials }}</span>
+                    <span class="stock">{{ formatResources(expedition.profile.resources, 'brak surowców') }}</span>
                     <template v-if="expedition.profile.nextRank">
                         <div class="xp-bar" role="progressbar">
                             <div class="xp-fill" :style="{ width: xpProgress + '%' }"></div>
@@ -87,7 +87,7 @@
                                 :title="repairBlock(ship) ?? ''"
                                 @click="onRepair(ship)"
                             >
-                                Remont ({{ ship.repairCost }} 🔩)
+                                Remont ({{ formatResources(ship.repairCost) }})
                             </button>
                             <span v-if="repairBlock(ship)" class="muted">{{ repairBlock(ship) }}</span>
                         </template>
@@ -106,7 +106,7 @@
                                 :title="buildBlock(t) ?? ''"
                                 @click="onBuild(t)"
                             >
-                                Buduj ({{ t.buildCost }} 🔩)
+                                Buduj ({{ formatResources(t.buildCost) }})
                             </button>
                             <span v-if="buildBlock(t)" class="muted">{{ buildBlock(t) }}</span>
                         </li>
@@ -137,8 +137,8 @@
                     </div>
                     <p class="desc">{{ island.description }}</p>
                     <div class="island-meta">
-                        <span>🏆 +{{ island.xpWin }} XP, +{{ island.materialsWin }} 🔩</span>
-                        <span class="muted">porażka: +{{ island.xpLoss }} XP, +{{ island.materialsLoss }} 🔩</span>
+                        <span>🏆 +{{ island.xpWin }} XP, {{ formatResources(island.lootWin, 'bez łupów') }}</span>
+                        <span class="muted">porażka: +{{ island.xpLoss }} XP, {{ formatResources(island.lootLoss, 'bez łupów') }}</span>
                         <span class="muted">🏗️ stocznia poz. {{ island.shipyardLevel }} · plansza {{ island.board.w }}×{{ island.board.h }}</span>
                         <span v-if="island.wins || island.losses" class="muted">
                             bilans: {{ island.wins }}W / {{ island.losses }}P
@@ -173,6 +173,7 @@ import {
     clearCurrentBattle, clearProfileId, getCurrentBattle, getProfileId,
     setCurrentBattle, setProfileId, type CurrentBattle,
 } from '../lib/expeditionSession';
+import { covers, formatResources, missing } from '../lib/resources';
 
 const router = useRouter();
 const route = useRoute();
@@ -265,8 +266,8 @@ async function onSail(x: number, y: number) {
     try {
         const result = await sail(profileId, x, y);
         const parts: string[] = [];
-        if (result.cartography > 0) parts.push(`+${result.cartography} 🔩 za nowe mapy`);
-        if (result.event?.effect === 'materials-lost') parts.push(`🌩️ Sztorm! Fale zabrały ${result.event.materials} 🔩`);
+        if (result.cartography > 0) parts.push(`+${result.cartography} drewna za nowe mapy`);
+        if (result.event?.effect === 'wood-lost') parts.push(`🌩️ Sztorm! Fale zabrały ${result.event.wood} drewna`);
         if (result.event?.effect === 'ship-damaged') parts.push(`🌩️ Sztorm! ${SHIP_LABELS[result.event.ship!]} uszkodzony`);
         seaMsg.value = parts.join(' · ');
         expedition.value = await getExpedition(profileId);
@@ -284,7 +285,7 @@ function buildBlock(t: ShipTypeDTO): string | null {
     if (!profile || !island) return 'dopłyń do portu';
     if (!rankAtLeast(profile.rank, t.requiredRank)) return `wymaga rangi: ${rankLabel(t.requiredRank)}`;
     if (island.shipyardLevel < t.requiredShipyardLevel) return `wymaga stoczni poziomu ${t.requiredShipyardLevel}`;
-    if (profile.materials < t.buildCost) return 'za mało materiałów';
+    if (!covers(profile.resources, t.buildCost)) return missing(profile.resources, t.buildCost);
     return null;
 }
 
@@ -296,7 +297,7 @@ function repairBlock(ship: FleetShipDTO): string | null {
     if (!profile || !type) return 'wczytywanie…';
     if (!island) return 'dopłyń do portu';
     if (island.shipyardLevel < type.requiredShipyardLevel) return `wymaga stoczni poziomu ${type.requiredShipyardLevel}`;
-    if (profile.materials < ship.repairCost) return 'za mało materiałów';
+    if (!covers(profile.resources, ship.repairCost)) return missing(profile.resources, ship.repairCost);
     return null;
 }
 
@@ -433,7 +434,7 @@ h2, h3 { font-family: var(--font-head); }
 .xp-bar { flex: 1 1 140px; min-width: 120px; height: 8px; background: var(--bg-panel); border: 1px solid var(--line-card); border-radius: 5px; overflow: hidden; }
 .xp-fill { height: 100%; background: linear-gradient(90deg, var(--info), var(--info-light)); transition: width 0.4s ease; }
 .pending { display: flex; gap: 0.75rem; align-items: center; border-color: var(--accent); }
-.materials { font-weight: 600; color: var(--warn); }
+.stock { font-weight: 600; color: var(--warn); }
 .sea-grid { display: grid; gap: 3px; margin-top: 0.75rem; }
 .sea-cell { width: 1.7rem; height: 1.7rem; border: 0; border-radius: 4px; padding: 0; font-size: 0.95rem; line-height: 1; cursor: default; }
 .sea-cell.fog { background: #0a1b23; box-shadow: inset 0 0 0 1px #12303a; }

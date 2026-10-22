@@ -69,19 +69,12 @@
                     </div>
 
                     <div class="resources">
-                        <div class="res">
-                            <span class="res-dot" style="background: var(--res-steel)"></span>
-                            <div><b>{{ expedition.profile.materials }}</b><span>MATERIAŁY</span></div>
-                        </div>
-                        <div class="res">
-                            <span class="res-dot island-dot"></span>
-                            <div><b>{{ discoveredIslands }} / {{ expedition.islands.length }}</b><span>WYSPY</span></div>
-                        </div>
-                        <div class="res">
-                            <span class="res-dot chart-dot"></span>
-                            <div><b>{{ chartedPercent }}%</b><span>MAPA</span></div>
+                        <div v-for="r in RESOURCES" :key="r.key" class="res">
+                            <span class="res-dot" :style="{ background: r.color }"></span>
+                            <div><b>{{ expedition.profile.resources[r.key] }}</b><span>{{ r.label.toUpperCase() }}</span></div>
                         </div>
                     </div>
+                    <div class="charted">wyspy {{ discoveredIslands }} / {{ expedition.islands.length }} · zbadano {{ chartedPercent }}% mapy</div>
 
                     <div class="where">
                         <Anchor :size="14" />
@@ -147,6 +140,7 @@ import {
 } from '../lib/expeditionSession';
 import { getTrainingPrefs } from '../lib/battleSession';
 import { carriedWeapon } from '../lib/ships';
+import { RESOURCES, formatResources } from '../lib/resources';
 
 const router = useRouter();
 
@@ -233,7 +227,7 @@ const primary = computed<Primary>(() => {
         return {
             kind: 'island',
             label: 'Nowa bitwa',
-            hint: `${island.name} · +${island.xpWin} XP, +${island.materialsWin} mat. za wygraną`,
+            hint: `${island.name} · +${island.xpWin} XP, ${formatResources(island.lootWin, 'bez łupów')} za wygraną`,
         };
     }
     const prefs = getTrainingPrefs();
@@ -466,8 +460,7 @@ h1 span { color: var(--info); }
 .res { flex: 1; display: flex; align-items: center; gap: 8px; padding: 11px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--line-card); }
 .res b { display: block; font: 700 15px var(--font-head); }
 .res span { font: 500 9px var(--font-mono); color: var(--text-muted); }
-.island-dot { background: var(--res-wood); }
-.chart-dot { background: var(--info); }
+.charted { margin-top: -12px; font: 500 11px var(--font-mono); color: var(--text-dim); }
 
 .where { display: flex; align-items: center; gap: 8px; font: 500 12px var(--font-mono); color: var(--text-muted); }
 .where b { color: var(--text); font-weight: 600; }

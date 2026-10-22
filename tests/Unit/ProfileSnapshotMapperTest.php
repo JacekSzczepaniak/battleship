@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Domain\Expedition\CaptainProfile;
+use App\Domain\Expedition\Resources;
 use App\Domain\Expedition\WorldMap;
 use App\Domain\Shared\GameId;
 use App\Infrastructure\Persistence\Doctrine\Mapper\ProfileSnapshotMapper;
@@ -12,7 +13,7 @@ it('round-tripuje liczbę zatopionych jednostek wroga', function () {
     $profile = CaptainProfile::create('Jacek');
     $gameId = GameId::new();
     $profile->startBattle('zatoka-rozbitka', $gameId);
-    $profile->settleBattle($gameId, 'won', 40, 20, [], 3);
+    $profile->settleBattle($gameId, 'won', 40, new Resources(wood: 20), [], 3);
 
     $restored = $m->toDomain((string) $profile->id(), $m->toArray($profile));
 

@@ -4,6 +4,7 @@ namespace App\Infrastructure\Persistence\Doctrine\Mapper;
 
 use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\OwnedShip;
+use App\Domain\Expedition\Resources;
 use App\Domain\Expedition\ShipType;
 use App\Domain\Shared\ProfileId;
 
@@ -16,7 +17,7 @@ final class ProfileSnapshotMapper
             'name' => $profile->name(),
             'xp' => $profile->xp(),
             'battles' => $profile->battles(),
-            'materials' => $profile->materials(),
+            'resources' => $profile->resources()->toArray(),
             'fleet' => array_map(static fn (OwnedShip $ship) => [
                 'id' => $ship->id,
                 'type' => $ship->type->value,
@@ -83,7 +84,7 @@ final class ProfileSnapshotMapper
             (int) ($state['xp'] ?? 0),
             $battles,
             $fleet,
-            isset($state['materials']) ? max(0, (int) $state['materials']) : null,
+            $this->resourcesFrom($state),
             isset($state['worldSeed']) ? (int) $state['worldSeed'] : null,
             $position,
             $discovered,
@@ -93,5 +94,23 @@ final class ProfileSnapshotMapper
             // brak klucza = profil sprzed odwiedzin; CaptainProfile przyjmie obecną pozycję
             isset($state['visited']) && is_array($state['visited']) ? array_values(array_map('strval', $state['visited'])) : null,
         );
+    }
+
+    /**
+     * Surowce ze snapshotu; profil sprzed trzech surowców miał jedno pole
+     * `materials` — przechodzi w drewno (GAME_DESIGN.md, filar IV).
+     *
+     * @param array<string,mixed> $state
+     */
+    private function resourcesFrom(array $state): ?Resources
+    {
+        if (isset($state['resources']) && is_array($state['resources'])) {
+            return Resources::fromArray($state['resources']);
+        }
+        if (isset($state['materials'])) {
+            return new Resources(wood: max(0, (int) $state['materials']));
+        }
+
+        return null;
     }
 }

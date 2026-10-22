@@ -51,13 +51,14 @@ export const SHIP_ICONS: Record<ShipTypeName, string> = {
     transportowiec: '⛴️',
 };
 
-export type BuildingTypeName = 'tartak' | 'kopalnia' | 'rozbudowa-stoczni' | 'fort';
+export type BuildingTypeName = 'tartak' | 'kopalnia' | 'rozbudowa-stoczni' | 'fort' | 'uczelnia';
 
 export const BUILDING_LABELS: Record<BuildingTypeName, string> = {
     tartak: 'Tartak',
     kopalnia: 'Kopalnia',
     'rozbudowa-stoczni': 'Rozbudowa stoczni',
     fort: 'Fort',
+    uczelnia: 'Uczelnia',
 };
 
 export const BUILDING_ICONS: Record<BuildingTypeName, string> = {
@@ -65,6 +66,7 @@ export const BUILDING_ICONS: Record<BuildingTypeName, string> = {
     kopalnia: '⚒️',
     'rozbudowa-stoczni': '🏗️',
     fort: '🏰',
+    uczelnia: '🎓',
 };
 
 // powód blokady budowy (Domain/Expedition/BuildingBlock); null = można budować
@@ -204,6 +206,59 @@ export interface LastCounterattackDTO {
     stockpileLost: ResourcesDTO;
 }
 
+// drzewko technologii (Epic G): katalog zawiera tylko działające technologie
+export type TechBranchName = 'kadluby' | 'uzbrojenie' | 'nawigacja' | 'osady';
+export type TechnologyName = 'spichlerze' | 'mapy-sztormowe';
+
+export const TECH_BRANCH_LABELS: Record<TechBranchName, string> = {
+    kadluby: 'Kadłuby',
+    uzbrojenie: 'Uzbrojenie',
+    nawigacja: 'Nawigacja',
+    osady: 'Osady',
+};
+
+export const TECH_LABELS: Record<TechnologyName, string> = {
+    spichlerze: 'Spichlerze',
+    'mapy-sztormowe': 'Mapy sztormowe',
+};
+
+// powód blokady badania (Domain/Expedition/ResearchBlock); null = można badać
+export type ResearchBlockCode = 'researched' | 'busy' | 'prerequisite' | 'rank' | 'no-academy' | 'not-present' | 'resources';
+
+export interface TechLevelDTO {
+    level: number;
+    cost: ResourcesDTO;
+    ticks: number;
+    requiredRank: RankName | null;
+}
+
+export interface TechnologyDTO {
+    id: TechnologyName;
+    branch: TechBranchName;
+    level: number;
+    state: 'researched' | 'in-progress' | 'available' | 'locked';
+    // tylko dla badania w toku
+    ticksLeft: number | null;
+    // powód blokady liczony dla wyspy, na której stoi kapitan
+    blocker: ResearchBlockCode | null;
+}
+
+export interface ResearchDTO {
+    // badanie w toku; paused = wyspa uczelni bez bandery, tiki nie lecą do odbicia
+    current: {
+        technology: TechnologyName;
+        island: string;
+        islandName: string;
+        progress: number;
+        ticks: number;
+        ticksLeft: number;
+        paused: boolean;
+    } | null;
+    branches: TechBranchName[];
+    levels: TechLevelDTO[];
+    technologies: TechnologyDTO[];
+}
+
 export interface ExpeditionDTO {
     profile: ExpeditionProfileDTO;
     fleet: FleetShipDTO[];
@@ -212,6 +267,7 @@ export interface ExpeditionDTO {
     islands: IslandDTO[];
     world: WorldDTO;
     counterattack: { pending: PendingCounterattackDTO | null; last: LastCounterattackDTO | null };
+    research: ResearchDTO;
 }
 
 export interface SettleResultDTO {
@@ -271,6 +327,18 @@ export interface BuildBuildingDTO {
 /** Budowa natychmiastowa na posiadanej wyspie, na której stoi kapitan; płaci magazyn wyspy, resztę ładownia. */
 export async function buildBuilding(profileId: string, islandId: string, type: BuildingTypeName): Promise<BuildBuildingDTO> {
     return http.post<BuildBuildingDTO>(`/profiles/${profileId}/islands/${islandId}/buildings`, { type });
+}
+
+export interface StartResearchDTO {
+    island: string;
+    technology: TechnologyName;
+    ticksLeft: number;
+    stockpile: ResourcesDTO;
+    cargo: ResourcesDTO;
+}
+
+export async function startResearch(profileId: string, islandId: string, technology: TechnologyName): Promise<StartResearchDTO> {
+    return http.post<StartResearchDTO>(`/profiles/${profileId}/islands/${islandId}/research`, { technology });
 }
 
 export interface CargoTransferDTO {

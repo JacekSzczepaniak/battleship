@@ -183,6 +183,6 @@ it('snapshot bez budynków, z nieznanym albo powtórzonym typem', function () {
     unset($state['buildings']);
     expect($m->toDomain((string) $profile->id(), $state)->buildings())->toBe([]);
 
-    $state['buildings'] = ['mielizny' => ['tartak', 'tartak', 'uczelnia'], 'zatoka-rozbitka' => ['uczelnia']];
+    $state['buildings'] = ['mielizny' => ['tartak', 'tartak', 'latarnia'], 'zatoka-rozbitka' => ['latarnia']];
     expect($m->toDomain((string) $profile->id(), $state)->buildings())->toBe(['mielizny' => [BuildingType::Tartak]]);
 });

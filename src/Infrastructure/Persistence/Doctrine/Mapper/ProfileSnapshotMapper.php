@@ -7,6 +7,7 @@ use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\OwnedShip;
 use App\Domain\Expedition\Resources;
 use App\Domain\Expedition\ShipType;
+use App\Domain\Expedition\Technology;
 use App\Domain\Shared\ProfileId;
 
 final class ProfileSnapshotMapper
@@ -44,6 +45,8 @@ final class ProfileSnapshotMapper
                 static fn (array $types) => array_map(static fn (BuildingType $t) => $t->value, $types),
                 $profile->buildings(),
             ),
+            // badania (Epic G): zbadane technologie i badanie w toku
+            'research' => $profile->researchState(),
         ];
     }
 
@@ -121,7 +124,40 @@ final class ProfileSnapshotMapper
             // brak klucza = profil sprzed kontrataków; CaptainProfile zacznie rzuty od bieżącego tiku
             $this->counterattacksFrom($state),
             $this->buildingsFrom($state),
+            ...$this->researchFrom($state),
         );
+    }
+
+    /**
+     * Badania; brak klucza = profil sprzed uczelni, bez badań. Nieznana
+     * technologia jest pomijana, a badanie w toku z nieznaną technologią przepada.
+     *
+     * @param array<string,mixed> $state
+     *
+     * @return array{researched: list<Technology>, research: array{technology: Technology, island: string, progress: int, countedTo: int}|null}
+     */
+    private function researchFrom(array $state): array
+    {
+        $raw = (array) ($state['research'] ?? []);
+
+        $researched = [];
+        foreach ((array) ($raw['researched'] ?? []) as $value) {
+            $technology = Technology::tryFrom((string) $value);
+            if (null !== $technology && !in_array($technology, $researched, true)) {
+                $researched[] = $technology;
+            }
+        }
+
+        $current = $raw['current'] ?? null;
+        $technology = is_array($current) ? Technology::tryFrom((string) ($current['technology'] ?? '')) : null;
+        $research = null !== $technology && isset($current['island']) && !in_array($technology, $researched, true) ? [
+            'technology' => $technology,
+            'island' => (string) $current['island'],
+            'progress' => max(0, (int) ($current['progress'] ?? 0)),
+            'countedTo' => (int) ($current['countedTo'] ?? 0),
+        ] : null;
+
+        return ['researched' => $researched, 'research' => $research];
     }
 
     /**

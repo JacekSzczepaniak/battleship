@@ -10,11 +10,13 @@ use App\Application\Expedition\RepairShip;
 use App\Application\Expedition\Sail;
 use App\Application\Expedition\SettleBattle;
 use App\Application\Expedition\StartIslandBattle;
+use App\Application\Expedition\StartResearch;
 use App\Application\Expedition\TransferCargo;
 use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\OwnedShip;
 use App\Domain\Expedition\Resources;
 use App\Domain\Expedition\ShipType;
+use App\Domain\Expedition\Technology;
 use App\Infrastructure\Http\Error\ApiException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -34,6 +36,7 @@ final class ExpeditionController
         private Sail $sail,
         private TransferCargo $transferCargo,
         private BuildBuilding $buildBuilding,
+        private StartResearch $startResearch,
     ) {
     }
 
@@ -160,6 +163,19 @@ final class ExpeditionController
         }
 
         return new JsonResponse($this->buildBuilding->handle($id, $islandId, $type), 201);
+    }
+
+    #[Route('/{id}/islands/{islandId}/research', name: 'api_profiles_start_research', methods: ['POST'])]
+    public function startResearch(string $id, string $islandId, Request $request): JsonResponse
+    {
+        $this->assertUuid($id, 'profile');
+
+        $technology = Technology::tryFrom((string) ($this->jsonPayload($request)['technology'] ?? ''));
+        if (null === $technology) {
+            throw new ApiException('Missing or invalid field: technology:technology', 'VALIDATION_ERROR', 400);
+        }
+
+        return new JsonResponse($this->startResearch->handle($id, $islandId, $technology), 201);
     }
 
     #[Route('/{id}/cargo', name: 'api_profiles_transfer_cargo', methods: ['POST'])]

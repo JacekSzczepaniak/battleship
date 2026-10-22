@@ -80,8 +80,8 @@ powroty. Odrzucone: czas rzeczywisty i hybrydy czasowe.
   bez poziomów, budowa natychmiastowa. Tartak i kopalnia przy złożu swojego
   surowca podwajają urobek. Fort chroni wyspę pod nieobecność floty: kontratak
   kończy się grabieżą połowy magazynu zamiast utraty wyspy. Rozbudowa stoczni
-  podnosi istniejącą stocznię o poziom (Zatoka 1→2). Uczelnia wchodzi
-  z drzewkiem (Epic G). Po utracie wyspy budynki stoją nieczynne do odbicia.
+  podnosi istniejącą stocznię o poziom (Zatoka 1→2). Uczelnia prowadzi
+  badania drzewka (filar V). Po utracie wyspy budynki stoją nieczynne do odbicia.
 - **Dzika/questowa** — wraki, ekspedycje, sekrety (czarna perła)
 
 ✅ (#48) Morze Rozbitków: stocznie tylko na Zatoce Rozbitka (poziom 1)
@@ -164,12 +164,16 @@ Obrona wyspy bez floty: fort w osadzie (#81, Filar III wyżej).
   niski procent odzysku, resztki znikają po N tikach, po przegranej pole
   bitwy zostaje przy wrogu (wojna nie może się sama finansować).
 
-## Filar V — Technologia: drzewko z dwiema ścieżkami
+## Filar V — Technologia: drzewko z dwiema ścieżkami ✅
 
 Gałęzie (szkic): **Kadłuby** (rozmiary, ładownia) · **Uzbrojenie**
 (parametry broni — WeaponSpec już na to gotowy) · **Nawigacja** (ruch o 2
 sektory, odporność na sztormy, jakość map, przejścia oceaniczne) ·
 **Osady** (budynki, wydobycie). Surowce per gałąź (drewno/stal/złoto).
+
+✅ (Epic G) Uczelnia na posiadanej wyspie, jedno badanie naraz, czas w tikach
+pod banderą. Drzewko startowe: 4 gałęzie po 2 poziomy, drugi poziom od rangi
+sternik. Technologie działają tylko po stronie gracza.
 
 Każdy węzeł ma **dwie ścieżki odblokowania**:
 - **standardową** — surowce + tiki + wymagana uczelnia (wolniej),
@@ -284,8 +288,8 @@ Akwenu 1 zacznie uwierać.
 
 ## Otwarte pytania
 
-- Kształt drzewka: ile węzłów na start, które questowe?
-- Rangi vs akweny: czy progi rosną z liczbą akwenów; gdzie osiągalny admirał; czym zapełnić lukę 250–600 XP (dziś tylko wyspy II poziomu) i które rangi bramkują akwen 2?
+- Które technologie dostaną ścieżkę questową (Epic J) i czy dojdą technologie tylko questowe?
+- Rangi vs akweny: czy progi rosną z liczbą akwenów; gdzie osiągalny admirał; czym zapełnić lukę 250–600 XP (dziś wyspy II poziomu, a od Epica G także drugi poziom drzewka) i które rangi bramkują akwen 2?
 - Specjalizacje: konkretne perki i progi; czy bojowa wpływa na samą bitwę, czy tylko na otoczkę (remont, zwiad)?
 - Pobojowisko: procent odzysku, po ilu tikach resztki znikają?
 - Ile akwenów na start (2–3?) i rozmiar planszy akwenu (12×12 wystarczy?)

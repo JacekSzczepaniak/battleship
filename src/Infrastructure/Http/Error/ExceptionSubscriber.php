@@ -100,6 +100,9 @@ final class ExceptionSubscriber implements EventSubscriberInterface
         if (str_starts_with($message, 'Ship type locked')) {
             return ['SHIP_TYPE_LOCKED', 403];
         }
+        if (str_starts_with($message, 'Technology locked')) {
+            return ['TECHNOLOGY_LOCKED', 403];
+        }
 
         return match ($message) {
             'Fleet not placed' => ['FLEET_NOT_PLACED', 422],
@@ -130,6 +133,10 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             'Island already captured' => ['ISLAND_ALREADY_CAPTURED', 409],
             'No counterattack on this island' => ['NO_COUNTERATTACK', 409],
             'Defense already started' => ['DEFENSE_ALREADY_STARTED', 409],
+            'Technology already researched' => ['TECHNOLOGY_RESEARCHED', 409],
+            'Research already in progress' => ['RESEARCH_IN_PROGRESS', 409],
+            'Technology requires previous level in branch' => ['TECHNOLOGY_PREREQUISITE', 409],
+            'No active academy on this island' => ['NO_ACADEMY', 409],
             default => ['VALIDATION_ERROR', 400],
         };
     }

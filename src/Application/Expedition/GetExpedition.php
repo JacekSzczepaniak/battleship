@@ -7,6 +7,9 @@ use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\ProfileRepository;
 use App\Domain\Expedition\ShipType;
+use App\Domain\Expedition\TechBranch;
+use App\Domain\Expedition\TechLevel;
+use App\Domain\Expedition\Technology;
 use App\Domain\Expedition\WorldMap;
 use App\Domain\Shared\ProfileId;
 
@@ -22,10 +25,10 @@ final class GetExpedition
     /**
      * Stan wyprawy: profil (XP, ranga, ładownia, liczba bander), flota, katalogi
      * typów statków (do UI stoczni) i budynków (do panelu osady), wyspy
-     * z kłódkami, banderami, stoczniami, złożami i budynkami oraz kontratak
-     * w toku i ostatnie rozstrzygnięcie (#78).
+     * z kłódkami, banderami, stoczniami, złożami i budynkami, kontratak
+     * w toku i ostatnie rozstrzygnięcie (#78) oraz drzewko badań (Epic G).
      *
-     * @return array{profile: array<string,mixed>, fleet: list<array<string,mixed>>, shipTypes: list<array<string,mixed>>, buildingTypes: list<array<string,mixed>>, islands: list<array<string,mixed>>, world: array<string,mixed>, counterattack: array<string,mixed>}
+     * @return array{profile: array<string,mixed>, fleet: list<array<string,mixed>>, shipTypes: list<array<string,mixed>>, buildingTypes: list<array<string,mixed>>, islands: list<array<string,mixed>>, world: array<string,mixed>, counterattack: array<string,mixed>, research: array<string,mixed>}
      */
     public function handle(string $profileId): array
     {
@@ -140,11 +143,69 @@ final class GetExpedition
                 // sektory, na których kapitan był — tam sztorm już nie grozi
                 'visited' => $profile->visitedSectors(),
                 'atIsland' => $world->islandAt($position['x'], $position['y']),
-                'stormChance' => 20,
+                // Mapy sztormowe (Epic G) obniżają szansę z 20% do 10%
+                'stormChance' => $profile->stormChance(),
                 // zegar świata: rejs i bitwa kosztują tik
                 'tick' => $profile->tick(),
             ],
             'counterattack' => $this->counterattackView($profile, $world),
+            'research' => $this->researchView($profile, $world),
+        ];
+    }
+
+    /**
+     * Drzewko badań: gałęzie, poziomy (koszt, czas, ranga), technologie ze
+     * stanem i badanie w toku. Powód blokady liczy się dla wyspy, na której
+     * stoi kapitan — tam można zacząć badanie.
+     *
+     * @return array{current: array<string,mixed>|null, branches: list<string>, levels: list<array<string,mixed>>, technologies: list<array<string,mixed>>}
+     */
+    private function researchView(CaptainProfile $profile, WorldMap $world): array
+    {
+        $position = $profile->position();
+        $hereId = $world->islandAt($position['x'], $position['y']);
+        $here = null !== $hereId ? $this->islands->byId($hereId) : null;
+        $current = $profile->research();
+
+        $technologies = array_map(function (Technology $t) use ($profile, $here, $world, $current) {
+            $inProgress = $current['technology'] ?? null;
+            $blocker = $profile->researchBlocker($t, $here, $world);
+
+            return [
+                'id' => $t->value,
+                'branch' => $t->branch()->value,
+                'level' => $t->level()->value,
+                // researched | in-progress | available | locked (z powodem w blocker)
+                'state' => match (true) {
+                    $profile->hasResearched($t) => 'researched',
+                    $inProgress === $t => 'in-progress',
+                    null === $blocker => 'available',
+                    default => 'locked',
+                },
+                'ticksLeft' => $inProgress === $t ? $profile->researchTicksLeft() : null,
+                'blocker' => $profile->hasResearched($t) || $inProgress === $t ? null : $blocker?->value,
+            ];
+        }, Technology::cases());
+
+        return [
+            'current' => null !== $current ? [
+                'technology' => $current['technology']->value,
+                'island' => $current['island'],
+                'islandName' => $this->islandName($current['island']),
+                'progress' => $current['progress'],
+                'ticks' => $current['technology']->level()->researchTicks(),
+                'ticksLeft' => $profile->researchTicksLeft(),
+                // wyspa uczelni bez bandery: badanie stoi do odbicia
+                'paused' => $profile->isResearchPaused(),
+            ] : null,
+            'branches' => array_map(static fn (TechBranch $b) => $b->value, TechBranch::cases()),
+            'levels' => array_map(static fn (TechLevel $l) => [
+                'level' => $l->value,
+                'cost' => $l->researchCost()->toArray(),
+                'ticks' => $l->researchTicks(),
+                'requiredRank' => $l->requiredRank()?->value,
+            ], TechLevel::cases()),
+            'technologies' => $technologies,
         ];
     }
 

@@ -20,6 +20,9 @@ final class Island
      */
     public const DEPOSIT_BUFFER_TICKS = 10;
 
+    /** Limit urobku po zbadaniu Spichlerzy (Epic G). */
+    public const DEPOSIT_BUFFER_TICKS_GRANARY = 20;
+
     /**
      * Najwyższy poziom stoczni (lotniskowiec). Poziom z katalogu podnosi
      * rozbudowa stoczni (#82), liczy go profil (CaptainProfile::shipyardLevel()).

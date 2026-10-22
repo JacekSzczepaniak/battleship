@@ -78,7 +78,7 @@
                         :disabled="busy || !cell.sailable"
                         :title="cell.title"
                         @click="onSail(cell.x, cell.y)"
-                    >{{ cell.glyph }}<small v-if="cell.flag" class="flag">🚩</small><small v-if="cell.attacked" class="attacked">⚔️</small><small v-if="cell.badge" class="badge">{{ cell.badge }}</small></button>
+                    >{{ cell.glyph }}<small v-if="cell.flag" class="flag">🚩</small><small v-if="cell.attacked" class="attacked">⚔️</small><small v-if="cell.badge" class="badge">{{ cell.badge }}</small><span v-if="cell.name" class="name">{{ cell.name }}</span></button>
                 </div>
                 <p v-if="unescortedConvoy" class="convoy-warn">⚠️ Konwój bez eskorty — podwójne straty w sztormie. Eskortuje sprawny kuter, niszczyciel albo lotniskowiec.</p>
                 <p v-if="seaMsg" class="sea-msg">{{ seaMsg }}</p>
@@ -331,6 +331,8 @@ const discoveredIslands = computed<IslandDTO[]>(
 interface SeaCell {
     key: string; x: number; y: number;
     cls: Record<string, boolean>; glyph: string; badge: string; flag: boolean; attacked: boolean; title: string; sailable: boolean;
+    /** nazwa wyspy w sektorze — etykieta po najechaniu (pusta na wodzie) */
+    name: string;
 }
 
 const seaCells = computed<SeaCell[]>(() => {
@@ -362,6 +364,7 @@ const seaCells = computed<SeaCell[]>(() => {
                 glyph: isPlayer ? '⛵' : island ? (island.unlocked ? '🏝️' : '🔒') : '',
                 badge: island ? (island.deposit ? '⛏' : island.shipyardLevel > 0 ? '🏗' : '') : '',
                 flag: island?.owned ?? false,
+                name: island?.name ?? '',
                 attacked: !!island && pending?.island === island.id,
                 title: [
                     island ? island.name : discovered ? `${x}:${y}` : 'niezbadane wody',
@@ -675,6 +678,27 @@ h2, h3 { font-family: var(--font-head); }
 .sea-cell .badge { position: absolute; right: -2px; bottom: -3px; font-size: 0.6rem; }
 .sea-cell .flag { position: absolute; left: -2px; top: -3px; font-size: 0.6rem; }
 .sea-cell .attacked { position: absolute; right: -3px; top: -4px; font-size: 0.6rem; }
+/* nazwa wyspy nad sektorem po najechaniu — natywny title pokazuje się z opóźnieniem
+   i nie działa na nieaktywnych (niesąsiednich) sektorach */
+.sea-cell .name {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 5px);
+    transform: translateX(-50%);
+    z-index: 3;
+    padding: 3px 7px;
+    border-radius: 5px;
+    border: 1px solid var(--line-card);
+    background: var(--bg-panel);
+    color: var(--text);
+    font: 600 11px var(--font-body);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .12s;
+}
+.sea-cell.island:hover { z-index: 2; box-shadow: inset 0 0 0 2px var(--accent); }
+.sea-cell.island:hover .name { opacity: 1; }
 .counterattack { display: flex; flex-direction: column; gap: 0.3rem; border-color: var(--danger); }
 .counterattack.defending { border-color: var(--info); }
 .counterattack .full-flag { font: 600 12px var(--font-mono); color: var(--info); }

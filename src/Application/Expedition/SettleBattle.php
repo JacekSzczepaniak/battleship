@@ -23,14 +23,16 @@ final class SettleBattle
     /**
      * Rozlicza zakończoną bitwę: wynik i straty czytane ze stanu gry (nie od
      * klienta), XP i surowce wg definicji wyspy, idempotentnie (ponowne
-     * wywołanie → zera). Pierwsza wygrana o wyspę stawia banderę. Zatopione
-     * statki: wygrana → do remontu, przegrana → stracone.
+     * wywołanie → zera). Pierwsza wygrana o wyspę stawia banderę; obrona
+     * rozstrzyga kontratak (przegrana odbiera wyspę i połowę magazynu, #78).
+     * Zatopione statki: wygrana → do remontu, przegrana → stracone.
      *
      * @return array{result:string, awarded:int, xp:int, rank:string, rankUp:bool,
      *     loot:array{wood:int, steel:int, gold:int}, stockpile:array{wood:int, steel:int, gold:int},
      *     cargo:array{wood:int, steel:int, gold:int}, cargoLost:array{wood:int, steel:int, gold:int},
      *     lostShips:list<string>, damagedShips:list<string>, captured:bool,
-     *     depositStarted:array{wood:int, steel:int, gold:int}|null}
+     *     depositStarted:array{wood:int, steel:int, gold:int}|null,
+     *     defense:array{held:bool, stockpileLost:array{wood:int, steel:int, gold:int}}|null}
      */
     public function handle(string $profileId, string $gameId): array
     {
@@ -90,6 +92,10 @@ final class SettleBattle
             'captured' => $outcome['captured'],
             // zdobycie wyspy ze złożem uruchamia wydobycie: urobek na tik
             'depositStarted' => $outcome['captured'] && $island->hasDeposit() ? $island->depositYield->toArray() : null,
+            // obrona przed kontratakiem: czy bandera została i co przepadło z magazynu
+            'defense' => null !== $outcome['defense']
+                ? ['held' => $outcome['defense']['held'], 'stockpileLost' => $outcome['defense']['stockpileLost']->toArray()]
+                : null,
         ];
     }
 

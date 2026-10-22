@@ -124,6 +124,9 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             'Ship not found' => ['SHIP_NOT_FOUND', 404],
             'Ship is not damaged' => ['SHIP_NOT_DAMAGED', 409],
             'No seaworthy ships' => ['NO_SEAWORTHY_SHIPS', 409],
+            'Island already captured' => ['ISLAND_ALREADY_CAPTURED', 409],
+            'No counterattack on this island' => ['NO_COUNTERATTACK', 409],
+            'Defense already started' => ['DEFENSE_ALREADY_STARTED', 409],
             default => ['VALIDATION_ERROR', 400],
         };
     }

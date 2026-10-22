@@ -22,7 +22,9 @@ final class StartIslandBattle
      * Rozpoczyna bitwę o wyspę: waliduje rangę, tworzy grę wg zasad wyspy
      * (plansza z definicji wyspy, skład = wybrane albo domyślnie dobrane sprawne
      * statki w limicie pól wyspy — przeciwnik dostaje lustrzany skład) i rejestruje
-     * bitwę w profilu. Dalej działa zwykły flow gry (fleet/shots).
+     * bitwę w profilu. Dalej działa zwykły flow gry (fleet/shots). Na wyspie pod
+     * banderą to obrona przed kontratakiem w toku — napastnik strzela pierwszy;
+     * bez kontrataku wyspa pod banderą nie przyjmuje bitwy (#78).
      *
      * @param list<string>|null $shipIds skład bitewny; null = dobór domyślny
      */
@@ -47,6 +49,11 @@ final class StartIslandBattle
             throw new \DomainException('Not at island');
         }
 
+        $defense = $profile->ownsIsland($island->id);
+        if ($defense) {
+            $profile->assertCanDefend($island->id);
+        }
+
         if ([] === $profile->activeFleet()) {
             throw new \DomainException('No seaworthy ships');
         }
@@ -58,8 +65,11 @@ final class StartIslandBattle
             $composition[$length] = ($composition[$length] ?? 0) + 1;
         }
 
-        $game = $this->createGame->handle($island->boardWidth, $island->boardHeight, $island->mode, $composition);
-        $profile->startBattle($island->id, $game->id(), array_map(static fn ($s) => $s->id, $squad));
+        $game = $this->createGame->handle($island->boardWidth, $island->boardHeight, $island->mode, $composition, $defense ? 'opponent' : 'player');
+        $shipIds = array_map(static fn ($s) => $s->id, $squad);
+        $defense
+            ? $profile->startDefense($island->id, $game->id(), $shipIds)
+            : $profile->startBattle($island->id, $game->id(), $shipIds);
         $this->profiles->save($profile);
 
         return $game;

@@ -36,6 +36,8 @@ final class ProfileSnapshotMapper
             'depositTicks' => $profile->depositTicks(),
             // wyspy pod banderą: id wyspy → tik zdobycia
             'ownedIslands' => $profile->ownedIslands(),
+            // kontratak w toku, spokój, rzuty i ostatnie rozstrzygnięcie (#78)
+            'counterattacks' => $profile->counterattackState(),
         ];
     }
 
@@ -110,7 +112,43 @@ final class ProfileSnapshotMapper
             array_map('intval', (array) ($state['depositTicks'] ?? [])),
             // brak klucza = brak bander (bez migracji — stare profile są testowe, #77)
             array_map('intval', (array) ($state['ownedIslands'] ?? [])),
+            // brak klucza = profil sprzed kontrataków; CaptainProfile zacznie rzuty od bieżącego tiku
+            $this->counterattacksFrom($state),
         );
+    }
+
+    /**
+     * @param array<string,mixed> $state
+     *
+     * @return array{pending: array{island: string, announcedAt: int, strikeAt: int, defense: ?string}|null, calmFrom: int, rolledTo: int, last: array{island: string, tick: int, held: bool, absent: bool, stockpileLost: array{wood:int, steel:int, gold:int}}|null}|null
+     */
+    private function counterattacksFrom(array $state): ?array
+    {
+        $raw = $state['counterattacks'] ?? null;
+        if (!is_array($raw)) {
+            return null;
+        }
+
+        $pending = $raw['pending'] ?? null;
+        $last = $raw['last'] ?? null;
+
+        return [
+            'pending' => is_array($pending) && isset($pending['island'], $pending['announcedAt'], $pending['strikeAt']) ? [
+                'island' => (string) $pending['island'],
+                'announcedAt' => (int) $pending['announcedAt'],
+                'strikeAt' => (int) $pending['strikeAt'],
+                'defense' => isset($pending['defense']) ? (string) $pending['defense'] : null,
+            ] : null,
+            'calmFrom' => (int) ($raw['calmFrom'] ?? 0),
+            'rolledTo' => (int) ($raw['rolledTo'] ?? 0),
+            'last' => is_array($last) && isset($last['island'], $last['tick']) ? [
+                'island' => (string) $last['island'],
+                'tick' => (int) $last['tick'],
+                'held' => (bool) ($last['held'] ?? false),
+                'absent' => (bool) ($last['absent'] ?? false),
+                'stockpileLost' => Resources::fromArray((array) ($last['stockpileLost'] ?? []))->toArray(),
+            ] : null,
+        ];
     }
 
     /**

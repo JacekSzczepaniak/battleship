@@ -36,6 +36,12 @@ const description = computed(() => {
             : 'Tym razem morze było po stronie wroga. Trening bez stawki — nic nie przepada.';
     }
     const damaged = r.expedition.settle.damagedShips.length;
+    if (r.expedition.settle.defense) {
+        return won.value
+            ? `Kontratak odparty — bandera nad wyspą ${r.expedition.islandName} zostaje.`
+                + (damaged ? ' Jednostki zatopione w boju wracają do portu na remont.' : ' Cała flota wraca bez szwanku.')
+            : `Napastnik przełamał obronę i zdjął Twoją banderę z wyspy ${r.expedition.islandName}. Jednostki zatopione w tej bitwie przepadły — XP zostaje na zawsze.`;
+    }
     return won.value
         ? `Flota wroga poszła na dno — ${r.expedition.islandName} uznaje Twoją banderę.`
             + (damaged ? ' Jednostki zatopione w boju wracają do portu na remont.' : ' Cała flota wraca bez szwanku.')
@@ -163,7 +169,7 @@ onMounted(load);
         <template v-else>
             <div class="left">
                 <div class="kicker outcome-kicker">
-                    {{ exp ? `BITWA · ${exp.islandName.toUpperCase()} · AKWEN I` : `BITWA TRENINGOWA · ${report.board.w}×${report.board.h}` }}
+                    {{ exp ? `${exp.settle.defense ? 'OBRONA' : 'BITWA'} · ${exp.islandName.toUpperCase()} · AKWEN I` : `BITWA TRENINGOWA · ${report.board.w}×${report.board.h}` }}
                 </div>
                 <h1>{{ won ? 'ZWYCIĘSTWO' : 'PORAŻKA' }}</h1>
                 <p class="lead">{{ description }}</p>
@@ -208,7 +214,8 @@ onMounted(load);
 
                 <div class="actions">
                     <router-link class="btn btn-primary" :to="{ name: 'home' }"><Anchor :size="17" /> Do portu</router-link>
-                    <button class="btn btn-secondary" :disabled="busy" @click="repeat">{{ busy ? 'Stawianie żagli…' : 'Powtórz bitwę' }}</button>
+                    <!-- wyspa pod banderą nie jest areną (#78): po zdobyciu i po obronie nie ma czego powtarzać -->
+                    <button v-if="!exp || (!exp.settle.captured && !exp.settle.defense)" class="btn btn-secondary" :disabled="busy" @click="repeat">{{ busy ? 'Stawianie żagli…' : 'Powtórz bitwę' }}</button>
                 </div>
                 <p v-if="error" class="err">{{ error }}</p>
             </div>
@@ -229,6 +236,10 @@ onMounted(load);
                 <template v-if="exp">
                     <p class="muted loot-note">Łup czeka w magazynie wyspy {{ exp.islandName }} — załadujesz go w porcie (1 tik).</p>
                     <p v-if="exp.settle.captured" class="captured">🚩 {{ exp.islandName }} pod Twoją banderą.</p>
+                    <p v-if="exp.settle.defense?.held" class="captured">🛡️ Wyspa obroniona: {{ exp.islandName }} — bandera zostaje, następny kontratak najwcześniej po 8 tikach spokoju.</p>
+                    <p v-if="exp.settle.defense && !exp.settle.defense.held" class="island-lost">
+                        🏴 Wyspa utracona: {{ exp.islandName }} — bandera zdjęta, z magazynu przepadło {{ formatResources(exp.settle.defense.stockpileLost, 'nic — magazyn był pusty') }}. Wyspę odbijesz zwykłą bitwą.
+                    </p>
                     <p v-if="exp.settle.depositStarted" class="deposit-started">
                         ⛏️ Złoże ruszyło: {{ formatResources(exp.settle.depositStarted) }}/tik — urobek zbiera się w magazynie wyspy {{ exp.islandName }}.
                     </p>
@@ -319,6 +330,7 @@ h1 { font: 700 84px var(--font-head); line-height: .95; letter-spacing: -.02em; 
 .loot-note { margin: 0; font-size: 12px; }
 .deposit-started { margin: 0; font: 600 12px var(--font-mono); color: var(--info); }
 .captured { margin: 0; font: 600 12px var(--font-mono); color: var(--text); }
+.island-lost { margin: 0; font: 600 12px var(--font-mono); color: var(--warn); }
 .cargo-lost { margin: 0; font: 500 12px var(--font-body); color: var(--danger); }
 .no-loot { margin: 0; font-size: 13px; }
 .fleet-kicker { margin-top: 16px; }

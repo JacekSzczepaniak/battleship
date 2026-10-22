@@ -239,9 +239,14 @@ export function useGame() {
             }
             const g = await getGame(gameId.value);
             applyProjection(g);
+            // obrona wyspy (#78): napastnik strzela pierwszy, zanim gracz zobaczy planszę
+            const attackerFirst = g.shotsCount === 0
+                && (g.playerUnderFireGrid?.hits.length ?? 0) + (g.playerUnderFireGrid?.misses.length ?? 0) > 0;
             pushLog('INFO', g.shotsCount > 0
                 ? `Wczytano trwającą bitwę — oddano już ${g.shotsCount} strzałów.`
-                : 'Flota na pozycjach. Wróg czeka we mgle — oddaj pierwszą salwę.');
+                : attackerFirst
+                    ? 'Napastnik otworzył ogień pierwszy — teraz Twoja salwa.'
+                    : 'Flota na pozycjach. Wróg czeka we mgle — oddaj pierwszą salwę.');
         } catch (e: any) {
             error.value = e?.message ?? 'Start failed';
             try { console.warn('[useGame.start] ERROR', e); } catch {}

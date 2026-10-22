@@ -53,6 +53,17 @@
                 </div>
             </section>
 
+            <!-- Kontratak (#78): zapowiedź z terminem i ostatnie rozstrzygnięcie -->
+            <section v-if="counterattack.pending" class="card counterattack" :class="{ defending: counterattack.pending.defenseStarted }">
+                <strong>{{ counterattack.pending.defenseStarted ? '🛡️' : '⚔️' }} {{ pendingLabel(counterattack.pending) }}</strong>
+                <span v-if="!counterattack.pending.defenseStarted" class="muted">
+                    Stań flotą na wyspie i przyjmij bitwę — napastnik strzela pierwszy. Bez obrony wyspa przepada razem z połową magazynu.
+                </span>
+            </section>
+            <p v-if="counterattack.last" class="last-counterattack" :class="{ lost: !counterattack.last.held }">
+                {{ counterattack.last.held ? '🛡️' : '🏴' }} {{ lastLabel(counterattack.last) }}
+            </p>
+
             <!-- Mapa morza: mgła, wyspy, pozycja -->
             <section class="card sea">
                 <div class="island-head">
@@ -68,7 +79,7 @@
                         :disabled="busy || !cell.sailable"
                         :title="cell.title"
                         @click="onSail(cell.x, cell.y)"
-                    >{{ cell.glyph }}<small v-if="cell.flag" class="flag">🚩</small><small v-if="cell.badge" class="badge">{{ cell.badge }}</small></button>
+                    >{{ cell.glyph }}<small v-if="cell.flag" class="flag">🚩</small><small v-if="cell.attacked" class="attacked">⚔️</small><small v-if="cell.badge" class="badge">{{ cell.badge }}</small></button>
                 </div>
                 <p v-if="unescortedConvoy" class="convoy-warn">⚠️ Konwój bez eskorty — podwójne straty w sztormie. Eskortuje sprawny kuter, niszczyciel albo lotniskowiec.</p>
                 <p v-if="seaMsg" class="sea-msg">{{ seaMsg }}</p>
@@ -81,7 +92,7 @@
                     <thead><tr><th>wyspa</th><th>stocznia</th><th>złoże</th><th>magazyn</th></tr></thead>
                     <tbody>
                         <tr v-for="island in economy" :key="island.id" :class="{ here: island.present }">
-                            <th>{{ island.present ? '📍' : '' }} {{ island.name }}<span v-if="island.owned" title="pod Twoją banderą"> 🚩</span></th>
+                            <th>{{ island.present ? '📍' : '' }} {{ island.name }}<span v-if="island.owned" title="pod Twoją banderą"> 🚩</span><span v-if="counterattack.pending?.island === island.id" :title="pendingLabel(counterattack.pending!)"> ⚔️</span></th>
                             <td>{{ island.shipyardLevel > 0 ? `🏗️ poz. ${island.shipyardLevel}` : '—' }}</td>
                             <td :class="`dep-${depositState(island)}`">{{ island.deposit ? `⛏️ ${depositLabel(island)}` : '—' }}</td>
                             <td>{{ formatResources(island.stockpile, 'pusto') }}</td>
@@ -179,7 +190,7 @@
                             bilans: {{ island.wins }}W / {{ island.losses }}P
                         </span>
                     </div>
-                    <div v-if="island.unlocked && island.present" class="squad">
+                    <div v-if="island.unlocked && island.present && (!island.owned || canDefend(island, counterattack.pending))" class="squad">
                         <span :class="{ over: activeCells > island.squadLimit }">
                             skład: {{ squadCells(squadFor(island)) }} / {{ island.squadLimit }} pól
                             <template v-if="activeCells > island.squadLimit"> · flota ma {{ activeCells }} pól — część zostanie w porcie</template>
@@ -203,8 +214,24 @@
                         </ul>
                         <span v-if="convoyBlocked(island)" class="over">⚠️ konwój bez eskorty nie zaatakuje wyspy — dobierz kuter, niszczyciel albo lotniskowiec</span>
                     </div>
+                    <!-- wyspa pod banderą nie jest areną: bitwa tylko w obronie przed kontratakiem (#78) -->
+                    <template v-if="island.owned">
+                        <button
+                            v-if="island.present && canDefend(island, counterattack.pending)"
+                            class="btn defend"
+                            :disabled="starting !== null || pendingBattle !== null || squadFor(island).length === 0 || convoyBlocked(island)"
+                            @click="onStartBattle(island)"
+                        >
+                            {{ starting === island.id ? 'Stawianie żagli…' : `🛡️ Broń wyspy — uderzenie za ${ticksLabel(counterattack.pending!.ticksLeft)}` }}
+                        </button>
+                        <p v-else-if="canDefend(island, counterattack.pending)" class="muted warn">
+                            ⚔️ Kontratak za {{ ticksLabel(counterattack.pending!.ticksLeft) }} — dopłyń z flotą, by bronić wyspy.
+                        </p>
+                        <p v-else-if="counterattack.pending?.island === island.id" class="muted">🛡️ Obrona trwa — wróć do bitwy, by ją rozstrzygnąć.</p>
+                        <p v-else class="muted">🚩 Wyspa pod Twoją banderą — walczysz tu tylko w obronie przed kontratakiem.</p>
+                    </template>
                     <button
-                        v-if="island.unlocked && island.present"
+                        v-else-if="island.unlocked && island.present"
                         class="btn"
                         :disabled="starting !== null || pendingBattle !== null || squadFor(island).length === 0 || convoyBlocked(island)"
                         @click="onStartBattle(island)"
@@ -236,6 +263,7 @@ import { defaultSquad, isUnescortedConvoy, squadCells } from '../lib/squad';
 import { fieldsLabel } from '../lib/ships';
 import { depositLabel, depositState, economyIslands, whereToFind } from '../lib/economy';
 import CargoPanel from '../components/CargoPanel.vue';
+import { canDefend, lastLabel, pendingLabel, ticksLabel } from '../lib/counterattack';
 import {
     addResources, covers, formatResources, isEmpty, missing, totalResources,
 } from '../lib/resources';
@@ -280,13 +308,15 @@ const currentIsland = computed<IslandDTO | null>(
 
 const economy = computed<IslandDTO[]>(() => economyIslands(expedition.value?.islands ?? []));
 
+const counterattack = computed(() => expedition.value?.counterattack ?? { pending: null, last: null });
+
 const discoveredIslands = computed<IslandDTO[]>(
     () => expedition.value?.islands.filter(i => i.discovered) ?? []
 );
 
 interface SeaCell {
     key: string; x: number; y: number;
-    cls: Record<string, boolean>; glyph: string; badge: string; flag: boolean; title: string; sailable: boolean;
+    cls: Record<string, boolean>; glyph: string; badge: string; flag: boolean; attacked: boolean; title: string; sailable: boolean;
 }
 
 const seaCells = computed<SeaCell[]>(() => {
@@ -299,6 +329,7 @@ const seaCells = computed<SeaCell[]>(() => {
         exp.islands.filter(i => i.discovered && i.position).map(i => [`${i.position!.x}:${i.position!.y}`, i])
     );
     const { x: px, y: py } = world.position;
+    const pending = exp.counterattack.pending;
 
     const cells: SeaCell[] = [];
     for (let y = 0; y < world.height; y++) {
@@ -317,9 +348,11 @@ const seaCells = computed<SeaCell[]>(() => {
                 glyph: isPlayer ? '⛵' : island ? (island.unlocked ? '🏝️' : '🔒') : '',
                 badge: island ? (island.deposit ? '⛏' : island.shipyardLevel > 0 ? '🏗' : '') : '',
                 flag: island?.owned ?? false,
+                attacked: !!island && pending?.island === island.id,
                 title: [
                     island ? island.name : discovered ? `${x}:${y}` : 'niezbadane wody',
                     island?.owned ? 'pod Twoją banderą' : '',
+                    island && pending?.island === island.id ? pendingLabel(pending) : '',
                     island && island.shipyardLevel > 0 ? `stocznia poz. ${island.shipyardLevel}` : '',
                     island?.deposit ? `złoże: ${depositLabel(island)}` : '',
                     island && !isEmpty(island.stockpile) ? `magazyn: ${formatResources(island.stockpile)}` : '',
@@ -610,6 +643,12 @@ h2, h3 { font-family: var(--font-head); }
 .sea-cell { position: relative; width: 1.7rem; height: 1.7rem; border: 0; border-radius: 4px; padding: 0; font-size: 0.95rem; line-height: 1; cursor: default; }
 .sea-cell .badge { position: absolute; right: -2px; bottom: -3px; font-size: 0.6rem; }
 .sea-cell .flag { position: absolute; left: -2px; top: -3px; font-size: 0.6rem; }
+.sea-cell .attacked { position: absolute; right: -3px; top: -4px; font-size: 0.6rem; }
+.counterattack { display: flex; flex-direction: column; gap: 0.3rem; border-color: var(--danger); }
+.counterattack.defending { border-color: var(--info); }
+.last-counterattack { margin: -6px 0 14px; font: 500 12px var(--font-mono); color: var(--text-muted); }
+.last-counterattack.lost { color: var(--warn); }
+.warn { color: var(--warn); }
 .sea-cell.fog { background: #0a1b23; box-shadow: inset 0 0 0 1px #12303a; }
 .sea-cell.water { background: #0c2029; box-shadow: inset 0 0 0 1px #163540; }
 .sea-cell.island { background: #3b3220; box-shadow: inset 0 0 0 1px #6b5a35; }

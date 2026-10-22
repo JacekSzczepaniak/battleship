@@ -9,7 +9,7 @@ use App\Domain\Shared\GameId;
 
 function noAwards(): array
 {
-    return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => [], 'cargoLost' => Resources::none(), 'captured' => false];
+    return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => [], 'cargoLost' => Resources::none(), 'captured' => false, 'defense' => null];
 }
 
 it('startuje jako rozbitek z zerowym XP', function () {
@@ -75,9 +75,10 @@ it('odrzuca podwójną rejestrację tej samej gry', function () {
 it('awansuje wraz z progami XP', function () {
     $profile = CaptainProfile::create('Jacek');
 
-    foreach (range(1, 2) as $i) {
+    // zdobyta wyspa nie jest już areną (#78) — dwie różne wyspy
+    foreach (['zatoka-rozbitka', 'mielizny'] as $islandId) {
         $gameId = GameId::new();
-        $profile->startBattle('zatoka-rozbitka', $gameId);
+        $profile->startBattle($islandId, $gameId);
         $profile->settleBattle($gameId, 'won', 40);
     }
 

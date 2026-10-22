@@ -14,6 +14,7 @@ final class PlaceFleet
     public function __construct(
         private readonly GameRepository $repo,
         private readonly FleetGenerator $opponentFleetGenerator,
+        private readonly OpponentTurn $opponentTurn,
     ) {
     }
 
@@ -40,6 +41,12 @@ final class PlaceFleet
 
         // Po rozstawieniu floty gracza – wygeneruj flotę przeciwnika
         $game->placeOpponentFleet($this->opponentFleetGenerator->generate($game->ruleset()));
+
+        // gra zaczynana turą przeciwnika (obrona wyspy, #78): napastnik strzela
+        // pierwszy, zanim gracz zobaczy planszę bitwy
+        if ('opponent' === $game->turn()) {
+            $this->opponentTurn->respond($game);
+        }
 
         $this->repo->save($game);
     }

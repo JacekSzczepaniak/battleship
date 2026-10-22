@@ -16,15 +16,16 @@ final class WorldMap
 
     /**
      * @param array<string, array{x:int,y:int}> $islands
-     * @param array<string, Island>             $deposits wyspy ze złożem (klucz: id)
+     * @param array<string, Island>             $deposits    wyspy ze złożem (klucz: id)
+     * @param array<string, bool>               $safeHarbors bezpieczne przystanie (klucz: id) — kontrataki ich nie dotyczą
      */
-    private function __construct(private array $islands, private array $deposits)
+    private function __construct(private array $islands, private array $deposits, private array $safeHarbors = [])
     {
     }
 
     /**
      * @param list<string> $islandIds wyspy w kolejności trasy
-     * @param list<Island> $deposits  wyspy ze złożami — nie zmieniają rozkładu wysp
+     * @param list<Island> $deposits  definicje wysp: złoża i bezpieczne przystanie — nie zmieniają rozkładu wysp
      */
     public static function generate(int $seed, array $islandIds, array $deposits = []): self
     {
@@ -47,13 +48,23 @@ final class WorldMap
         }
 
         $withDeposit = [];
+        $safeHarbors = [];
         foreach ($deposits as $island) {
             if ($island->hasDeposit() && isset($islands[$island->id])) {
                 $withDeposit[$island->id] = $island;
             }
+            if ($island->safeHarbor) {
+                $safeHarbors[$island->id] = true;
+            }
         }
 
-        return new self($islands, $withDeposit);
+        return new self($islands, $withDeposit, $safeHarbors);
+    }
+
+    /** Czy wyspa jest bezpieczną przystanią (kontrataki jej nie dotyczą, #78). */
+    public function isSafeHarbor(string $islandId): bool
+    {
+        return isset($this->safeHarbors[$islandId]);
     }
 
     /** @return array<string, Island> wyspy ze złożami na tej mapie */

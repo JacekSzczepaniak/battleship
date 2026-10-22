@@ -35,13 +35,23 @@ it('porażka nie zdobywa wyspy, pierwsza wygrana stawia banderę z tikiem rozlic
         ->and($profile->ownedIslands())->toBe(['mielizny' => $profile->tick()]);
 });
 
-it('kolejna wygrana o posiadaną wyspę nie zdobywa jej drugi raz', function () {
+it('bitwa o zdobycie wyspy pod banderą jest odrzucana', function () {
     $profile = CaptainProfile::create('Jacek');
     fightFor($profile, 'mielizny', 'won');
+
+    $profile->startBattle('mielizny', GameId::new());
+})->throws(DomainException::class, 'Island already captured');
+
+it('druga bitwa rozpoczęta przed zdobyciem nie zdobywa wyspy drugi raz', function () {
+    $profile = CaptainProfile::create('Jacek');
+    $first = GameId::new();
+    $second = GameId::new();
+    $profile->startBattle('mielizny', $first);
+    $profile->startBattle('mielizny', $second);
+    $profile->settleBattle($first, 'won', 50);
     $capturedAt = $profile->tick();
 
-    // zdobyta wyspa nadal przyjmuje bitwy (areną przestaje być w #78)
-    expect(fightFor($profile, 'mielizny', 'won')['captured'])->toBeFalse()
+    expect($profile->settleBattle($second, 'won', 50)['captured'])->toBeFalse()
         ->and($profile->ownedIslands())->toBe(['mielizny' => $capturedAt])
         ->and($profile->battleStats('mielizny'))->toBe(['wins' => 2, 'losses' => 0]);
 });

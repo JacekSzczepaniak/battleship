@@ -2,8 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\Resources;
+use App\Domain\Expedition\StaticIslandCatalog;
 use App\Domain\Expedition\WorldMap;
 use App\Domain\Shared\GameId;
 use App\Infrastructure\Persistence\Doctrine\Mapper\ProfileSnapshotMapper;
@@ -71,4 +73,21 @@ it('round-tripuje odwiedzone sektory; stary snapshot zna tylko obecną pozycję'
     $legacy = $m->toDomain((string) $profile->id(), $state);
     $pos = $profile->position();
     expect($legacy->visitedSectors())->toBe(["{$pos['x']}:{$pos['y']}"]);
+});
+
+it('round-tripuje rozbudowę stoczni; profil sprzed rozbudowy ma stocznię z katalogu', function () {
+    $m = new ProfileSnapshotMapper();
+    $zatoka = (new StaticIslandCatalog())->byId('zatoka-rozbitka');
+    $profile = CaptainProfile::create('Jacek');
+    $state = $m->toArray($profile);
+    $state['ownedIslands'] = ['zatoka-rozbitka' => 0];
+
+    unset($state['buildings']);
+    expect($m->toDomain((string) $profile->id(), $state)->shipyardLevel($zatoka))->toBe(1);
+
+    $state['buildings'] = ['zatoka-rozbitka' => ['rozbudowa-stoczni']];
+    $restored = $m->toDomain((string) $profile->id(), $state);
+    expect($restored->buildingsOn('zatoka-rozbitka'))->toBe([BuildingType::RozbudowaStoczni])
+        ->and($restored->shipyardLevel($zatoka))->toBe(2)
+        ->and($m->toArray($restored)['buildings'])->toBe(['zatoka-rozbitka' => ['rozbudowa-stoczni']]);
 });

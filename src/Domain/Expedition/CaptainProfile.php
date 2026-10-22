@@ -487,6 +487,22 @@ final class CaptainProfile
         return $yield;
     }
 
+    /**
+     * Efektywny poziom stoczni: poziom z katalogu plus rozbudowa (#82), która
+     * działa tylko pod banderą. Ten poziom sprawdzają budowa i remont statku.
+     */
+    public function shipyardLevel(Island $island): int
+    {
+        $level = $island->shipyardLevel;
+        if ($this->ownsIsland($island->id)) {
+            foreach ($this->buildingsOn($island->id) as $building) {
+                $level += $building->shipyardBoost();
+            }
+        }
+
+        return min($level, Island::MAX_SHIPYARD_LEVEL);
+    }
+
     /** Ile urobku może czekać w magazynie wyspy: limit rośnie razem z urobkiem. */
     public function depositCap(Island $island): Resources
     {

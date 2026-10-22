@@ -23,7 +23,8 @@ Bitwa (classic/fun, bronie specjalne z nośników: sonar=kuter, torpeda=
 niszczyciel, nalot=lotniskowiec; zatopiony nośnik odbiera broń) · profil
 kapitana (XP nigdy nie maleje, 9 rang od rozbitka do admirała — progi
 w Filarze VIII; licznik zatopionych jednostek wroga) · flota jako majątek
-(budowa/remont, stocznie, wygrana→remont / przegrana→strata) · wolne morze
+(budowa/remont, stocznie, wygrana→remont / przegrana→strata) · rozbudowa
+stoczni w osadzie (#82: Zatoka pod banderą 1→2) · wolne morze
 12×12 z mgłą, deterministyczne z seeda profilu · kartografia pasywna ·
 sztormy przy pierwszym wpłynięciu na sektor · geografia=logistyka (bitwa/stocznia
 wymagają obecności) · bandery na wyspach i kontrataki z bitwą obronną; pełna
@@ -86,6 +87,11 @@ i Wyspie Sygnałowej (poziom 3); złoża na Mieliznach (3 drewna/tik),
 Archipelagu Mgieł (2 stali/tik) i Cieśninie Sztormów (1 złota/tik).
 Złoże pracuje, dopóki wyspa jest pod banderą kapitana, urobek czeka w jej
 magazynie do limitu 10 tików produkcji. Tratwę skleja się na każdej wyspie.
+
+✅ (#82) Rozbudowa stoczni (50 drewna, 30 stali, 15 złota) to budynek osady:
+podnosi stocznię poziomu 1–2 o jeden poziom, więc w Zatoce pod banderą
+powstają niszczyciel i transportowiec. Bez bandery stocznia wraca do poziomu
+z katalogu. Sygnałowa (poziom 3) i wyspy bez stoczni jej nie dostaną.
 
 **Zdobywanie wyspy — trzy fazy:** ✅
 1. potyczka morska (obecna bitwa = flota strażnicza),

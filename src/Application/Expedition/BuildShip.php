@@ -19,7 +19,8 @@ final class BuildShip
 
     /**
      * Buduje statek w stoczni wyspy, na której kapitan STOI (geografia =
-     * logistyka); stocznia musi być wystarczająco duża, a bramkę rangi typu
+     * logistyka); stocznia musi być wystarczająco duża (z rozbudową pod
+     * banderą, #82), a bramkę rangi typu
      * i koszt (magazyn wyspy, potem ładownia) egzekwuje domena (CaptainProfile::buildShip).
      */
     public function handle(string $profileId, string $islandId, ShipType $type): OwnedShip
@@ -36,7 +37,7 @@ final class BuildShip
         if (!$profile->isAt($this->worldFactory->worldFor($profile), $island->id)) {
             throw new \DomainException('Not at island');
         }
-        if ($island->shipyardLevel < $type->requiredShipyardLevel()) {
+        if ($profile->shipyardLevel($island) < $type->requiredShipyardLevel()) {
             throw new \DomainException('Shipyard level too low for this ship type');
         }
 

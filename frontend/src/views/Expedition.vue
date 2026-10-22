@@ -133,7 +133,7 @@
                         @transfer="onTransfer"
                     />
 
-                    <h3 v-if="currentIsland.shipyardLevel > 0">🏗️ Stocznia — {{ currentIsland.name }} <span class="muted">(poziom {{ currentIsland.shipyardLevel }})</span></h3>
+                    <h3 v-if="currentIsland.shipyardLevel > 0">🏗️ Stocznia — {{ currentIsland.name }} <span class="muted">(poziom {{ currentIsland.shipyardLevel }}{{ currentIsland.owned && currentIsland.buildings.includes('rozbudowa-stoczni') ? ', z rozbudową' : '' }})</span></h3>
                     <h3 v-else>🪵 {{ currentIsland.name }} — bez stoczni <span class="muted">(tratwę skleisz z desek na każdej wyspie)</span></h3>
                     <ul class="ships">
                         <li v-for="t in expedition.shipTypes" :key="t.type" class="ship">

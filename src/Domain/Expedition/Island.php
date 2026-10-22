@@ -20,6 +20,12 @@ final class Island
      */
     public const DEPOSIT_BUFFER_TICKS = 10;
 
+    /**
+     * Najwyższy poziom stoczni (lotniskowiec). Poziom z katalogu podnosi
+     * rozbudowa stoczni (#82), liczy go profil (CaptainProfile::shipyardLevel()).
+     */
+    public const MAX_SHIPYARD_LEVEL = 3;
+
     public function __construct(
         public readonly string $id,
         public readonly string $name,

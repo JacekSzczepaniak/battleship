@@ -51,16 +51,18 @@ export const SHIP_ICONS: Record<ShipTypeName, string> = {
     transportowiec: '⛴️',
 };
 
-export type BuildingTypeName = 'tartak' | 'kopalnia';
+export type BuildingTypeName = 'tartak' | 'kopalnia' | 'rozbudowa-stoczni';
 
 export const BUILDING_LABELS: Record<BuildingTypeName, string> = {
     tartak: 'Tartak',
     kopalnia: 'Kopalnia',
+    'rozbudowa-stoczni': 'Rozbudowa stoczni',
 };
 
 export const BUILDING_ICONS: Record<BuildingTypeName, string> = {
     tartak: '🪚',
     kopalnia: '⚒️',
+    'rozbudowa-stoczni': '🏗️',
 };
 
 // powód blokady budowy (Domain/Expedition/BuildingBlock); null = można budować
@@ -125,7 +127,7 @@ export interface IslandDTO {
     xpLoss: number;
     lootWin: ResourcesDTO;
     lootLoss: ResourcesDTO;
-    // 0 = brak stoczni — na wyspie zbudujesz tylko tratwę
+    // 0 = brak stoczni — na wyspie zbudujesz tylko tratwę; z rozbudową pod banderą (#82)
     shipyardLevel: number;
     // bandera kapitana: pierwsza wygrana bitwa o wyspę ją zdobywa
     owned: boolean;

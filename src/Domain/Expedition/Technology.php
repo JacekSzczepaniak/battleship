@@ -15,10 +15,20 @@ enum Technology: string
     /** Szansa sztormu przy pierwszym wpłynięciu: 10% zamiast 20%. */
     case MapySztormowe = 'mapy-sztormowe';
 
+    /** Ładownia każdego statku +50%, z zaokrągleniem w dół. */
+    case PojemneLadownie = 'pojemne-ladownie';
+
+    /** Remont za połowę ceny, z zaokrągleniem w górę. */
+    case DokRemontowy = 'dok-remontowy';
+
+    /** Złoże daje +1 jednostkę swojego surowca na tik, zanim tartak i kopalnia podwoją urobek. */
+    case LepszeNarzedzia = 'lepsze-narzedzia';
+
     public function branch(): TechBranch
     {
         return match ($this) {
-            self::Spichlerze => TechBranch::Osady,
+            self::Spichlerze, self::LepszeNarzedzia => TechBranch::Osady,
+            self::PojemneLadownie, self::DokRemontowy => TechBranch::Kadluby,
             self::MapySztormowe => TechBranch::Nawigacja,
         };
     }
@@ -26,7 +36,8 @@ enum Technology: string
     public function level(): TechLevel
     {
         return match ($this) {
-            self::Spichlerze, self::MapySztormowe => TechLevel::First,
+            self::Spichlerze, self::MapySztormowe, self::PojemneLadownie => TechLevel::First,
+            self::LepszeNarzedzia, self::DokRemontowy => TechLevel::Second,
         };
     }
 }

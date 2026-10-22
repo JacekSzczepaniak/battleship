@@ -226,7 +226,15 @@ final class CaptainProfile
      */
     public function cargoCapacity(): int
     {
-        return array_sum(array_map(static fn (OwnedShip $s) => $s->type->cargoCapacity(), $this->fleet));
+        return array_sum(array_map(fn (OwnedShip $s) => $this->shipCargoCapacity($s->type), $this->fleet));
+    }
+
+    /** Ładownia statku danego typu: Pojemne ładownie dają +50%, z zaokrągleniem w dół. */
+    public function shipCargoCapacity(ShipType $type): int
+    {
+        $capacity = $type->cargoCapacity();
+
+        return $this->hasResearched(Technology::PojemneLadownie) ? intdiv($capacity * 3, 2) : $capacity;
     }
 
     public function stockpile(string $islandId): Resources
@@ -425,10 +433,21 @@ final class CaptainProfile
             throw new \DomainException('Ship is not damaged');
         }
 
-        $this->pay($islandId, $ship->type->repairCost());
+        $this->pay($islandId, $this->repairCost($ship->type));
         $ship->repair();
 
         return $ship;
+    }
+
+    /** Koszt remontu statku danego typu: Dok remontowy daje połowę ceny, z zaokrągleniem w górę. */
+    public function repairCost(ShipType $type): Resources
+    {
+        $cost = $type->repairCost();
+        if (!$this->hasResearched(Technology::DokRemontowy)) {
+            return $cost;
+        }
+
+        return Resources::fromArray(array_map(static fn (int $amount) => intdiv($amount + 1, 2), $cost->toArray()));
     }
 
     private function shipById(string $shipId): ?OwnedShip
@@ -497,12 +516,20 @@ final class CaptainProfile
         $this->buildings[$island->id][] = $type;
     }
 
-    /** Urobek złoża na tik pod banderą, z budynkami stojącymi na wyspie (tartak, kopalnia). */
+    /**
+     * Urobek złoża na tik pod banderą: Lepsze narzędzia dokładają 1 jednostkę
+     * każdego surowca złoża, a budynki stojące na wyspie (tartak, kopalnia)
+     * podwajają już powiększony urobek.
+     */
     public function depositYield(Island $island): Resources
     {
-        $yield = $island->depositYield;
+        $base = $island->depositYield;
+        if ($this->hasResearched(Technology::LepszeNarzedzia)) {
+            $base = Resources::fromArray(array_map(static fn (int $amount) => $amount > 0 ? $amount + 1 : 0, $base->toArray()));
+        }
+        $yield = $base;
         foreach ($this->buildingsOn($island->id) as $building) {
-            $yield = $yield->add($building->depositBoost($island->depositYield));
+            $yield = $yield->add($building->depositBoost($base));
         }
 
         return $yield;

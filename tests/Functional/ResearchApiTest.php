@@ -37,6 +37,9 @@ final class ResearchApiTest extends WebTestCase
         self::assertSame([
             ['id' => 'spichlerze', 'branch' => 'osady', 'level' => 1, 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'no-academy'],
             ['id' => 'mapy-sztormowe', 'branch' => 'nawigacja', 'level' => 1, 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'no-academy'],
+            ['id' => 'pojemne-ladownie', 'branch' => 'kadluby', 'level' => 1, 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'no-academy'],
+            ['id' => 'dok-remontowy', 'branch' => 'kadluby', 'level' => 2, 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'prerequisite'],
+            ['id' => 'lepsze-narzedzia', 'branch' => 'osady', 'level' => 2, 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'prerequisite'],
         ], $research['technologies']);
 
         // bez uczelni badania nie da się zacząć
@@ -47,7 +50,10 @@ final class ResearchApiTest extends WebTestCase
         // uczelnia stoi także w bezpiecznej przystani
         $this->post($client, "/api/profiles/$profileId/islands/zatoka-rozbitka/buildings", ['type' => 'uczelnia']);
         self::assertResponseStatusCodeSame(201);
-        self::assertSame(['spichlerze' => 'available', 'mapy-sztormowe' => 'available'], $this->states($this->expedition($client, $profileId)));
+        self::assertSame(
+            ['spichlerze' => 'available', 'mapy-sztormowe' => 'available', 'pojemne-ladownie' => 'available', 'dok-remontowy' => 'locked', 'lepsze-narzedzia' => 'locked'],
+            $this->states($this->expedition($client, $profileId)),
+        );
 
         $started = $this->post($client, "/api/profiles/$profileId/islands/zatoka-rozbitka/research", ['technology' => 'spichlerze']);
         self::assertResponseStatusCodeSame(201);
@@ -115,7 +121,10 @@ final class ResearchApiTest extends WebTestCase
         );
         $expedition = $this->expedition($client, $granary);
         self::assertNull($expedition['research']['current']);
-        self::assertSame(['spichlerze' => 'researched', 'mapy-sztormowe' => 'researched'], $this->states($expedition));
+        self::assertSame(
+            ['spichlerze' => 'researched', 'mapy-sztormowe' => 'researched', 'pojemne-ladownie' => 'available', 'dok-remontowy' => 'locked', 'lepsze-narzedzia' => 'locked'],
+            $this->states($expedition),
+        );
         $mielizny = array_column($expedition['islands'], null, 'id')['mielizny'];
         self::assertSame(['wood' => 60, 'steel' => 0, 'gold' => 0], $mielizny['deposit']['cap']);
         self::assertSame(60, $mielizny['stockpile']['wood']);

@@ -26,6 +26,9 @@ const emit = defineEmits<{
 const EFFECTS: Record<TechnologyName, string> = {
     spichlerze: 'magazyn złoża mieści 20 tików produkcji zamiast 10',
     'mapy-sztormowe': 'sztorm przy pierwszym wpłynięciu: 10% zamiast 20%',
+    'pojemne-ladownie': 'ładownia każdego statku +50% (w dół)',
+    'dok-remontowy': 'remont za połowę ceny (w górę)',
+    'lepsze-narzedzia': 'złoże +1 na tik; tartak i kopalnia podwajają powiększony urobek',
 };
 
 const current = computed(() => props.research.current);

@@ -91,22 +91,23 @@ final class GetExpedition
             ];
         }
 
+        // ładownia i remont z technologiami kapitana (Pojemne ładownie, Dok remontowy)
         $fleet = array_map(static fn ($ship) => [
             'id' => $ship->id,
             'type' => $ship->type->value,
             'length' => $ship->type->length(),
             'damaged' => $ship->isDamaged(),
-            'repairCost' => $ship->type->repairCost()->toArray(),
+            'repairCost' => $profile->repairCost($ship->type)->toArray(),
         ], $profile->fleet());
 
         $shipTypes = array_map(static fn (ShipType $type) => [
             'type' => $type->value,
             'length' => $type->length(),
-            'cargoCapacity' => $type->cargoCapacity(),
+            'cargoCapacity' => $profile->shipCargoCapacity($type),
             // nośnik broni = eskorta konwoju (#47)
             'armed' => $type->isArmed(),
             'buildCost' => $type->buildCost()->toArray(),
-            'repairCost' => $type->repairCost()->toArray(),
+            'repairCost' => $profile->repairCost($type)->toArray(),
             'requiredRank' => $type->requiredRank()->value,
             'requiredShipyardLevel' => $type->requiredShipyardLevel(),
         ], ShipType::cases());

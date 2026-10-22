@@ -25,8 +25,8 @@ it('odrzuca ujemne ilości i koszt ponad stan', function () {
 
 it('niszczyciel wymaga stali — samo drewno nie wystarcza', function () {
     $profile = CaptainProfile::fromSnapshot(
-        CaptainProfile::create('Jacek')->id(), 'Jacek', Rank::Marynarz->threshold(), [], null,
-        new Resources(wood: 100),
+        CaptainProfile::create('Jacek')->id(), 'Jacek', Rank::Marynarz->threshold(), [], null, Resources::none(),
+        stockpiles: ['zatoka-rozbitka' => new Resources(wood: 100)],
     );
 
     expect(fn () => $profile->buildShip(ShipType::Niszczyciel, 'zatoka-rozbitka'))->toThrow(DomainException::class, 'Not enough resources');
@@ -34,13 +34,13 @@ it('niszczyciel wymaga stali — samo drewno nie wystarcza', function () {
 
 it('budowa niszczyciela zdejmuje drewno i stal', function () {
     $profile = CaptainProfile::fromSnapshot(
-        CaptainProfile::create('Jacek')->id(), 'Jacek', Rank::Marynarz->threshold(), [], null,
-        new Resources(wood: 40, steel: 25, gold: 3),
+        CaptainProfile::create('Jacek')->id(), 'Jacek', Rank::Marynarz->threshold(), [], null, Resources::none(),
+        stockpiles: ['zatoka-rozbitka' => new Resources(wood: 40, steel: 25, gold: 3)],
     );
 
     $profile->buildShip(ShipType::Niszczyciel, 'zatoka-rozbitka');
 
-    expect($profile->cargo()->toArray())->toBe(['wood' => 10, 'steel' => 5, 'gold' => 3]);
+    expect($profile->stockpile('zatoka-rozbitka')->toArray())->toBe(['wood' => 10, 'steel' => 5, 'gold' => 3]);
 });
 
 it('rozliczenie dokłada łup z wyspy do magazynu', function () {
@@ -51,7 +51,7 @@ it('rozliczenie dokłada łup z wyspy do magazynu', function () {
     $profile->settleBattle($gameId, 'won', 70, new Resources(wood: 20, steel: 10, gold: 5));
 
     expect($profile->stockpile('wyspa-sygnalowa')->toArray())->toBe(['wood' => 20, 'steel' => 10, 'gold' => 5])
-        ->and($profile->cargo()->toArray())->toBe(['wood' => 20, 'steel' => 0, 'gold' => 0]);
+        ->and($profile->cargo()->isZero())->toBeTrue();
 });
 
 it('nagrody wysp: sumy jak dawne materiały, porażka tylko w drewnie', function () {

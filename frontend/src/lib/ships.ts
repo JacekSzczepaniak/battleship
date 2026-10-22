@@ -1,6 +1,6 @@
 // Nazwy i role jednostek po stronie UI. Silnik zna statki po długości, a broń
 // wynika ze składu floty (Game::*_CARRIER_LENGTH): kuter(2)=sonar,
-// niszczyciel(3)=torpeda, lotniskowiec(4)=nalot.
+// niszczyciel(3)=torpeda, lotniskowiec(4)=nalot. Transportowiec(5) broni nie ma.
 
 import type { ShipTypeName } from '../api/expeditionApi';
 
@@ -17,6 +17,7 @@ const NAME_BY_LENGTH: Record<number, string> = {
     2: 'Kuter',
     3: 'Niszczyciel',
     4: 'Lotniskowiec',
+    5: 'Transportowiec',
 };
 
 const TYPE_BY_LENGTH: Record<number, ShipTypeName> = {
@@ -24,6 +25,7 @@ const TYPE_BY_LENGTH: Record<number, ShipTypeName> = {
     2: 'kuter',
     3: 'niszczyciel',
     4: 'lotniskowiec',
+    5: 'transportowiec',
 };
 
 export function shipName(length: number): string {

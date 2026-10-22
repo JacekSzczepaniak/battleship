@@ -71,9 +71,8 @@ it('żegluga odkrywa sąsiedztwo i płaci za kartografię', function () {
         ->and($profile->moveCount())->toBe(1);
 
     // drewno w ładowni: przed + kartografia (bez nadmiaru ponad pojemność)
-    // - ewentualny sztorm (max 5 albo ładunek za burtą po uszkodzeniu statku)
+    // - ewentualny sztorm (fale albo ładunek za burtą po uszkodzeniu statku)
     $expected = $woodBefore + $outcome['cartography'] - $outcome['cartographyLost']
-        - ('wood-lost' === ($outcome['event']['effect'] ?? null) ? $outcome['event']['wood'] : 0)
         - ($outcome['event']['cargoLost']['wood'] ?? 0);
     expect($profile->cargo()->wood)->toBe($expected);
 

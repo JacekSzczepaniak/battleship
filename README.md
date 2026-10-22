@@ -116,7 +116,7 @@ Dwa konteksty, połączone tylko identyfikatorem gry:
 
 - **Bitwa** — agregat `Domain/Game/Game` z dwiema stronami planszy. Bronie wynikają ze składu
   floty: kuter (2 pola) daje sonar, niszczyciel (3) torpedę, lotniskowiec (4) nalot; zatopiony
-  nośnik odbiera broń. Parametry broni opisuje `Domain/Game/Weapon/*Spec`.
+  nośnik odbiera broń. Transportowiec (5) broni nie daje — w bitwie to zwykły cel. Parametry broni opisuje `Domain/Game/Weapon/*Spec`.
 - **Wyprawa** — agregat `Domain/Expedition/CaptainProfile`: XP i ranga (`Rank`, 9 stopni),
   flota jako majątek (statki giną albo czekają na remont), materiały, mapa świata z mgłą
   generowana z seeda profilu, rejestr bitew o wyspy.

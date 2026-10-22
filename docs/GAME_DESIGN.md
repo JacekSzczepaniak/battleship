@@ -99,6 +99,12 @@ majątkiem. Nowe źródła walki: NPC, piraci, **kontrataki na osady**
   bezbronny, wymaga eskorty.
 - **Konwój = gameplay**: ryzyko (sztorm, pirat) skaluje się z wartością
   ładunku; ekonomia i walka sprzęgają się bez sztucznych mechanik.
+  ✅ (#47) Transportowiec: 5 pól, ładownia 60, bez broni; tratwa nie ma
+  ładowni (darmowa ładownia = darmowy transport). Konwój = statki
+  z transportowcem; eskorta = sprawny statek z bronią. Fale w sztormie
+  zabierają 10% ładunku (min. 5 drewna), konwój bez eskorty — dwa razy
+  tyle i nie atakuje wysp. Flota bez transportowca nie podlega regułom
+  eskorty — bezpiecznik z zasady 6 zostaje.
 - **Pobojowisko (pomysł na przyszłość):** po bitwie morskiej na miejscu
   starcia dryfują resztki z zatopionych statków (przynajmniej drewno).
   Zbiera je flota obecna na miejscu albo wysłane po nie transportowce pod
@@ -155,7 +161,7 @@ zmian: nigdy nie maleje, ranga wynika z XP (nie jest zapisywana).
 |---|---|---|
 | rozbitek | 0 | tratwa, kuter, wyspy I poziomu |
 | majtek | 30 | — |
-| marynarz | 80 | niszczyciel, wyspy II poziomu |
+| marynarz | 80 | niszczyciel, transportowiec, wyspy II poziomu |
 | bosman | 150 | — |
 | sternik | 250 | — |
 | porucznik | 400 | — |
@@ -202,7 +208,9 @@ i progi do zaprojektowania przy epiku.
 5. **Budżet złożoności** — 3 surowce, 2–3 parametry na motyw akwenu,
    krótkie drzewko na start; głębia przez sprzężenia, nie przez liczbę bytów.
 6. **Bezpiecznik anty-softlock** — tratwa darmowa, kartografia jako dochód
-   bez ryzyka, żegluga bez wymogu sprawnej floty.
+   bez ryzyka, żegluga bez wymogu sprawnej floty. Od #47 kartografia płaci
+   tylko do ładowni, więc flota z samych tratw jej nie zbiera — rozbitkowi
+   zostają łupy z bitew (także porażek) w magazynie wyspy.
 7. **Każdy plaster grywalny osobno** — kolejny etap zaczyna się od
    działającej gry.
 8. **Bitwa rozwija się ze światem** — plastry ekonomii/świata nie zamrażają

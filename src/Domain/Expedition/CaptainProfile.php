@@ -13,14 +13,21 @@ use App\Domain\Shared\ProfileId;
  */
 final class CaptainProfile
 {
-    /** Surowce na start: drewno na kuter (stal i złoto przychodzą z bitew). */
+    /**
+     * Surowce na start: drewno na kuter (stal i złoto przychodzą z bitew).
+     * Leży w magazynie wyspy startowej — ładownia floty startowej go nie uniesie.
+     */
     private const STARTING_WOOD = 20;
 
     /** Szansa sztormu przy wpłynięciu w NIEZBADANY sektor (w %). */
     private const STORM_CHANCE = 20;
 
-    /** Górny limit drewna zabieranego przez sztorm. */
-    private const STORM_WOOD_LOSS = 5;
+    /**
+     * Fale zabierają procent ładunku, ale nie mniej niż minimum drewna (o ile
+     * jest w ładowni). Konwój bez eskorty traci dwukrotność obu wartości.
+     */
+    private const STORM_CARGO_LOSS_PERCENT = 10;
+    private const STORM_MIN_WOOD_LOSS = 5;
 
     /** Nagroda kartograficzna w drewnie: za nowy sektor / bonus za odkrycie wyspy. */
     private const CARTOGRAPHY_SECTOR_REWARD = 1;
@@ -42,7 +49,11 @@ final class CaptainProfile
 
     private Resources $cargo;
 
-    /** Surowce ze snapshotu sprzed ładowni — rozkłada je ensureWorldState(), które zna mapę. */
+    /**
+     * Surowce czekające na magazyn wyspy (drewno startowe, profil sprzed
+     * ładowni, ładunek ponad pojemność po zmianie zasad) — rozkłada je
+     * ensureWorldState(), które zna mapę.
+     */
     private ?Resources $unplacedResources = null;
 
     // --- Wolne morze ---
@@ -84,7 +95,8 @@ final class CaptainProfile
         }
 
         $self = new self(ProfileId::new(), $name);
-        $self->cargo = new Resources(wood: self::STARTING_WOOD);
+        $self->cargo = Resources::none();
+        $self->unplacedResources = new Resources(wood: self::STARTING_WOOD);
         $self->fleet = self::startingFleet();
         $self->worldSeed = crc32((string) $self->id) & 0x7FFFFFFF;
 
@@ -220,7 +232,7 @@ final class CaptainProfile
     /**
      * Skład bitewny w limicie pól planszy: wskazane statki albo — gdy nie
      * wskazano — domyślny dobór (nośniki broni od największego, potem tratwy).
-     * Statki spoza składu czekają w porcie.
+     * Statki spoza składu czekają w porcie. Konwój bez eskorty nie atakuje.
      *
      * @param list<string>|null $shipIds
      *
@@ -229,7 +241,8 @@ final class CaptainProfile
     public function battleSquad(?array $shipIds, int $cellLimit): array
     {
         if (null === $shipIds) {
-            return $this->defaultSquad($cellLimit);
+            // sprawne są tylko transportowce — konwój bez eskorty
+            return $this->defaultSquad($cellLimit) ?: throw new \DomainException('Convoy needs an escort');
         }
         if ([] === $shipIds || count($shipIds) !== count(array_unique($shipIds))) {
             throw new \InvalidArgumentException('Squad must list distinct ships');
@@ -246,6 +259,9 @@ final class CaptainProfile
         if (self::squadCells($squad) > $cellLimit) {
             throw new \DomainException('Squad exceeds island limit');
         }
+        if (self::isUnescortedConvoy($squad)) {
+            throw new \DomainException('Convoy needs an escort');
+        }
 
         return $squad;
     }
@@ -253,16 +269,11 @@ final class CaptainProfile
     /** @return list<OwnedShip> */
     private function defaultSquad(int $cellLimit): array
     {
-        // kolejność doboru: nośniki broni od największego, potem tratwy; reszta
-        // (np. jednostki bez uzbrojenia) tylko gdy zostanie miejsce
+        // kolejność doboru: nośniki broni od największego, potem tratwy;
+        // transportowiec płynie do bitwy tylko wskazany wprost
         $priority = [ShipType::Lotniskowiec, ShipType::Niszczyciel, ShipType::Kuter, ShipType::Tratwa];
-        $rank = static function (OwnedShip $s) use ($priority): int {
-            $index = array_search($s->type, $priority, true);
-
-            return false === $index ? count($priority) : $index;
-        };
-        $candidates = $this->activeFleet();
-        usort($candidates, static fn (OwnedShip $a, OwnedShip $b) => $rank($a) <=> $rank($b));
+        $candidates = array_values(array_filter($this->activeFleet(), static fn (OwnedShip $s) => in_array($s->type, $priority, true)));
+        usort($candidates, static fn (OwnedShip $a, OwnedShip $b) => array_search($a->type, $priority, true) <=> array_search($b->type, $priority, true));
 
         $squad = [];
         $cells = 0;
@@ -280,6 +291,26 @@ final class CaptainProfile
     public static function squadCells(array $ships): int
     {
         return array_sum(array_map(static fn (OwnedShip $s) => $s->type->length(), $ships));
+    }
+
+    /**
+     * Konwój = statki z co najmniej jednym transportowcem; eskortuje go statek
+     * z bronią. Reguła nie dotyczy floty bez transportowca, więc same tratwy
+     * nadal walczą (bezpiecznik anty-softlock).
+     *
+     * @param list<OwnedShip> $ships sprawne statki
+     */
+    public static function isUnescortedConvoy(array $ships): bool
+    {
+        $hasTransport = false;
+        foreach ($ships as $ship) {
+            if ($ship->type->isArmed()) {
+                return false;
+            }
+            $hasTransport = $hasTransport || ShipType::Transportowiec === $ship->type;
+        }
+
+        return $hasTransport;
     }
 
     /** @return list<OwnedShip> statki zdolne do bitwy (nieuszkodzone) */
@@ -364,9 +395,9 @@ final class CaptainProfile
     }
 
     /**
-     * Profil sprzed ładowni miał jeden magazyn: trafia on do magazynu wyspy,
-     * na której stoi kapitan; na morzu do ładowni, a nadwyżka do magazynu
-     * wyspy startowej.
+     * Surowce bez miejsca (patrz $unplacedResources) trafiają do magazynu
+     * wyspy, na której stoi kapitan; na morzu do ładowni, a nadwyżka do
+     * magazynu wyspy startowej.
      */
     private function placeUnplacedResources(WorldMap $world): void
     {
@@ -517,10 +548,26 @@ final class CaptainProfile
             return ['type' => 'storm', 'effect' => 'ship-damaged', 'ship' => $ship->type->value, 'cargoLost' => $overboard->toArray()];
         }
 
-        $loss = min(self::STORM_WOOD_LOSS, $this->cargo->wood);
-        $this->cargo = $this->cargo->subtract(new Resources(wood: $loss));
+        $unescorted = self::isUnescortedConvoy($active);
+        $multiplier = $unescorted ? 2 : 1;
+        $units = max(
+            intdiv($this->cargo->total() * self::STORM_CARGO_LOSS_PERCENT * $multiplier, 100),
+            min(self::STORM_MIN_WOOD_LOSS * $multiplier, $this->cargo->wood),
+        );
+        $lost = self::takeCheapestFirst($this->cargo, $units);
+        $this->cargo = $this->cargo->subtract($lost);
 
-        return ['type' => 'storm', 'effect' => 'wood-lost', 'wood' => $loss];
+        return ['type' => 'storm', 'effect' => 'cargo-lost', 'cargoLost' => $lost->toArray(), 'unescorted' => $unescorted];
+    }
+
+    /** Fale zabierają najpierw drewno, potem stal, na końcu złoto. */
+    private static function takeCheapestFirst(Resources $from, int $units): Resources
+    {
+        $units = min($units, $from->total());
+        $wood = min($from->wood, $units);
+        $steel = min($from->steel, $units - $wood);
+
+        return new Resources($wood, $steel, $units - $wood - $steel);
     }
 
     /** @return list<array{0:int,1:int}> sektor + sąsiedztwo (promień 1) w granicach mapy */
@@ -677,6 +724,12 @@ final class CaptainProfile
 
     // --- Snapshot (mapper persystencji) ---
 
+    /** Surowce, których ensureWorldState() jeszcze nie rozłożyło; null = brak. */
+    public function unplacedResources(): ?Resources
+    {
+        return $this->unplacedResources;
+    }
+
     /** @return array<string, array{island: string, settled: bool, result: ?string, ships?: list<string>, enemySunk?: int}> */
     public function battles(): array
     {
@@ -685,15 +738,15 @@ final class CaptainProfile
 
     /**
      * @param array<string, array{island: string, settled: bool, result: ?string, ships?: list<string>, enemySunk?: int}> $battles
-     * @param list<OwnedShip>|null                                                                                        $fleet           null = profil sprzed ekonomii — dostaje flotę startową
-     * @param Resources|null                                                                                              $cargo           null = profil sprzed ładowni (patrz $legacyResources) albo sprzed ekonomii — drewno startowe w ładowni
-     * @param int|null                                                                                                    $worldSeed       null = seed wyprowadzony z id (stabilny dla starych profili)
-     * @param array{x:int,y:int}|null                                                                                     $position        null = start ustali ensureWorldState
-     * @param list<string>|null                                                                                           $discovered      sektory "x:y"
-     * @param int|null                                                                                                    $tick            null = profil sprzed tiku: rejsy + zarejestrowane bitwy
-     * @param list<string>|null                                                                                           $visited         null = profil sprzed odwiedzin: tylko obecna pozycja
-     * @param array<string, Resources>                                                                                    $stockpiles      magazyny wysp
-     * @param Resources|null                                                                                              $legacyResources jeden magazyn profilu sprzed ładowni — rozłożony przy ensureWorldState()
+     * @param list<OwnedShip>|null                                                                                        $fleet      null = profil sprzed ekonomii — dostaje flotę startową
+     * @param Resources|null                                                                                              $cargo      null = profil sprzed ładowni (patrz $unplaced) albo sprzed ekonomii — drewno startowe do magazynu wyspy
+     * @param int|null                                                                                                    $worldSeed  null = seed wyprowadzony z id (stabilny dla starych profili)
+     * @param array{x:int,y:int}|null                                                                                     $position   null = start ustali ensureWorldState
+     * @param list<string>|null                                                                                           $discovered sektory "x:y"
+     * @param int|null                                                                                                    $tick       null = profil sprzed tiku: rejsy + zarejestrowane bitwy
+     * @param list<string>|null                                                                                           $visited    null = profil sprzed odwiedzin: tylko obecna pozycja
+     * @param array<string, Resources>                                                                                    $stockpiles magazyny wysp
+     * @param Resources|null                                                                                              $unplaced   surowce czekające na magazyn wyspy (też jeden magazyn profilu sprzed ładowni) — rozłożone przy ensureWorldState()
      */
     public static function fromSnapshot(
         ProfileId $id,
@@ -709,14 +762,19 @@ final class CaptainProfile
         ?int $tick = null,
         ?array $visited = null,
         array $stockpiles = [],
-        ?Resources $legacyResources = null,
+        ?Resources $unplaced = null,
     ): self {
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
         $self->fleet = $fleet ?? self::startingFleet();
-        $self->cargo = $cargo ?? (null !== $legacyResources ? Resources::none() : new Resources(wood: self::STARTING_WOOD));
         $self->stockpiles = $stockpiles;
-        $self->unplacedResources = $legacyResources;
+        $self->unplacedResources = $unplaced ?? (null === $cargo ? new Resources(wood: self::STARTING_WOOD) : null);
+        // ładunek ponad pojemność (np. zapisany, zanim tratwa straciła ładownię)
+        // nie przepada — czeka na magazyn wyspy
+        [$self->cargo, $overflow] = ($cargo ?? Resources::none())->fitInto($self->cargoCapacity());
+        if (!$overflow->isZero()) {
+            $self->unplacedResources = ($self->unplacedResources ?? Resources::none())->add($overflow);
+        }
         $self->worldSeed = $worldSeed ?? (crc32((string) $id) & 0x7FFFFFFF);
         $self->position = $position;
         $self->discovered = null !== $discovered ? array_fill_keys($discovered, true) : [];

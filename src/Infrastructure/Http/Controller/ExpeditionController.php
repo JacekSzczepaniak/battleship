@@ -9,7 +9,9 @@ use App\Application\Expedition\RepairShip;
 use App\Application\Expedition\Sail;
 use App\Application\Expedition\SettleBattle;
 use App\Application\Expedition\StartIslandBattle;
+use App\Application\Expedition\TransferCargo;
 use App\Domain\Expedition\OwnedShip;
+use App\Domain\Expedition\Resources;
 use App\Domain\Expedition\ShipType;
 use App\Infrastructure\Http\Error\ApiException;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -28,6 +30,7 @@ final class ExpeditionController
         private BuildShip $buildShip,
         private RepairShip $repairShip,
         private Sail $sail,
+        private TransferCargo $transferCargo,
     ) {
     }
 
@@ -136,6 +139,29 @@ final class ExpeditionController
         $ship = $this->repairShip->handle($id, $islandId, $shipId);
 
         return new JsonResponse($this->shipView($ship));
+    }
+
+    #[Route('/{id}/cargo', name: 'api_profiles_transfer_cargo', methods: ['POST'])]
+    public function transferCargo(string $id, Request $request): JsonResponse
+    {
+        $this->assertUuid($id, 'profile');
+        $payload = $this->jsonPayload($request);
+
+        $islandId = $payload['islandId'] ?? null;
+        $direction = $payload['direction'] ?? null;
+        $amounts = [];
+        foreach (['wood', 'steel', 'gold'] as $key) {
+            $value = $payload[$key] ?? 0;
+            if (!is_int($value) || $value < 0) {
+                throw new ApiException('Invalid field: wood/steel/gold must be non-negative int', 'VALIDATION_ERROR', 400);
+            }
+            $amounts[$key] = $value;
+        }
+        if (!is_string($islandId) || !in_array($direction, ['load', 'unload'], true)) {
+            throw new ApiException('Missing or invalid fields: islandId:string, direction:load|unload', 'VALIDATION_ERROR', 400);
+        }
+
+        return new JsonResponse($this->transferCargo->handle($id, $islandId, $direction, Resources::fromArray($amounts)));
     }
 
     /** @return array<string,mixed> */

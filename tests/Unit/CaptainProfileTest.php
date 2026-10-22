@@ -9,7 +9,7 @@ use App\Domain\Shared\GameId;
 
 function noAwards(): array
 {
-    return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => []];
+    return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => [], 'cargoLost' => Resources::none()];
 }
 
 it('startuje jako rozbitek z zerowym XP', function () {
@@ -45,7 +45,8 @@ it('nalicza XP i surowce także za przegraną — doświadczenia się nie traci'
 
     expect($outcome['xp'])->toBe(12)
         ->and($profile->xp())->toBe(12)
-        ->and($profile->resources()->wood)->toBe(26) // 20 startowych + 6
+        ->and($profile->cargo()->wood)->toBe(20) // ładownia bez zmian
+        ->and($profile->stockpile('mielizny')->wood)->toBe(6) // łup leży w magazynie wyspy bitwy
         ->and($profile->battleStats('mielizny'))->toBe(['wins' => 0, 'losses' => 1]);
 });
 
@@ -95,11 +96,13 @@ it('round-tripuje przez snapshot', function () {
         $profile->xp(),
         $profile->battles(),
         $profile->fleet(),
-        $profile->resources(),
+        $profile->cargo(),
+        stockpiles: $profile->stockpiles(),
     );
 
     expect($restored->xp())->toBe(40)
-        ->and($restored->resources()->wood)->toBe(40) // 20 startowych + 20 z bitwy
+        ->and($restored->cargo()->wood)->toBe(20) // drewno startowe w ładowni
+        ->and($restored->stockpile('zatoka-rozbitka')->wood)->toBe(20) // łup w magazynie wyspy
         ->and($restored->battleStats('zatoka-rozbitka'))->toBe(['wins' => 1, 'losses' => 0])
         ->and($restored->settleBattle($gameId, 'won', 40, new Resources(wood: 20)))->toEqual(noAwards());
 });

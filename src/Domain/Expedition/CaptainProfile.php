@@ -32,7 +32,18 @@ final class CaptainProfile
     /** @var list<OwnedShip> */
     private array $fleet = [];
 
-    private Resources $resources;
+    /**
+     * Surowce istnieją fizycznie (GAME_DESIGN.md, filar IV): w magazynach wysp
+     * i w ładowni floty — bez globalnego portfela.
+     *
+     * @var array<string, Resources> klucz: id wyspy
+     */
+    private array $stockpiles = [];
+
+    private Resources $cargo;
+
+    /** Surowce ze snapshotu sprzed ładowni — rozkłada je ensureWorldState(), które zna mapę. */
+    private ?Resources $unplacedResources = null;
 
     // --- Wolne morze ---
 
@@ -73,7 +84,7 @@ final class CaptainProfile
         }
 
         $self = new self(ProfileId::new(), $name);
-        $self->resources = new Resources(wood: self::STARTING_WOOD);
+        $self->cargo = new Resources(wood: self::STARTING_WOOD);
         $self->fleet = self::startingFleet();
         $self->worldSeed = crc32((string) $self->id) & 0x7FFFFFFF;
 
@@ -118,9 +129,86 @@ final class CaptainProfile
 
     // --- Flota i surowce ---
 
-    public function resources(): Resources
+    public function cargo(): Resources
     {
-        return $this->resources;
+        return $this->cargo;
+    }
+
+    /** Pojemność ładowni = suma pojemności sprawnych statków. */
+    public function cargoCapacity(): int
+    {
+        return array_sum(array_map(static fn (OwnedShip $s) => $s->type->cargoCapacity(), $this->activeFleet()));
+    }
+
+    public function stockpile(string $islandId): Resources
+    {
+        return $this->stockpiles[$islandId] ?? Resources::none();
+    }
+
+    /** @return array<string, Resources> niepuste magazyny wysp */
+    public function stockpiles(): array
+    {
+        return array_filter($this->stockpiles, static fn (Resources $r) => !$r->isZero());
+    }
+
+    /**
+     * Załadunek z magazynu wyspy do ładowni (kapitan stoi na wyspie — sprawdza
+     * warstwa aplikacji). Dokowanie kosztuje tik.
+     */
+    public function loadCargo(string $islandId, Resources $amount): void
+    {
+        if ($amount->isZero()) {
+            throw new \InvalidArgumentException('Nothing to transfer');
+        }
+        $stock = $this->stockpile($islandId)->subtract($amount);
+        if ($this->cargo->total() + $amount->total() > $this->cargoCapacity()) {
+            throw new \DomainException('Cargo capacity exceeded');
+        }
+
+        $this->stockpiles[$islandId] = $stock;
+        $this->cargo = $this->cargo->add($amount);
+        ++$this->tick;
+    }
+
+    /** Rozładunek z ładowni do magazynu wyspy. Dokowanie kosztuje tik. */
+    public function unloadCargo(string $islandId, Resources $amount): void
+    {
+        if ($amount->isZero()) {
+            throw new \InvalidArgumentException('Nothing to transfer');
+        }
+
+        $this->cargo = $this->cargo->subtract($amount);
+        $this->stockpiles[$islandId] = $this->stockpile($islandId)->add($amount);
+        ++$this->tick;
+    }
+
+    /**
+     * Płatność w porcie: najpierw magazyn wyspy, brakującą resztę bierze
+     * z ładowni zadokowanej floty.
+     */
+    private function pay(string $islandId, Resources $cost): void
+    {
+        $stock = $this->stockpile($islandId);
+        if (!$stock->add($this->cargo)->covers($cost)) {
+            throw new \DomainException('Not enough resources');
+        }
+
+        $fromStock = new Resources(
+            min($stock->wood, $cost->wood),
+            min($stock->steel, $cost->steel),
+            min($stock->gold, $cost->gold),
+        );
+        $this->stockpiles[$islandId] = $stock->subtract($fromStock);
+        $this->cargo = $this->cargo->subtract($cost->subtract($fromStock));
+    }
+
+    /** Ładunek ponad pojemność (np. po utracie statku) przepada; zwraca, co przepadło. */
+    private function trimCargo(): Resources
+    {
+        [$kept, $overflow] = $this->cargo->fitInto($this->cargoCapacity());
+        $this->cargo = $kept;
+
+        return $overflow;
     }
 
     /** @return list<OwnedShip> */
@@ -135,13 +223,16 @@ final class CaptainProfile
         return array_values(array_filter($this->fleet, static fn (OwnedShip $s) => !$s->isDamaged()));
     }
 
-    /** Buduje statek: bramka rangi + koszt w surowcach (stocznię sprawdza warstwa aplikacji). */
-    public function buildShip(ShipType $type): OwnedShip
+    /**
+     * Buduje statek: bramka rangi + koszt z magazynu wyspy i ładowni
+     * (obecność i stocznię sprawdza warstwa aplikacji).
+     */
+    public function buildShip(ShipType $type, string $islandId): OwnedShip
     {
         if (!$this->rank()->atLeast($type->requiredRank())) {
             throw new \DomainException(sprintf('Ship type locked: requires rank %s', $type->requiredRank()->value));
         }
-        $this->resources = $this->resources->subtract($type->buildCost());
+        $this->pay($islandId, $type->buildCost());
 
         $ship = OwnedShip::build($type);
         $this->fleet[] = $ship;
@@ -149,8 +240,8 @@ final class CaptainProfile
         return $ship;
     }
 
-    /** Remontuje uszkodzony statek za surowce. */
-    public function repairShip(string $shipId): OwnedShip
+    /** Remontuje uszkodzony statek za surowce z magazynu wyspy i ładowni. */
+    public function repairShip(string $shipId, string $islandId): OwnedShip
     {
         $ship = $this->shipById($shipId);
         if (null === $ship) {
@@ -160,7 +251,7 @@ final class CaptainProfile
             throw new \DomainException('Ship is not damaged');
         }
 
-        $this->resources = $this->resources->subtract($ship->type->repairCost());
+        $this->pay($islandId, $ship->type->repairCost());
         $ship->repair();
 
         return $ship;
@@ -196,14 +287,43 @@ final class CaptainProfile
      */
     public function ensureWorldState(WorldMap $world): void
     {
-        if (null !== $this->position) {
+        if (null === $this->position) {
+            $this->position = $world->startPosition();
+            $this->visited["{$this->position['x']}:{$this->position['y']}"] = true;
+            foreach ($this->neighborhood($this->position['x'], $this->position['y'], $world) as [$x, $y]) {
+                $this->discovered["$x:$y"] = true;
+            }
+        }
+
+        $this->placeUnplacedResources($world);
+    }
+
+    /**
+     * Profil sprzed ładowni miał jeden magazyn: trafia on do magazynu wyspy,
+     * na której stoi kapitan; na morzu do ładowni, a nadwyżka do magazynu
+     * wyspy startowej.
+     */
+    private function placeUnplacedResources(WorldMap $world): void
+    {
+        if (null === $this->unplacedResources) {
+            return;
+        }
+        $legacy = $this->unplacedResources;
+        $this->unplacedResources = null;
+
+        $here = $world->islandAt($this->position['x'], $this->position['y']);
+        if (null !== $here) {
+            $this->stockpiles[$here] = $this->stockpile($here)->add($legacy);
+
             return;
         }
 
-        $this->position = $world->startPosition();
-        $this->visited["{$this->position['x']}:{$this->position['y']}"] = true;
-        foreach ($this->neighborhood($this->position['x'], $this->position['y'], $world) as [$x, $y]) {
-            $this->discovered["$x:$y"] = true;
+        [$fit, $rest] = $legacy->fitInto($this->cargoCapacity() - $this->cargo->total());
+        $this->cargo = $this->cargo->add($fit);
+        if (!$rest->isZero()) {
+            $start = $world->startPosition();
+            $startIsland = $world->islandAt($start['x'], $start['y']) ?? throw new \LogicException('Start sector has no island');
+            $this->stockpiles[$startIsland] = $this->stockpile($startIsland)->add($rest);
         }
     }
 
@@ -266,7 +386,9 @@ final class CaptainProfile
      * wymaga sprawnej floty — uszkodzone statki dopłyną (bezpiecznik:
      * z morza zawsze wrócisz do stoczni).
      *
-     * @return array{discoveredNow: list<string>, cartography: int, event: array<string,mixed>|null}
+     * Dochód kartograficzny trafia do ładowni; nadmiar ponad pojemność przepada.
+     *
+     * @return array{discoveredNow: list<string>, cartography: int, cartographyLost: int, event: array<string,mixed>|null}
      */
     public function sail(int $x, int $y, WorldMap $world): array
     {
@@ -305,9 +427,10 @@ final class CaptainProfile
                 $cartography += self::CARTOGRAPHY_ISLAND_BONUS;
             }
         }
-        $this->resources = $this->resources->add(new Resources(wood: $cartography));
+        [$fit, $lost] = (new Resources(wood: $cartography))->fitInto($this->cargoCapacity() - $this->cargo->total());
+        $this->cargo = $this->cargo->add($fit);
 
-        return ['discoveredNow' => $discoveredNow, 'cartography' => $cartography, 'event' => $event];
+        return ['discoveredNow' => $discoveredNow, 'cartography' => $cartography, 'cartographyLost' => $lost->wood, 'event' => $event];
     }
 
     /** @return array<string,mixed>|null zdarzenie sztormu (deterministyczne) albo spokojna żegluga */
@@ -323,12 +446,14 @@ final class CaptainProfile
         if (1 === $effectRoll % 2 && [] !== $active) {
             $ship = $active[$effectRoll % count($active)];
             $ship->markDamaged();
+            // uszkodzony statek nie wiezie ładunku — nadmiar idzie za burtę
+            $overboard = $this->trimCargo();
 
-            return ['type' => 'storm', 'effect' => 'ship-damaged', 'ship' => $ship->type->value];
+            return ['type' => 'storm', 'effect' => 'ship-damaged', 'ship' => $ship->type->value, 'cargoLost' => $overboard->toArray()];
         }
 
-        $loss = min(self::STORM_WOOD_LOSS, $this->resources->wood);
-        $this->resources = $this->resources->subtract(new Resources(wood: $loss));
+        $loss = min(self::STORM_WOOD_LOSS, $this->cargo->wood);
+        $this->cargo = $this->cargo->subtract(new Resources(wood: $loss));
 
         return ['type' => 'storm', 'effect' => 'wood-lost', 'wood' => $loss];
     }
@@ -375,13 +500,14 @@ final class CaptainProfile
 
     /**
      * Rozlicza bitwę: XP i surowce nigdy nie giną (przyznawane też za porażkę),
-     * straty dotykają floty — zatopione statki po wygranej wymagają remontu,
-     * po przegranej są stracone. Idempotentne: druga próba zwraca zera.
+     * łup trafia do magazynu wyspy, o którą była bitwa. Straty dotykają floty —
+     * zatopione statki po wygranej wymagają remontu, po przegranej są stracone;
+     * ładunek ponad nową pojemność przepada. Idempotentne: druga próba zwraca zera.
      *
      * @param list<int> $sunkLengths    długości statków gracza zatopionych w bitwie
      * @param int       $enemyShipsSunk liczba jednostek wroga zatopionych w bitwie (statystyka kapitana)
      *
-     * @return array{xp:int, loot:Resources, lost:list<string>, damaged:list<string>}
+     * @return array{xp:int, loot:Resources, lost:list<string>, damaged:list<string>, cargoLost:Resources}
      */
     public function settleBattle(GameId $gameId, string $result, int $xpAward, ?Resources $loot = null, array $sunkLengths = [], int $enemyShipsSunk = 0): array
     {
@@ -399,7 +525,7 @@ final class CaptainProfile
         $key = (string) $gameId;
         $battle = $this->battles[$key] ?? throw new \DomainException('Battle not registered for this profile');
         if ($battle['settled']) {
-            return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => []];
+            return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => [], 'cargoLost' => Resources::none()];
         }
 
         $battle['settled'] = true;
@@ -408,11 +534,12 @@ final class CaptainProfile
         $this->battles[$key] = $battle;
 
         $this->xp += $xpAward;
-        $this->resources = $this->resources->add($loot);
+        $this->stockpiles[$battle['island']] = $this->stockpile($battle['island'])->add($loot);
 
         [$lost, $damaged] = $this->applyLosses($battle['ships'] ?? [], $result, $sunkLengths);
+        $cargoLost = $this->trimCargo();
 
-        return ['xp' => $xpAward, 'loot' => $loot, 'lost' => $lost, 'damaged' => $damaged];
+        return ['xp' => $xpAward, 'loot' => $loot, 'lost' => $lost, 'damaged' => $damaged, 'cargoLost' => $cargoLost];
     }
 
     /**
@@ -493,13 +620,15 @@ final class CaptainProfile
 
     /**
      * @param array<string, array{island: string, settled: bool, result: ?string, ships?: list<string>, enemySunk?: int}> $battles
-     * @param list<OwnedShip>|null                                                                                        $fleet      null = profil sprzed ekonomii — dostaje flotę startową
-     * @param Resources|null                                                                                              $resources  null = surowce startowe
-     * @param int|null                                                                                                    $worldSeed  null = seed wyprowadzony z id (stabilny dla starych profili)
-     * @param array{x:int,y:int}|null                                                                                     $position   null = start ustali ensureWorldState
-     * @param list<string>|null                                                                                           $discovered sektory "x:y"
-     * @param int|null                                                                                                    $tick       null = profil sprzed tiku: rejsy + zarejestrowane bitwy
-     * @param list<string>|null                                                                                           $visited    null = profil sprzed odwiedzin: tylko obecna pozycja
+     * @param list<OwnedShip>|null                                                                                        $fleet           null = profil sprzed ekonomii — dostaje flotę startową
+     * @param Resources|null                                                                                              $cargo           null = profil sprzed ładowni (patrz $legacyResources) albo sprzed ekonomii — drewno startowe w ładowni
+     * @param int|null                                                                                                    $worldSeed       null = seed wyprowadzony z id (stabilny dla starych profili)
+     * @param array{x:int,y:int}|null                                                                                     $position        null = start ustali ensureWorldState
+     * @param list<string>|null                                                                                           $discovered      sektory "x:y"
+     * @param int|null                                                                                                    $tick            null = profil sprzed tiku: rejsy + zarejestrowane bitwy
+     * @param list<string>|null                                                                                           $visited         null = profil sprzed odwiedzin: tylko obecna pozycja
+     * @param array<string, Resources>                                                                                    $stockpiles      magazyny wysp
+     * @param Resources|null                                                                                              $legacyResources jeden magazyn profilu sprzed ładowni — rozłożony przy ensureWorldState()
      */
     public static function fromSnapshot(
         ProfileId $id,
@@ -507,18 +636,22 @@ final class CaptainProfile
         int $xp,
         array $battles,
         ?array $fleet = null,
-        ?Resources $resources = null,
+        ?Resources $cargo = null,
         ?int $worldSeed = null,
         ?array $position = null,
         ?array $discovered = null,
         int $moveCount = 0,
         ?int $tick = null,
         ?array $visited = null,
+        array $stockpiles = [],
+        ?Resources $legacyResources = null,
     ): self {
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
         $self->fleet = $fleet ?? self::startingFleet();
-        $self->resources = $resources ?? new Resources(wood: self::STARTING_WOOD);
+        $self->cargo = $cargo ?? (null !== $legacyResources ? Resources::none() : new Resources(wood: self::STARTING_WOOD));
+        $self->stockpiles = $stockpiles;
+        $self->unplacedResources = $legacyResources;
         $self->worldSeed = $worldSeed ?? (crc32((string) $id) & 0x7FFFFFFF);
         $self->position = $position;
         $self->discovered = null !== $discovered ? array_fill_keys($discovered, true) : [];

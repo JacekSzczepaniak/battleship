@@ -12,7 +12,7 @@ it('nowy profil dostaje flotę startową: kuter + 3 tratwy i 20 drewna', functio
 
     $types = array_map(static fn ($s) => $s->type, $profile->fleet());
 
-    expect($profile->resources()->wood)->toBe(20)
+    expect($profile->cargo()->wood)->toBe(20)
         ->and($types)->toBe([ShipType::Kuter, ShipType::Tratwa, ShipType::Tratwa, ShipType::Tratwa])
         ->and($profile->activeFleet())->toHaveCount(4);
 });
@@ -20,9 +20,9 @@ it('nowy profil dostaje flotę startową: kuter + 3 tratwy i 20 drewna', functio
 it('tratwa jest zawsze darmowa — bezpiecznik anty-softlock', function () {
     $profile = CaptainProfile::create('Jacek');
 
-    $ship = $profile->buildShip(ShipType::Tratwa);
+    $ship = $profile->buildShip(ShipType::Tratwa, 'zatoka-rozbitka');
 
-    expect($profile->resources()->wood)->toBe(20)
+    expect($profile->cargo()->wood)->toBe(20)
         ->and($ship->type)->toBe(ShipType::Tratwa)
         ->and($profile->fleet())->toHaveCount(5);
 });
@@ -30,19 +30,19 @@ it('tratwa jest zawsze darmowa — bezpiecznik anty-softlock', function () {
 it('budowa kutra kosztuje drewno', function () {
     $profile = CaptainProfile::create('Jacek');
 
-    $profile->buildShip(ShipType::Kuter);
+    $profile->buildShip(ShipType::Kuter, 'zatoka-rozbitka');
 
-    expect($profile->resources()->wood)->toBe(0);
+    expect($profile->cargo()->wood)->toBe(0);
 });
 
 it('odrzuca budowę bez surowców', function () {
     $profile = CaptainProfile::create('Jacek');
-    $profile->buildShip(ShipType::Kuter); // drewno: 20 → 0
-    $profile->buildShip(ShipType::Kuter);
+    $profile->buildShip(ShipType::Kuter, 'zatoka-rozbitka'); // drewno: 20 → 0
+    $profile->buildShip(ShipType::Kuter, 'zatoka-rozbitka');
 })->throws(DomainException::class, 'Not enough resources');
 
 it('odrzuca budowę typu ponad rangę kapitana', function () {
-    CaptainProfile::create('Jacek')->buildShip(ShipType::Niszczyciel);
+    CaptainProfile::create('Jacek')->buildShip(ShipType::Niszczyciel, 'zatoka-rozbitka');
 })->throws(DomainException::class, 'Ship type locked: requires rank marynarz');
 
 it('wygrana bitwa: zatopione statki wymagają remontu, nie giną', function () {
@@ -72,7 +72,7 @@ it('przegrana bitwa: zatopione statki są stracone', function () {
     expect($outcome['lost'])->toBe(['kuter', 'tratwa', 'tratwa', 'tratwa'])
         ->and($profile->fleet())->toHaveCount(0)
         // ale rozbitek zawsze może odbudować się darmową tratwą
-        ->and($profile->buildShip(ShipType::Tratwa)->type)->toBe(ShipType::Tratwa);
+        ->and($profile->buildShip(ShipType::Tratwa, 'zatoka-rozbitka')->type)->toBe(ShipType::Tratwa);
 });
 
 it('remont przywraca statek do służby za surowce', function () {
@@ -80,19 +80,24 @@ it('remont przywraca statek do służby za surowce', function () {
     $gameId = GameId::new();
     $kuter = $profile->activeFleet()[0];
     $profile->startBattle('zatoka-rozbitka', $gameId, [$kuter->id]);
-    $profile->settleBattle($gameId, 'won', 40, new Resources(wood: 20), [2]);
+    $outcome = $profile->settleBattle($gameId, 'won', 40, new Resources(wood: 20), [2]);
 
-    expect($kuter->isDamaged())->toBeTrue();
+    // uszkodzony kuter nie wiezie ładunku: pojemność 30 → 15, nadmiar przepada
+    expect($kuter->isDamaged())->toBeTrue()
+        ->and($outcome['cargoLost']->wood)->toBe(5)
+        ->and($profile->cargo()->wood)->toBe(15);
 
-    $profile->repairShip($kuter->id);
+    $profile->repairShip($kuter->id, 'zatoka-rozbitka');
 
+    // remont (8 drewna) płaci najpierw magazyn wyspy, w którym leży łup (20)
     expect($kuter->isDamaged())->toBeFalse()
-        ->and($profile->resources()->wood)->toBe(32); // 20 + 20 - 8 (remont kutra)
+        ->and($profile->stockpile('zatoka-rozbitka')->wood)->toBe(12)
+        ->and($profile->cargo()->wood)->toBe(15);
 });
 
 it('odrzuca remont sprawnego statku', function () {
     $profile = CaptainProfile::create('Jacek');
-    $profile->repairShip($profile->fleet()[0]->id);
+    $profile->repairShip($profile->fleet()[0]->id, 'zatoka-rozbitka');
 })->throws(DomainException::class, 'Ship is not damaged');
 
 it('profil sprzed ekonomii dostaje flotę startową przy odczycie snapshotu', function () {
@@ -100,7 +105,7 @@ it('profil sprzed ekonomii dostaje flotę startową przy odczycie snapshotu', fu
     $restored = CaptainProfile::fromSnapshot($profile->id(), 'Jacek', 100, []);
 
     expect($restored->fleet())->toHaveCount(4)
-        ->and($restored->resources()->wood)->toBe(20);
+        ->and($restored->cargo()->wood)->toBe(20);
 });
 
 it('bramki typów statków rosną spójnie z progresją', function () {

@@ -59,6 +59,25 @@ final readonly class Resources
         return $this->wood + $this->steel + $this->gold;
     }
 
+    /**
+     * Dzieli paczkę na część mieszczącą się w `$room` jednostkach i nadmiar.
+     * Najcenniejsze zostają: najpierw złoto, potem stal, na końcu drewno.
+     *
+     * @return array{0: self, 1: self} [mieści się, nadmiar]
+     */
+    public function fitInto(int $room): array
+    {
+        $room = max(0, $room);
+        $gold = min($this->gold, $room);
+        $room -= $gold;
+        $steel = min($this->steel, $room);
+        $room -= $steel;
+        $wood = min($this->wood, $room);
+        $kept = new self($wood, $steel, $gold);
+
+        return [$kept, $this->subtract($kept)];
+    }
+
     public function isZero(): bool
     {
         return 0 === $this->total();

@@ -68,12 +68,17 @@
                         <div class="stat" :title="`bitwy przegrane: ${totals.losses}`"><b>{{ expedition.profile.enemyShipsSunk }}</b><span>ZATOPIONE</span></div>
                     </div>
 
+                    <div class="hold-head">
+                        <span class="kicker">ŁADOWNIA</span>
+                        <span class="hold-cap">{{ cargoUsed }} / {{ expedition.profile.cargoCapacity }}</span>
+                    </div>
                     <div class="resources">
                         <div v-for="r in RESOURCES" :key="r.key" class="res">
                             <span class="res-dot" :style="{ background: r.color }"></span>
-                            <div><b>{{ expedition.profile.resources[r.key] }}</b><span>{{ r.label.toUpperCase() }}</span></div>
+                            <div><b>{{ expedition.profile.cargo[r.key] }}</b><span>{{ r.label.toUpperCase() }}</span></div>
                         </div>
                     </div>
+                    <div v-if="currentIsland" class="charted">magazyn · {{ currentIsland.name }}: {{ formatResources(currentIsland.stockpile, 'pusty') }}</div>
                     <div class="charted">wyspy {{ discoveredIslands }} / {{ expedition.islands.length }} · zbadano {{ chartedPercent }}% mapy</div>
 
                     <div class="where">
@@ -140,7 +145,7 @@ import {
 } from '../lib/expeditionSession';
 import { getTrainingPrefs } from '../lib/battleSession';
 import { carriedWeapon } from '../lib/ships';
-import { RESOURCES, formatResources } from '../lib/resources';
+import { RESOURCES, formatResources, totalResources } from '../lib/resources';
 
 const router = useRouter();
 
@@ -186,6 +191,8 @@ const chartedPercent = computed(() => {
     if (!w) return 0;
     return Math.round((w.discovered.length / (w.width * w.height)) * 100);
 });
+
+const cargoUsed = computed(() => (expedition.value ? totalResources(expedition.value.profile.cargo) : 0));
 
 const currentIsland = computed<IslandDTO | null>(() => expedition.value?.islands.find(i => i.present) ?? null);
 
@@ -456,7 +463,9 @@ h1 span { color: var(--info); }
 .stat b { display: block; font: 700 22px var(--font-head); }
 .stat span { font: 500 10px var(--font-mono); color: var(--text-muted); }
 
-.resources { display: flex; gap: 10px; }
+.resources { display: flex; gap: 10px; margin-top: -12px; }
+.hold-head { display: flex; justify-content: space-between; align-items: baseline; }
+.hold-cap { font: 600 11px var(--font-mono); color: var(--text-muted); }
 .res { flex: 1; display: flex; align-items: center; gap: 8px; padding: 11px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--line-card); }
 .res b { display: block; font: 700 15px var(--font-head); }
 .res span { font: 500 9px var(--font-mono); color: var(--text-muted); }

@@ -18,7 +18,7 @@ final class GetExpedition
     }
 
     /**
-     * Stan wyprawy: profil (XP, ranga, surowce), flota, katalog typów
+     * Stan wyprawy: profil (XP, ranga, ładownia), flota, katalog typów
      * statków (do UI stoczni) i wyspy z kłódkami.
      *
      * @return array{profile: array<string,mixed>, fleet: list<array<string,mixed>>, shipTypes: list<array<string,mixed>>, islands: list<array<string,mixed>>, world: array<string,mixed>}
@@ -58,6 +58,7 @@ final class GetExpedition
                 'shipyardLevel' => $island->shipyardLevel,
                 'board' => ['w' => $island->boardWidth, 'h' => $island->boardHeight],
                 'unlocked' => $island->isAccessibleFor($rank),
+                'stockpile' => $profile->stockpile($island->id)->toArray(),
                 'wins' => $stats['wins'],
                 'losses' => $stats['losses'],
             ];
@@ -89,7 +90,8 @@ final class GetExpedition
                 'nextRank' => null !== $next
                     ? ['rank' => $next->value, 'xpNeeded' => max(0, $next->threshold() - $profile->xp())]
                     : null,
-                'resources' => $profile->resources()->toArray(),
+                'cargo' => $profile->cargo()->toArray(),
+                'cargoCapacity' => $profile->cargoCapacity(),
                 'enemyShipsSunk' => $profile->enemyShipsSunk(),
             ],
             'fleet' => $fleet,

@@ -17,7 +17,8 @@ final class ProfileSnapshotMapper
             'name' => $profile->name(),
             'xp' => $profile->xp(),
             'battles' => $profile->battles(),
-            'resources' => $profile->resources()->toArray(),
+            'cargo' => $profile->cargo()->toArray(),
+            'stockpiles' => array_map(static fn (Resources $r) => $r->toArray(), $profile->stockpiles()),
             'fleet' => array_map(static fn (OwnedShip $ship) => [
                 'id' => $ship->id,
                 'type' => $ship->type->value,
@@ -78,13 +79,15 @@ final class ProfileSnapshotMapper
             $discovered = array_values(array_map('strval', $state['discovered']));
         }
 
+        $cargo = isset($state['cargo']) && is_array($state['cargo']) ? Resources::fromArray($state['cargo']) : null;
+
         return CaptainProfile::fromSnapshot(
             new ProfileId($id),
             (string) ($state['name'] ?? 'Rozbitek'),
             (int) ($state['xp'] ?? 0),
             $battles,
             $fleet,
-            $this->resourcesFrom($state),
+            $cargo,
             isset($state['worldSeed']) ? (int) $state['worldSeed'] : null,
             $position,
             $discovered,
@@ -93,16 +96,36 @@ final class ProfileSnapshotMapper
             isset($state['tick']) ? (int) $state['tick'] : null,
             // brak klucza = profil sprzed odwiedzin; CaptainProfile przyjmie obecną pozycję
             isset($state['visited']) && is_array($state['visited']) ? array_values(array_map('strval', $state['visited'])) : null,
+            $this->stockpilesFrom($state),
+            // brak ładowni w snapshotcie = profil sprzed #46: jego magazyn rozłoży ensureWorldState()
+            null === $cargo ? $this->legacyResourcesFrom($state) : null,
         );
     }
 
     /**
-     * Surowce ze snapshotu; profil sprzed trzech surowców miał jedno pole
-     * `materials` — przechodzi w drewno (GAME_DESIGN.md, filar IV).
+     * @param array<string,mixed> $state
+     *
+     * @return array<string, Resources>
+     */
+    private function stockpilesFrom(array $state): array
+    {
+        $out = [];
+        foreach ((array) ($state['stockpiles'] ?? []) as $islandId => $amounts) {
+            if (is_array($amounts)) {
+                $out[(string) $islandId] = Resources::fromArray($amounts);
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Jeden magazyn profilu sprzed ładowni: `resources` (#45) albo jeszcze
+     * starsze `materials`, które przechodzą w drewno (GAME_DESIGN.md, filar IV).
      *
      * @param array<string,mixed> $state
      */
-    private function resourcesFrom(array $state): ?Resources
+    private function legacyResourcesFrom(array $state): ?Resources
     {
         if (isset($state['resources']) && is_array($state['resources'])) {
             return Resources::fromArray($state['resources']);

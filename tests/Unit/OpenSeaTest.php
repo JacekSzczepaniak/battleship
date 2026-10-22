@@ -63,17 +63,19 @@ it('żegluga odkrywa sąsiedztwo i płaci za kartografię', function () {
 
     $pos = $profile->position();
     $target = ['x' => $pos['x'] + ($pos['x'] < WorldMap::WIDTH - 1 ? 1 : -1), 'y' => $pos['y']];
-    $woodBefore = $profile->resources()->wood;
+    $woodBefore = $profile->cargo()->wood;
 
     $outcome = $profile->sail($target['x'], $target['y'], $world);
 
     expect($profile->position())->toBe($target)
         ->and($profile->moveCount())->toBe(1);
 
-    // drewno: przed + kartografia - ewentualny sztorm (max 5)
-    $expected = $woodBefore + $outcome['cartography']
-        - ('wood-lost' === ($outcome['event']['effect'] ?? null) ? $outcome['event']['wood'] : 0);
-    expect($profile->resources()->wood)->toBe($expected);
+    // drewno w ładowni: przed + kartografia (bez nadmiaru ponad pojemność)
+    // - ewentualny sztorm (max 5 albo ładunek za burtą po uszkodzeniu statku)
+    $expected = $woodBefore + $outcome['cartography'] - $outcome['cartographyLost']
+        - ('wood-lost' === ($outcome['event']['effect'] ?? null) ? $outcome['event']['wood'] : 0)
+        - ($outcome['event']['cargoLost']['wood'] ?? 0);
+    expect($profile->cargo()->wood)->toBe($expected);
 
     foreach ($outcome['discoveredNow'] as $sector) {
         [$x, $y] = array_map('intval', explode(':', $sector));
@@ -141,7 +143,7 @@ it('stan morski round-tripuje przez snapshot', function () {
     $profile->sail($pos['x'] + ($pos['x'] < WorldMap::WIDTH - 1 ? 1 : -1), $pos['y'], $world);
 
     $restored = CaptainProfile::fromSnapshot(
-        $profile->id(), 'Jacek', 0, [], $profile->fleet(), $profile->resources(),
+        $profile->id(), 'Jacek', 0, [], $profile->fleet(), $profile->cargo(),
         $profile->worldSeed(), $profile->position(), $profile->discoveredSectors(), $profile->moveCount(),
     );
 

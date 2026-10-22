@@ -39,7 +39,7 @@
                 </div>
                 <div class="xp-row">
                     <span>{{ expedition.profile.xp }} XP</span>
-                    <span class="stock">{{ formatResources(expedition.profile.resources, 'brak surowców') }}</span>
+                    <span class="stock" title="Ładownia floty (zajęte / pojemność)">⚓ {{ formatResources(expedition.profile.cargo, 'pusta ładownia') }} ({{ totalResources(expedition.profile.cargo) }}/{{ expedition.profile.cargoCapacity }})</span>
                     <template v-if="expedition.profile.nextRank">
                         <div class="xp-bar" role="progressbar">
                             <div class="xp-fill" :style="{ width: xpProgress + '%' }"></div>
@@ -96,6 +96,33 @@
                 </ul>
 
                 <template v-if="currentIsland">
+                    <h3>📦 Ładownia i magazyn — {{ currentIsland.name }}
+                        <span class="muted">(ładownia {{ totalResources(expedition.profile.cargo) }}/{{ expedition.profile.cargoCapacity }}, każde przeniesienie = 1 tik)</span>
+                    </h3>
+                    <table class="hold">
+                        <thead><tr><th></th><th>magazyn wyspy</th><th></th><th>ładownia</th></tr></thead>
+                        <tbody>
+                            <tr v-for="r in RESOURCES" :key="r.key">
+                                <th><span class="res-dot" :style="{ background: r.color }"></span> {{ r.label }}</th>
+                                <td>{{ currentIsland.stockpile[r.key] }}</td>
+                                <td class="moves">
+                                    <button
+                                        class="btn small"
+                                        :disabled="busy || loadable(r.key) === 0"
+                                        :title="loadable(r.key) === 0 ? 'magazyn pusty albo ładownia pełna' : `załaduj ${loadable(r.key)}`"
+                                        @click="onTransfer('load', r.key, loadable(r.key))"
+                                    >załaduj →</button>
+                                    <button
+                                        class="btn small"
+                                        :disabled="busy || expedition.profile.cargo[r.key] === 0"
+                                        @click="onTransfer('unload', r.key, expedition.profile.cargo[r.key])"
+                                    >← rozładuj</button>
+                                </td>
+                                <td>{{ expedition.profile.cargo[r.key] }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
                     <h3>🏗️ Stocznia — {{ currentIsland.name }} <span class="muted">(poziom {{ currentIsland.shipyardLevel }})</span></h3>
                     <ul class="ships">
                         <li v-for="t in expedition.shipTypes" :key="t.type" class="ship">
@@ -164,7 +191,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
-    buildShip, createProfile, getExpedition, repairShip, sail, settleBattle, startIslandBattle,
+    buildShip, createProfile, getExpedition, repairShip, sail, settleBattle, startIslandBattle, transferCargo,
     RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS,
     type ExpeditionDTO, type FleetShipDTO, type IslandDTO, type RankName, type ShipTypeDTO,
 } from '../api/expeditionApi';
@@ -173,7 +200,9 @@ import {
     clearCurrentBattle, clearProfileId, getCurrentBattle, getProfileId,
     setCurrentBattle, setProfileId, type CurrentBattle,
 } from '../lib/expeditionSession';
-import { covers, formatResources, missing } from '../lib/resources';
+import {
+    RESOURCES, addResources, covers, formatResources, isEmpty, missing, totalResources, type ResourceKey,
+} from '../lib/resources';
 
 const router = useRouter();
 const route = useRoute();
@@ -266,9 +295,11 @@ async function onSail(x: number, y: number) {
     try {
         const result = await sail(profileId, x, y);
         const parts: string[] = [];
-        if (result.cartography > 0) parts.push(`+${result.cartography} drewna za nowe mapy`);
+        if (result.cartography > 0) parts.push(`+${result.cartography - result.cartographyLost} drewna za nowe mapy`);
+        if (result.cartographyLost > 0) parts.push(`ładownia pełna — ${result.cartographyLost} drewna przepadło`);
         if (result.event?.effect === 'wood-lost') parts.push(`🌩️ Sztorm! Fale zabrały ${result.event.wood} drewna`);
         if (result.event?.effect === 'ship-damaged') parts.push(`🌩️ Sztorm! ${SHIP_LABELS[result.event.ship!]} uszkodzony`);
+        if (result.event?.cargoLost && !isEmpty(result.event.cargoLost)) parts.push(`za burtą: ${formatResources(result.event.cargoLost)}`);
         seaMsg.value = parts.join(' · ');
         expedition.value = await getExpedition(profileId);
     } catch (e: any) {
@@ -285,7 +316,8 @@ function buildBlock(t: ShipTypeDTO): string | null {
     if (!profile || !island) return 'dopłyń do portu';
     if (!rankAtLeast(profile.rank, t.requiredRank)) return `wymaga rangi: ${rankLabel(t.requiredRank)}`;
     if (island.shipyardLevel < t.requiredShipyardLevel) return `wymaga stoczni poziomu ${t.requiredShipyardLevel}`;
-    if (!covers(profile.resources, t.buildCost)) return missing(profile.resources, t.buildCost);
+    const available = addResources(island.stockpile, profile.cargo);
+    if (!covers(available, t.buildCost)) return missing(available, t.buildCost);
     return null;
 }
 
@@ -297,7 +329,8 @@ function repairBlock(ship: FleetShipDTO): string | null {
     if (!profile || !type) return 'wczytywanie…';
     if (!island) return 'dopłyń do portu';
     if (island.shipyardLevel < type.requiredShipyardLevel) return `wymaga stoczni poziomu ${type.requiredShipyardLevel}`;
-    if (!covers(profile.resources, ship.repairCost)) return missing(profile.resources, ship.repairCost);
+    const available = addResources(island.stockpile, profile.cargo);
+    if (!covers(available, ship.repairCost)) return missing(available, ship.repairCost);
     return null;
 }
 
@@ -312,6 +345,31 @@ async function onBuild(t: ShipTypeDTO) {
         expedition.value = await getExpedition(profileId);
     } catch (e: any) {
         error.value = e?.message ?? 'Budowa nie powiodła się';
+    } finally {
+        busy.value = false;
+    }
+}
+
+/** Ile surowca da się załadować: tyle, ile jest w magazynie, ale nie ponad wolne miejsce. */
+function loadable(key: ResourceKey): number {
+    const exp = expedition.value;
+    const island = currentIsland.value;
+    if (!exp || !island) return 0;
+    const room = exp.profile.cargoCapacity - totalResources(exp.profile.cargo);
+    return Math.max(0, Math.min(island.stockpile[key], room));
+}
+
+async function onTransfer(direction: 'load' | 'unload', key: ResourceKey, amount: number) {
+    const profileId = getProfileId();
+    const island = currentIsland.value;
+    if (!profileId || !island || amount <= 0) return;
+    busy.value = true;
+    error.value = '';
+    try {
+        await transferCargo(profileId, island.id, direction, { [key]: amount });
+        expedition.value = await getExpedition(profileId);
+    } catch (e: any) {
+        error.value = e?.message ?? 'Przeładunek nie powiódł się';
     } finally {
         busy.value = false;
     }
@@ -435,6 +493,12 @@ h2, h3 { font-family: var(--font-head); }
 .xp-fill { height: 100%; background: linear-gradient(90deg, var(--info), var(--info-light)); transition: width 0.4s ease; }
 .pending { display: flex; gap: 0.75rem; align-items: center; border-color: var(--accent); }
 .stock { font-weight: 600; color: var(--warn); }
+.hold { border-collapse: collapse; margin: 0.3rem 0 0.6rem; font-size: 14px; }
+.hold th, .hold td { padding: 4px 10px; text-align: left; }
+.hold thead th { font: 600 10px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--text-label); }
+.hold td { font-weight: 600; }
+.hold .moves { display: flex; gap: 6px; }
+.res-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; vertical-align: middle; }
 .sea-grid { display: grid; gap: 3px; margin-top: 0.75rem; }
 .sea-cell { width: 1.7rem; height: 1.7rem; border: 0; border-radius: 4px; padding: 0; font-size: 0.95rem; line-height: 1; cursor: default; }
 .sea-cell.fog { background: #0a1b23; box-shadow: inset 0 0 0 1px #12303a; }

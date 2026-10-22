@@ -99,6 +99,7 @@ const gridStyle = computed(() => ({
 .cell.ship { background: #33596a; box-shadow: inset 0 0 0 1px #517f8f; }
 
 /* kropka trafienia / pierścień pudła */
+.cell::before,
 .cell::after {
     content: '';
     position: absolute;
@@ -107,19 +108,43 @@ const gridStyle = computed(() => ({
     border-radius: 50%;
     transform: translate(-50%, -50%);
 }
+/*
+    Trafiony (statek jeszcze pływa) ma być najgłośniejszy na planszy — tu trzeba
+    dobijać: jasna obwódka, poświata i powolny puls. Zatopiony jest „wygaszony”:
+    ciemne pole i przygaszony krzyżyk zamiast kropki, żeby nie mylił się z trafieniem.
+*/
+.cell.hit {
+    background: #4d2a14;
+    box-shadow: inset 0 0 0 2px var(--accent), 0 0 10px #e8843c55;
+}
 .cell.hit::after {
     width: calc(var(--cell) * .44);
     height: calc(var(--cell) * .44);
     background: var(--accent);
     box-shadow: 0 0 12px #e8843c99;
 }
-.cell.ship.hit { background: #4a3327; box-shadow: inset 0 0 0 1px #7a4a33; }
-.cell.sunk { background: #3a1c12; box-shadow: inset 0 0 0 1px #7a3a22; }
+.cell.hit::before {
+    width: calc(var(--cell) * .44);
+    height: calc(var(--cell) * .44);
+    box-shadow: 0 0 0 1.5px var(--accent);
+    animation: hitPulse 1.8s ease-out infinite;
+}
+.cell.sunk { background: #24130e; box-shadow: inset 0 0 0 1px #4e2a1d; }
+.cell.sunk::before,
 .cell.sunk::after {
-    width: calc(var(--cell) * .47);
-    height: calc(var(--cell) * .47);
-    background: var(--accent);
-    box-shadow: none;
+    width: calc(var(--cell) * .56);
+    height: 2.5px;
+    border-radius: 2px;
+    background: #a4532c;
+}
+.cell.sunk::before { transform: translate(-50%, -50%) rotate(45deg); }
+.cell.sunk::after { transform: translate(-50%, -50%) rotate(-45deg); }
+@keyframes hitPulse {
+    0% { transform: translate(-50%, -50%) scale(1); opacity: .9; }
+    100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .cell.hit::before { animation: none; opacity: 0; }
 }
 .cell.miss::after {
     width: 7px;

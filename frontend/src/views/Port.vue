@@ -102,7 +102,7 @@
                                 </div>
                             </li>
                         </ul>
-                        <p v-if="!expedition.fleet.length" class="muted">Brak jednostek — tratwę zbudujesz za darmo w każdej stoczni.</p>
+                        <p v-if="!expedition.fleet.length" class="muted">Brak jednostek — tratwę zbudujesz za darmo na każdej wyspie.</p>
                     </div>
                 </template>
 

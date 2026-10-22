@@ -39,6 +39,12 @@ final readonly class Resources
         return new self($this->wood + $other->wood, $this->steel + $other->steel, $this->gold + $other->gold);
     }
 
+    /** Paczka powtórzona n razy (np. urobek złoża za n tików). */
+    public function times(int $n): self
+    {
+        return new self($this->wood * $n, $this->steel * $n, $this->gold * $n);
+    }
+
     public function covers(self $cost): bool
     {
         return $this->wood >= $cost->wood && $this->steel >= $cost->steel && $this->gold >= $cost->gold;

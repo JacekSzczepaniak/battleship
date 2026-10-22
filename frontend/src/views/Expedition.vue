@@ -124,7 +124,8 @@
                         </tbody>
                     </table>
 
-                    <h3>🏗️ Stocznia — {{ currentIsland.name }} <span class="muted">(poziom {{ currentIsland.shipyardLevel }})</span></h3>
+                    <h3 v-if="currentIsland.shipyardLevel > 0">🏗️ Stocznia — {{ currentIsland.name }} <span class="muted">(poziom {{ currentIsland.shipyardLevel }})</span></h3>
+                    <h3 v-else>🪵 {{ currentIsland.name }} — bez stoczni <span class="muted">(tratwę skleisz z desek na każdej wyspie)</span></h3>
                     <ul class="ships">
                         <li v-for="t in expedition.shipTypes" :key="t.type" class="ship">
                             <span class="ship-name">{{ SHIP_ICONS[t.type] }} {{ SHIP_LABELS[t.type] }} ({{ t.length }}-masztowiec)</span>
@@ -168,7 +169,12 @@
                     <div class="island-meta">
                         <span>🏆 +{{ island.xpWin }} XP, {{ formatResources(island.lootWin, 'bez łupów') }}</span>
                         <span class="muted">porażka: +{{ island.xpLoss }} XP, {{ formatResources(island.lootLoss, 'bez łupów') }}</span>
-                        <span class="muted">🏗️ stocznia poz. {{ island.shipyardLevel }} · plansza {{ island.board.w }}×{{ island.board.h }}</span>
+                        <span class="muted">🏗️ {{ island.shipyardLevel > 0 ? `stocznia poz. ${island.shipyardLevel}` : 'bez stoczni' }} · plansza {{ island.board.w }}×{{ island.board.h }}</span>
+                        <span v-if="island.deposit" :class="island.deposit.active ? 'deposit' : 'muted'">
+                            ⛏️ złoże: {{ formatResources(island.deposit.yield) }}/tik
+                            <template v-if="island.deposit.active"> · pracuje, urobek czeka w magazynie (do {{ formatResources(island.deposit.cap) }})</template>
+                            <template v-else> · ruszy po pierwszej wygranej bitwie</template>
+                        </span>
                         <span v-if="island.wins || island.losses" class="muted">
                             bilans: {{ island.wins }}W / {{ island.losses }}P
                         </span>
@@ -348,10 +354,21 @@ function buildBlock(t: ShipTypeDTO): string | null {
     const island = currentIsland.value;
     if (!profile || !island) return 'dopłyń do portu';
     if (!rankAtLeast(profile.rank, t.requiredRank)) return `wymaga rangi: ${rankLabel(t.requiredRank)}`;
-    if (island.shipyardLevel < t.requiredShipyardLevel) return `wymaga stoczni poziomu ${t.requiredShipyardLevel}`;
+    if (island.shipyardLevel < t.requiredShipyardLevel) return shipyardMissing(island, t.requiredShipyardLevel);
     const available = addResources(island.stockpile, profile.cargo);
     if (!covers(available, t.buildCost)) return missing(available, t.buildCost);
     return null;
+}
+
+/** Stocznie są tylko na dwóch wyspach (#48) — podpowiedź, dokąd płynąć. */
+function shipyardMissing(island: IslandDTO, level: number): string {
+    const yards = (expedition.value?.islands ?? [])
+        .filter(i => i.shipyardLevel >= level && i.discovered)
+        .map(i => i.name);
+    const where = yards.length ? ` — płyń do: ${yards.join(', ')}` : '';
+    return island.shipyardLevel === 0
+        ? `brak stoczni${where}`
+        : `wymaga stoczni poziomu ${level}${where}`;
 }
 
 /** Powód blokady remontu statku; null = można remontować. */
@@ -361,7 +378,7 @@ function repairBlock(ship: FleetShipDTO): string | null {
     const type = expedition.value?.shipTypes.find(t => t.type === ship.type);
     if (!profile || !type) return 'wczytywanie…';
     if (!island) return 'dopłyń do portu';
-    if (island.shipyardLevel < type.requiredShipyardLevel) return `wymaga stoczni poziomu ${type.requiredShipyardLevel}`;
+    if (island.shipyardLevel < type.requiredShipyardLevel) return shipyardMissing(island, type.requiredShipyardLevel);
     const available = addResources(island.stockpile, profile.cargo);
     if (!covers(available, ship.repairCost)) return missing(available, ship.repairCost);
     return null;
@@ -565,6 +582,7 @@ h2, h3 { font-family: var(--font-head); }
 .stock { font-weight: 600; color: var(--warn); }
 .squad { display: flex; flex-wrap: wrap; gap: 0.5rem 0.8rem; align-items: center; margin-bottom: 0.6rem; font: 500 12px var(--font-mono); color: var(--text-muted); }
 .squad .over { color: var(--warn); }
+.deposit { color: var(--text-2); }
 .convoy-warn { margin: 0.5rem 0 0; font: 500 12px var(--font-mono); color: var(--warn); }
 .squad-pick { list-style: none; padding: 0; margin: 0; width: 100%; display: flex; flex-wrap: wrap; gap: 6px 14px; }
 .squad-pick label { cursor: pointer; color: var(--text-2); }

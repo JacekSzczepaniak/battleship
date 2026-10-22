@@ -19,7 +19,7 @@ final class GetExpedition
 
     /**
      * Stan wyprawy: profil (XP, ranga, ładownia), flota, katalog typów
-     * statków (do UI stoczni) i wyspy z kłódkami.
+     * statków (do UI stoczni) i wyspy z kłódkami, stoczniami i złożami.
      *
      * @return array{profile: array<string,mixed>, fleet: list<array<string,mixed>>, shipTypes: list<array<string,mixed>>, islands: list<array<string,mixed>>, world: array<string,mixed>}
      */
@@ -55,7 +55,14 @@ final class GetExpedition
                 'xpLoss' => $island->xpLoss,
                 'lootWin' => $island->lootWin->toArray(),
                 'lootLoss' => $island->lootLoss->toArray(),
+                // 0 = brak stoczni (na każdej wyspie zbudujesz tylko tratwę)
                 'shipyardLevel' => $island->shipyardLevel,
+                // złoże: urobek na tik, limit czekający w magazynie, czy pracuje (po pierwszej wygranej)
+                'deposit' => $island->hasDeposit() ? [
+                    'yield' => $island->depositYield->toArray(),
+                    'cap' => $island->depositCap()->toArray(),
+                    'active' => $stats['wins'] > 0,
+                ] : null,
                 'board' => ['w' => $island->boardWidth, 'h' => $island->boardHeight],
                 // ile pól planszy może zająć skład bitewny (#73)
                 'squadLimit' => $island->squadCellLimit(),

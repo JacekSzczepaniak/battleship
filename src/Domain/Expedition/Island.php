@@ -6,10 +6,15 @@ namespace App\Domain\Expedition;
  * Definicja wyspy wyprawy: bitwa o zadanych zasadach, bramkowana rangą,
  * z nagrodami XP i surowców za wygraną i (mniejszymi) za przegraną —
  * z porażek też się uczymy. Stocznia na wyspie buduje i remontuje flotę;
- * jej poziom ogranicza dostępne typy statków.
+ * jej poziom ogranicza dostępne typy statków (0 = brak stoczni, tylko
+ * tratwa). Złoże wyspy produkuje surowiec co tik, odkąd kapitan wygrał
+ * o nią bitwę (GAME_DESIGN.md, filar III).
  */
 final class Island
 {
+    /** Urobek czeka w magazynie wyspy najwyżej tyle tików produkcji — potem złoże staje. */
+    public const DEPOSIT_BUFFER_TICKS = 10;
+
     public function __construct(
         public readonly string $id,
         public readonly string $name,
@@ -23,6 +28,7 @@ final class Island
         public readonly int $shipyardLevel,
         public readonly int $boardWidth,
         public readonly int $boardHeight,
+        public readonly Resources $depositYield = new Resources(),
     ) {
         if (!in_array($mode, ['classic', 'fun'], true)) {
             throw new \InvalidArgumentException('Island mode must be classic|fun');
@@ -47,6 +53,17 @@ final class Island
     public function squadCellLimit(): int
     {
         return intdiv($this->boardWidth * $this->boardHeight * 20, 100);
+    }
+
+    public function hasDeposit(): bool
+    {
+        return !$this->depositYield->isZero();
+    }
+
+    /** Ile urobku może czekać w magazynie wyspy, zanim złoże stanie. */
+    public function depositCap(): Resources
+    {
+        return $this->depositYield->times(self::DEPOSIT_BUFFER_TICKS);
     }
 
     public function isAccessibleFor(Rank $rank): bool

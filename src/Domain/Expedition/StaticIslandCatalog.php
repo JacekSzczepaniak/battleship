@@ -5,6 +5,8 @@ namespace App\Domain\Expedition;
 /**
  * Stały katalog wysp plastra A/B: liniowa trasa 6 wysp, kolejne bramkowane
  * rangą; wczesne wyspy mają mniejsze plansze (krótsze polowanie małą flotą).
+ * Stocznie tylko na dwóch wyspach (Zatoka — start, Sygnałowa — hub), złoża
+ * na trzech innych: surowce trzeba dowieźć do stoczni (#48).
  * Docelowo (plaster C) katalog będzie generowany z seeda świata.
  */
 final class StaticIslandCatalog implements IslandCatalog
@@ -39,9 +41,10 @@ final class StaticIslandCatalog implements IslandCatalog
                 xpLoss: 12,
                 lootWin: new Resources(wood: 18, steel: 7),
                 lootLoss: new Resources(wood: 6),
-                shipyardLevel: 1,
+                shipyardLevel: 0,
                 boardWidth: 8,
                 boardHeight: 8,
+                depositYield: new Resources(wood: 3),
             ),
             new Island(
                 id: 'wyspa-sygnalowa',
@@ -53,7 +56,7 @@ final class StaticIslandCatalog implements IslandCatalog
                 xpLoss: 15,
                 lootWin: new Resources(wood: 20, steel: 10, gold: 5),
                 lootLoss: new Resources(wood: 8),
-                shipyardLevel: 2,
+                shipyardLevel: 3,
                 boardWidth: 9,
                 boardHeight: 9,
             ),
@@ -67,9 +70,10 @@ final class StaticIslandCatalog implements IslandCatalog
                 xpLoss: 20,
                 lootWin: new Resources(wood: 20, steel: 12, gold: 8),
                 lootLoss: new Resources(wood: 10),
-                shipyardLevel: 2,
+                shipyardLevel: 0,
                 boardWidth: 10,
                 boardHeight: 10,
+                depositYield: new Resources(steel: 2),
             ),
             new Island(
                 id: 'ciesnina-sztormow',
@@ -81,9 +85,10 @@ final class StaticIslandCatalog implements IslandCatalog
                 xpLoss: 25,
                 lootWin: new Resources(wood: 20, steel: 18, gold: 12),
                 lootLoss: new Resources(wood: 12),
-                shipyardLevel: 3,
+                shipyardLevel: 0,
                 boardWidth: 10,
                 boardHeight: 10,
+                depositYield: new Resources(gold: 1),
             ),
             new Island(
                 id: 'twierdza-admiralicji',
@@ -95,7 +100,7 @@ final class StaticIslandCatalog implements IslandCatalog
                 xpLoss: 30,
                 lootWin: new Resources(wood: 20, steel: 22, gold: 18),
                 lootLoss: new Resources(wood: 15),
-                shipyardLevel: 3,
+                shipyardLevel: 0,
                 boardWidth: 10,
                 boardHeight: 10,
             ),

@@ -75,6 +75,12 @@ powroty. Odrzucone: czas rzeczywisty i hybrydy czasowe.
   uczelnia, fort)
 - **Dzika/questowa** — wraki, ekspedycje, sekrety (czarna perła)
 
+✅ (#48) Morze Rozbitków: stocznie tylko na Zatoce Rozbitka (poziom 1)
+i Wyspie Sygnałowej (poziom 3); złoża na Mieliznach (3 drewna/tik),
+Archipelagu Mgieł (2 stali/tik) i Cieśninie Sztormów (1 złota/tik).
+Złoże pracuje od pierwszej wygranej bitwy o wyspę, urobek czeka w jej
+magazynie do limitu 10 tików produkcji. Tratwę skleja się na każdej wyspie.
+
 **Zdobywanie wyspy — trzy fazy:** ✅
 1. potyczka morska (obecna bitwa = flota strażnicza),
 2. **abordaż**: ostatni niezatopiony statek wroga można abordażować zamiast
@@ -207,7 +213,7 @@ i progi do zaprojektowania przy epiku.
    kontratak) komunikowane zanim gracz podejmie decyzję.
 5. **Budżet złożoności** — 3 surowce, 2–3 parametry na motyw akwenu,
    krótkie drzewko na start; głębia przez sprzężenia, nie przez liczbę bytów.
-6. **Bezpiecznik anty-softlock** — tratwa darmowa, kartografia jako dochód
+6. **Bezpiecznik anty-softlock** — tratwa darmowa na każdej wyspie, kartografia jako dochód
    bez ryzyka, żegluga bez wymogu sprawnej floty. Od #47 kartografia płaci
    tylko do ładowni, więc flota z samych tratw jej nie zbiera — rozbitkowi
    zostają łupy z bitew (także porażek) w magazynie wyspy.

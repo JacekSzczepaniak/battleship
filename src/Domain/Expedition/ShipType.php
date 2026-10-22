@@ -91,11 +91,15 @@ enum ShipType: string
         };
     }
 
-    /** Minimalny poziom stoczni potrzebny do budowy i remontu. */
+    /**
+     * Minimalny poziom stoczni potrzebny do budowy i remontu. Tratwę klei się
+     * z desek na każdej wyspie, także bez stoczni (bezpiecznik anty-softlock).
+     */
     public function requiredShipyardLevel(): int
     {
         return match ($this) {
-            self::Tratwa, self::Kuter => 1,
+            self::Tratwa => 0,
+            self::Kuter => 1,
             self::Niszczyciel, self::Transportowiec => 2,
             self::Lotniskowiec => 3,
         };

@@ -32,6 +32,8 @@ final class ProfileSnapshotMapper
             'visited' => $profile->visitedSectors(),
             // surowce czekające na magazyn wyspy — rozłoży je ensureWorldState()
             'unplaced' => $profile->unplacedResources()?->toArray(),
+            // złoża wysp: tik ostatniego naliczenia urobku
+            'depositTicks' => $profile->depositTicks(),
         ];
     }
 
@@ -100,6 +102,7 @@ final class ProfileSnapshotMapper
             isset($state['visited']) && is_array($state['visited']) ? array_values(array_map('strval', $state['visited'])) : null,
             $this->stockpilesFrom($state),
             $this->unplacedFrom($state, $cargo),
+            array_map('intval', (array) ($state['depositTicks'] ?? [])),
         );
     }
 

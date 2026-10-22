@@ -90,7 +90,7 @@ const hasDamaged = computed(() => exp.value?.fleet.some(s => s.damaged) ?? false
 const shipyardLabel = computed(() => {
     const e = exp.value;
     if (!e) return '';
-    if (e.fleet.length === 0) return 'Odbuduj flotę w stoczni (tratwa za darmo)';
+    if (e.fleet.length === 0) return 'Odbuduj flotę (tratwa za darmo na każdej wyspie)';
     if (hasDamaged.value) return 'Napraw flotę w stoczni';
     return e.settle.lostShips.length ? 'Uzupełnij flotę w stoczni' : 'Flota sprawna — stocznia';
 });

@@ -30,13 +30,16 @@ enum Technology: string
     /** Złoże daje +1 jednostkę swojego surowca na tik, zanim tartak i kopalnia podwoją urobek. */
     case LepszeNarzedzia = 'lepsze-narzedzia';
 
+    /** Stocznia buduje niszczyciel w wariancie zwiadowczym: 2 sonary zamiast torpedy (ShipVariant). */
+    case NiszczycielZwiadowczy = 'niszczyciel-zwiadowczy';
+
     public function branch(): TechBranch
     {
         return match ($this) {
             self::Spichlerze, self::LepszeNarzedzia => TechBranch::Osady,
             self::PojemneLadownie, self::DokRemontowy => TechBranch::Kadluby,
             self::MapySztormowe, self::ZeglugaDwusektorowa => TechBranch::Nawigacja,
-            self::SonarDalekiegoZasiegu => TechBranch::Uzbrojenie,
+            self::SonarDalekiegoZasiegu, self::NiszczycielZwiadowczy => TechBranch::Uzbrojenie,
         };
     }
 
@@ -44,7 +47,7 @@ enum Technology: string
     {
         return match ($this) {
             self::Spichlerze, self::MapySztormowe, self::SonarDalekiegoZasiegu, self::PojemneLadownie => TechLevel::First,
-            self::ZeglugaDwusektorowa, self::LepszeNarzedzia, self::DokRemontowy => TechLevel::Second,
+            self::ZeglugaDwusektorowa, self::LepszeNarzedzia, self::DokRemontowy, self::NiszczycielZwiadowczy => TechLevel::Second,
         };
     }
 }

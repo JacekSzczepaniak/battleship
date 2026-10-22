@@ -42,6 +42,7 @@ final class ResearchApiTest extends WebTestCase
             ['id' => 'pojemne-ladownie', 'branch' => 'kadluby', 'level' => 1, 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'no-academy'],
             ['id' => 'dok-remontowy', 'branch' => 'kadluby', 'level' => 2, 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'prerequisite'],
             ['id' => 'lepsze-narzedzia', 'branch' => 'osady', 'level' => 2, 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'prerequisite'],
+            ['id' => 'niszczyciel-zwiadowczy', 'branch' => 'uzbrojenie', 'level' => 2, 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'prerequisite'],
         ], $research['technologies']);
 
         // bez uczelni badania nie da się zacząć
@@ -53,7 +54,7 @@ final class ResearchApiTest extends WebTestCase
         $this->post($client, "/api/profiles/$profileId/islands/zatoka-rozbitka/buildings", ['type' => 'uczelnia']);
         self::assertResponseStatusCodeSame(201);
         self::assertSame(
-            ['spichlerze' => 'available', 'mapy-sztormowe' => 'available', 'sonar-dalekiego-zasiegu' => 'available', 'zegluga-dwusektorowa' => 'locked', 'pojemne-ladownie' => 'available', 'dok-remontowy' => 'locked', 'lepsze-narzedzia' => 'locked'],
+            ['spichlerze' => 'available', 'mapy-sztormowe' => 'available', 'sonar-dalekiego-zasiegu' => 'available', 'zegluga-dwusektorowa' => 'locked', 'pojemne-ladownie' => 'available', 'dok-remontowy' => 'locked', 'lepsze-narzedzia' => 'locked', 'niszczyciel-zwiadowczy' => 'locked'],
             $this->states($this->expedition($client, $profileId)),
         );
 
@@ -124,7 +125,7 @@ final class ResearchApiTest extends WebTestCase
         $expedition = $this->expedition($client, $granary);
         self::assertNull($expedition['research']['current']);
         self::assertSame(
-            ['spichlerze' => 'researched', 'mapy-sztormowe' => 'researched', 'sonar-dalekiego-zasiegu' => 'available', 'zegluga-dwusektorowa' => 'locked', 'pojemne-ladownie' => 'available', 'dok-remontowy' => 'locked', 'lepsze-narzedzia' => 'locked'],
+            ['spichlerze' => 'researched', 'mapy-sztormowe' => 'researched', 'sonar-dalekiego-zasiegu' => 'available', 'zegluga-dwusektorowa' => 'locked', 'pojemne-ladownie' => 'available', 'dok-remontowy' => 'locked', 'lepsze-narzedzia' => 'locked', 'niszczyciel-zwiadowczy' => 'locked'],
             $this->states($expedition),
         );
         $mielizny = array_column($expedition['islands'], null, 'id')['mielizny'];

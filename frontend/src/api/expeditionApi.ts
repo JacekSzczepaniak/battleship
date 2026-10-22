@@ -43,6 +43,19 @@ export const SHIP_LABELS: Record<ShipTypeName, string> = {
     transportowiec: 'Transportowiec',
 };
 
+// wariant statku (#99): ten sam kadłub, inne wyposażenie; dziś ma je tylko niszczyciel
+export type ShipVariantName = 'torpedowy' | 'zwiadowczy';
+
+export const SHIP_VARIANT_LABELS: Record<ShipVariantName, string> = {
+    torpedowy: 'torpedowy',
+    zwiadowczy: 'zwiadowczy',
+};
+
+/** Nazwa statku floty z wariantem: „Niszczyciel zwiadowczy”, „Kuter”. */
+export function fleetShipLabel(ship: { type: ShipTypeName; variant?: ShipVariantName | null }): string {
+    return ship.variant ? `${SHIP_LABELS[ship.type]} ${SHIP_VARIANT_LABELS[ship.variant]}` : SHIP_LABELS[ship.type];
+}
+
 export const SHIP_ICONS: Record<ShipTypeName, string> = {
     tratwa: '🛶',
     kuter: '🚤',
@@ -105,6 +118,8 @@ export interface FleetShipDTO {
     id: string;
     type: ShipTypeName;
     length: number;
+    // stały od budowy; null = typ bez wariantów
+    variant: ShipVariantName | null;
     damaged: boolean;
     repairCost: ResourcesDTO;
 }
@@ -119,6 +134,14 @@ export interface ShipTypeDTO {
     repairCost: ResourcesDTO;
     requiredRank: RankName;
     requiredShipyardLevel: number;
+    // warianty do wyboru przy budowie (pusta lista = typ bez wariantów)
+    variants: ShipVariantDTO[];
+}
+
+export interface ShipVariantDTO {
+    variant: ShipVariantName;
+    requiredTechnology: TechnologyName | null;
+    unlocked: boolean;
 }
 
 export interface IslandDTO {
@@ -210,7 +233,7 @@ export interface LastCounterattackDTO {
 
 // drzewko technologii (Epic G): katalog zawiera tylko działające technologie
 export type TechBranchName = 'kadluby' | 'uzbrojenie' | 'nawigacja' | 'osady';
-export type TechnologyName = 'spichlerze' | 'mapy-sztormowe' | 'sonar-dalekiego-zasiegu' | 'zegluga-dwusektorowa' | 'pojemne-ladownie' | 'dok-remontowy' | 'lepsze-narzedzia';
+export type TechnologyName = 'spichlerze' | 'mapy-sztormowe' | 'sonar-dalekiego-zasiegu' | 'zegluga-dwusektorowa' | 'pojemne-ladownie' | 'dok-remontowy' | 'lepsze-narzedzia' | 'niszczyciel-zwiadowczy';
 
 export const TECH_BRANCH_LABELS: Record<TechBranchName, string> = {
     kadluby: 'Kadłuby',
@@ -227,6 +250,7 @@ export const TECH_LABELS: Record<TechnologyName, string> = {
     'pojemne-ladownie': 'Pojemne ładownie',
     'dok-remontowy': 'Dok remontowy',
     'lepsze-narzedzia': 'Lepsze narzędzia',
+    'niszczyciel-zwiadowczy': 'Niszczyciel zwiadowczy',
 };
 
 // powód blokady badania (Domain/Expedition/ResearchBlock); null = można badać
@@ -315,8 +339,8 @@ export async function settleBattle(profileId: string, gameId: string): Promise<S
     return http.post<SettleResultDTO>(`/profiles/${profileId}/battles/${gameId}/settle`, {});
 }
 
-export async function buildShip(profileId: string, islandId: string, type: ShipTypeName): Promise<FleetShipDTO> {
-    return http.post<FleetShipDTO>(`/profiles/${profileId}/ships`, { type, islandId });
+export async function buildShip(profileId: string, islandId: string, type: ShipTypeName, variant?: ShipVariantName): Promise<FleetShipDTO> {
+    return http.post<FleetShipDTO>(`/profiles/${profileId}/ships`, { type, islandId, ...(variant ? { variant } : {}) });
 }
 
 export async function repairShip(profileId: string, islandId: string, shipId: string): Promise<FleetShipDTO> {

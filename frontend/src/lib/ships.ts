@@ -1,16 +1,61 @@
 // Nazwy i role jednostek po stronie UI. Broń wynika z wyposażenia statku; domyślne
 // zależy od długości (Loadout::defaultFor): kuter(2)=sonar, niszczyciel(3)=torpeda,
-// lotniskowiec(4)=nalot. Transportowiec(5) broni nie ma. Warianty (#99) UI jeszcze nie zna.
+// lotniskowiec(4)=nalot. Transportowiec(5) broni nie ma. Warianty statków (#99)
+// niosą inne wyposażenie: niszczyciel zwiadowczy 2 sonary zamiast torpedy.
 
-import type { ShipTypeName } from '../api/expeditionApi';
+import type { ShipTypeName, ShipVariantName } from '../api/expeditionApi';
+import type { Loadout } from '../api/gameApi';
 
 export type WeaponKey = 'shot' | 'sonar' | 'torpedo' | 'airraid';
 
-export const CARRIER_LENGTH: Record<Exclude<WeaponKey, 'shot'>, number> = {
-    sonar: 2,
-    torpedo: 3,
-    airraid: 4,
+const DEFAULT_LOADOUT: Record<number, Loadout> = {
+    2: { sonar: 1 },
+    3: { torpedo: 1 },
+    4: { airRaid: 1 },
 };
+
+/** Wyposażenie wariantu (ShipVariant::loadout) i nazwa statku w tym wariancie. */
+export const VARIANTS: Record<ShipVariantName, { length: number; w: Loadout; name: string }> = {
+    torpedowy: { length: 3, w: { torpedo: 1 }, name: 'Niszczyciel torpedowy' },
+    zwiadowczy: { length: 3, w: { sonar: 2 }, name: 'Niszczyciel zwiadowczy' },
+};
+
+const LOADOUT_WEAPON: Record<keyof Loadout, Exclude<WeaponKey, 'shot'>> = {
+    sonar: 'sonar',
+    torpedo: 'torpedo',
+    airRaid: 'airraid',
+};
+
+const WEAPON_LABEL: Record<keyof Loadout, string> = {
+    sonar: 'sonar',
+    torpedo: 'torpeda',
+    airRaid: 'nalot',
+};
+
+/** Wyposażenie statku: `w` z API albo domyślne dla długości. */
+export function loadoutOf(length: number, w?: Loadout): Loadout {
+    return w ?? DEFAULT_LOADOUT[length] ?? {};
+}
+
+/** Bronie, których statek jest nośnikiem. */
+export function carriedWeapons(length: number, w?: Loadout): Exclude<WeaponKey, 'shot'>[] {
+    return (Object.entries(loadoutOf(length, w)) as [keyof Loadout, number][])
+        .filter(([, uses]) => uses > 0)
+        .map(([weapon]) => LOADOUT_WEAPON[weapon]);
+}
+
+function sameLoadout(a: Loadout, b: Loadout): boolean {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)] as (keyof Loadout)[]);
+    return [...keys].every(k => (a[k] ?? 0) === (b[k] ?? 0));
+}
+
+/** Wariant statku z planszy bitwy; null = wyposażenie domyślne albo statek bez wariantów. */
+export function variantOf(length: number, w?: Loadout): ShipVariantName | null {
+    if (!w) return null;
+    const found = (Object.entries(VARIANTS) as [ShipVariantName, (typeof VARIANTS)[ShipVariantName]][])
+        .find(([, v]) => v.length === length && sameLoadout(v.w, w));
+    return found ? found[0] : null;
+}
 
 const NAME_BY_LENGTH: Record<number, string> = {
     1: 'Tratwa',
@@ -28,7 +73,9 @@ const TYPE_BY_LENGTH: Record<number, ShipTypeName> = {
     5: 'transportowiec',
 };
 
-export function shipName(length: number): string {
+export function shipName(length: number, w?: Loadout): string {
+    const variant = variantOf(length, w);
+    if (variant) return VARIANTS[variant].name;
     return NAME_BY_LENGTH[length] ?? `${length}-masztowiec`;
 }
 
@@ -36,14 +83,12 @@ export function shipTypeForLength(length: number): ShipTypeName | null {
     return TYPE_BY_LENGTH[length] ?? null;
 }
 
-/** Broń, którą jednostka danej długości daje flocie (tylko tryb z broniami specjalnymi). */
-export function carriedWeapon(length: number): string | null {
-    switch (length) {
-        case CARRIER_LENGTH.sonar: return 'sonar';
-        case CARRIER_LENGTH.torpedo: return 'torpeda';
-        case CARRIER_LENGTH.airraid: return 'nalot';
-        default: return null;
-    }
+/** Broń, którą jednostka daje flocie, np. „torpeda”, „sonar ×2” (tylko tryb z broniami specjalnymi). */
+export function carriedWeapon(length: number, w?: Loadout): string | null {
+    const parts = (Object.entries(loadoutOf(length, w)) as [keyof Loadout, number][])
+        .filter(([, uses]) => uses > 0)
+        .map(([weapon, uses]) => uses > 1 ? `${WEAPON_LABEL[weapon]} ×${uses}` : WEAPON_LABEL[weapon]);
+    return parts.length ? parts.join(', ') : null;
 }
 
 /** „1 pole”, „3 pola”, „5 pól” — polska odmiana liczebnika. */

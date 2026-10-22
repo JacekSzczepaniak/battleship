@@ -8,7 +8,11 @@ export interface EnemyFogGridView {
     sunk: { cells: [number, number][] }[];
 }
 
-export interface PlayerFleetItem { x: number; y: number; o: 'h' | 'v'; l: number }
+// wyposażenie statku (Loadout::toArray): broń => liczba użyć
+export type Loadout = Partial<Record<'torpedo' | 'sonar' | 'airRaid', number>>;
+
+// `w` tylko przy wyposażeniu innym niż domyślne dla długości (wariant statku, #99)
+export interface PlayerFleetItem { x: number; y: number; o: 'h' | 'v'; l: number; w?: Loadout }
 
 export type RulesetName = 'classic' | 'fun';
 
@@ -32,6 +36,9 @@ export interface GameViewDTO {
     allowedShips?: Record<string, number>;
     // skład floty przeciwnika; inny niż allowedShips przy bonusie pełnej bandery (#79)
     opponentShips?: Record<string, number>;
+    // warianty: długość => wyposażenia odbiegające od domyślnego (pierwsze statki tej długości); pusta tablica = brak
+    variants?: Record<string, Loadout[]> | [];
+    opponentVariants?: Record<string, Loadout[]> | [];
     weapons: WeaponsState;
     opponentWeapons?: WeaponsState;
     mode: 'standard' | 'nonstandard' | string;

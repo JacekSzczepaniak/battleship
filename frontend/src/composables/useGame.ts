@@ -3,9 +3,9 @@ import { useRoute } from 'vue-router';
 import {
     getGame, fireShot, fireTorpedo, sonarPing, sendAirRaid,
     type GameViewDTO, type ShotResultDTO, type RulesetName, type WeaponsState,
-    type TorpedoDirection, type TurnOutcomeDTO, type SonarCell, type PlayerFleetItem, type CellShotResult,
+    type TorpedoDirection, type TurnOutcomeDTO, type SonarCell, type PlayerFleetItem, type CellShotResult, type Loadout,
 } from '../api/gameApi.ts';
-import { cellLabel, fieldsLabel, shipName } from '../lib/ships';
+import { carriedWeapons, cellLabel, fieldsLabel, shipName } from '../lib/ships';
 
 export type WeaponMode = 'shot' | 'torpedo' | 'sonar' | 'airraid';
 
@@ -55,6 +55,8 @@ export function useGame() {
     // skład floty (ten sam dla obu stron — AI losuje flotę z rulesetu)
     const allowedShips = ref<Record<string, number>>({});
     const opponentShips = ref<Record<string, number>>({});
+    // warianty wroga (lustro składu gracza, #99): długość => wyposażenia odbiegające od domyślnego
+    const opponentVariants = ref<Record<string, Loadout[]>>({});
     // długości zatopionych statków: wroga (z projekcji) i własnych (z overlayu)
     const enemySunkLengths = ref<number[]>([]);
     // Notatki gracza a'la saper: „tu nic nie może być" — szkic po stronie klienta,
@@ -147,6 +149,7 @@ export function useGame() {
         playerFleet.value = dto.playerFleet ?? [];
         allowedShips.value = dto.allowedShips ?? {};
         opponentShips.value = dto.opponentShips ?? dto.allowedShips ?? {};
+        opponentVariants.value = dto.opponentVariants && !Array.isArray(dto.opponentVariants) ? dto.opponentVariants : {};
         shotsTotal.value = dto.shotsCount ?? 0;
     }
 
@@ -155,11 +158,11 @@ export function useGame() {
         return shipCellsOf(s).every(([x, y]) => ov[y]?.[x] === 'opp-hit');
     }
 
-    /** Długości własnych statków, które wciąż pływają (żywe nośniki broni). */
-    const aliveShipLengths = computed<Set<number>>(() => {
-        const alive = new Set<number>();
+    /** Bronie, których nośnik wciąż pływa (wyposażenie statku, także wariantu #99). */
+    const aliveCarriers = computed<Set<WeaponMode>>(() => {
+        const alive = new Set<WeaponMode>();
         for (const s of playerFleet.value) {
-            if (!isShipSunk(s)) alive.add(s.l);
+            if (!isShipSunk(s)) carriedWeapons(s.l, s.w).forEach(w => alive.add(w));
         }
         return alive;
     });
@@ -171,13 +174,13 @@ export function useGame() {
     const playerTotal = computed(() => Object.values(allowedShips.value).reduce((a, b) => a + b, 0));
 
     /**
-     * Komórki własnych NIEZATOPIONYCH NISZCZYCIELI (3-masztowców) — legalne
-     * wyrzutnie torped (reguła domenowa: broń wynika ze składu floty).
+     * Komórki własnych NIEZATOPIONYCH nośników torped — legalne wyrzutnie
+     * (reguła domenowa: broń wynika z wyposażenia statku; zwiadowca torped nie ma).
      */
     const launchableCells = computed<Set<string>>(() => {
         const set = new Set<string>();
         for (const s of playerFleet.value) {
-            if (s.l !== 3 || isShipSunk(s)) continue;
+            if (!carriedWeapons(s.l, s.w).includes('torpedo') || isShipSunk(s)) continue;
             for (const [x, y] of shipCellsOf(s)) set.add(`${x}:${y}`);
         }
         return set;
@@ -424,12 +427,12 @@ export function useGame() {
         gameId, size, width, height, playerGrid, playerUnderFireOverlay, enemyFogGrid, turn, status, finished,
         loading, shooting, error, start, refresh, shot, attack, disabled,
         // tryb fun
-        ruleset, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells, aliveShipLengths,
+        ruleset, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells, aliveCarriers,
         // notatki (saper-style)
         noteMarks, toggleNote,
         // stats
         shotsCount, shotsTotal, hitsCount, missesCount, duplicatesCount, opponentHitsCount,
-        enemySunkLengths, playerSunkLengths, enemyTotal, playerTotal, allowedShips, opponentShips,
+        enemySunkLengths, playerSunkLengths, enemyTotal, playerTotal, allowedShips, opponentShips, opponentVariants, playerFleet,
         // dziennik i toast
         log, toast, toastType,
         lastShot, sunkCells,

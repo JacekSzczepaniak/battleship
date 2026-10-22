@@ -7,16 +7,16 @@ import { useGame, type WeaponMode } from '../composables/useGame';
 import { getExpedition, settleBattle } from '../api/expeditionApi';
 import { clearCurrentBattle, getCurrentBattle } from '../lib/expeditionSession';
 import { getBattleReport, saveBattleReport, type BattleReport } from '../lib/battleSession';
-import { CARRIER_LENGTH, fieldsLabel, shipName } from '../lib/ships';
+import { carriedWeapons, fieldsLabel, shipName } from '../lib/ships';
 import { attackerMissingShip, battleBonusLabel } from '../lib/counterattack';
 import type { TorpedoDirection } from '../api/gameApi';
 
 const {
     gameId, status, finished, turn, loading, shooting, error, disabled, attack, width, height,
-    ruleset, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells, aliveShipLengths,
+    ruleset, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells, aliveCarriers,
     noteMarks, toggleNote,
     shotsCount, hitsCount, opponentHitsCount, enemySunkLengths, playerSunkLengths, enemyTotal, playerTotal,
-    allowedShips, opponentShips,
+    allowedShips, opponentShips, opponentVariants, playerFleet,
     log, toast, toastType,
     playerGrid, playerUnderFireOverlay, enemyFogGrid, lastShot, sunkCells,
 } = useGame();
@@ -58,11 +58,36 @@ const CARRIER_NAME: Record<Exclude<WeaponMode, 'shot'>, string> = {
     airraid: 'lotniskowiec',
 };
 
+// dopełniacz nazw nośników do podpisu „z kutra”, „ze zwiadowcy” na karcie broni
+const CARRIER_GENITIVE: Record<string, string> = {
+    kuter: 'kutra',
+    niszczyciel: 'niszczyciela',
+    lotniskowiec: 'lotniskowca',
+    'niszczyciel zwiadowczy': 'zwiadowcy',
+};
+
+/** Nazwy własnych statków niosących broń (z rozstawionej floty, z wariantami #99). */
+function carrierNames(mode: Exclude<WeaponMode, 'shot'>): string[] {
+    const names = new Set<string>();
+    for (const s of playerFleet.value) {
+        if (carriedWeapons(s.l, s.w).includes(mode)) names.add(shipName(s.l, s.w).toLowerCase());
+    }
+    return names.size ? [...names] : [CARRIER_NAME[mode]];
+}
+
+function carrierSource(mode: Exclude<WeaponMode, 'shot'>): string {
+    const from = carrierNames(mode).map(n => CARRIER_GENITIVE[n] ?? n).join(' i ');
+    return `${/^(z|s)/.test(from) ? 'ze' : 'z'} ${from}`;
+}
+
 function lockReason(mode: Exclude<WeaponMode, 'shot'>): string | null {
     if (ruleset.value !== 'fun' || !weapons.value) return 'tylko w trybie z broniami';
     const state = mode === 'airraid' ? weapons.value.airRaid : weapons.value[mode];
     if (state.limit === 0) return `brak nośnika · ${CARRIER_NAME[mode]}`;
-    if (!aliveShipLengths.value.has(CARRIER_LENGTH[mode])) return `${CARRIER_NAME[mode]} zatopiony`;
+    if (!aliveCarriers.value.has(mode)) {
+        const names = carrierNames(mode);
+        return names.length > 1 ? 'nośniki zatopione' : `${names[0]} zatopiony`;
+    }
     if (state.used >= state.limit) return 'wyczerpane';
     return null;
 }
@@ -78,9 +103,9 @@ const sonarRadius = computed(() => weapons.value?.sonar.radius ?? 3);
 
 const weaponCards = computed<WeaponCard[]>(() => [
     { key: 'shot', hotkey: '1', name: 'Salwa', icon: Crosshair, area: 'jedno pole', source: 'każdy okręt', charges: '∞', locked: null },
-    { key: 'sonar', hotkey: '2', name: 'Sonar', icon: Radar, area: `krzyż · promień ${sonarRadius.value}`, source: 'z kutra · nie kończy tury', charges: charges('sonar'), locked: lockReason('sonar') },
-    { key: 'torpedo', hotkey: '3', name: 'Torpeda', icon: Rocket, area: 'linia do krawędzi', source: 'z niszczyciela', charges: charges('torpedo'), locked: lockReason('torpedo') },
-    { key: 'airraid', hotkey: '4', name: 'Nalot', icon: Plane, area: 'obszar 3×3', source: 'z lotniskowca', charges: charges('airraid'), locked: lockReason('airraid') },
+    { key: 'sonar', hotkey: '2', name: 'Sonar', icon: Radar, area: `krzyż · promień ${sonarRadius.value}`, source: `${carrierSource('sonar')} · nie kończy tury`, charges: charges('sonar'), locked: lockReason('sonar') },
+    { key: 'torpedo', hotkey: '3', name: 'Torpeda', icon: Rocket, area: 'linia do krawędzi', source: carrierSource('torpedo'), charges: charges('torpedo'), locked: lockReason('torpedo') },
+    { key: 'airraid', hotkey: '4', name: 'Nalot', icon: Plane, area: 'obszar 3×3', source: carrierSource('airraid'), charges: charges('airraid'), locked: lockReason('airraid') },
 ]);
 
 function selectWeapon(card: WeaponCard) {
@@ -265,6 +290,21 @@ const turnLabel = computed(() => {
     return turn.value === 'player' ? 'Twój ruch' : 'Ruch wroga';
 });
 
+// warianty statków wroga (lustro składu gracza, #54 D6): pokazane obok jego broni
+const enemyVariants = computed(() => {
+    if (ruleset.value !== 'fun') return [];
+    return Object.entries(opponentVariants.value).flatMap(([len, loadouts]) => {
+        const counts = new Map<string, { name: string; weapon: string; count: number }>();
+        for (const w of loadouts) {
+            const name = shipName(Number(len), w);
+            const entry = counts.get(name) ?? { name, weapon: carriedWeapons(Number(len), w).join(', '), count: 0 };
+            entry.count++;
+            counts.set(name, entry);
+        }
+        return [...counts.values()];
+    });
+});
+
 const aiArsenal = computed(() => {
     const w = opponentWeapons.value;
     if (ruleset.value !== 'fun' || !w) return [];
@@ -377,6 +417,9 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
                 <span class="kicker">ARSENAŁ WROGA</span>
                 <span v-for="a in aiArsenal" :key="a.label" class="ai-pill" :class="{ empty: a.left === 0 }" :title="a.label">
                     <component :is="a.icon" :size="13" /> {{ a.left }}/{{ a.limit }}
+                </span>
+                <span v-for="v in enemyVariants" :key="v.name" class="ai-pill variant" :title="`wariant w składzie wroga · nośnik: ${v.weapon}`">
+                    {{ v.name.toLowerCase() }}{{ v.count > 1 ? ` ×${v.count}` : '' }}
                 </span>
             </div>
         </header>

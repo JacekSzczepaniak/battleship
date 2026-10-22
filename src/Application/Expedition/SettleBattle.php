@@ -4,9 +4,11 @@ namespace App\Application\Expedition;
 
 use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\ProfileRepository;
+use App\Domain\Expedition\ShipVariant;
 use App\Domain\Game\Game;
 use App\Domain\Game\GameRepository;
 use App\Domain\Game\GameStatus;
+use App\Domain\Game\Ship;
 use App\Domain\Shared\GameId;
 use App\Domain\Shared\ProfileId;
 
@@ -65,13 +67,20 @@ final class SettleBattle
         // urobek złóż do bieżącego tiku liczy się przed łupem, który trafia do tego samego magazynu
         $profile->ensureWorldState($this->worldFactory->worldFor($profile));
 
+        // wariant zatopionego statku (#99) wskazuje, który statek floty poniósł stratę
+        $sunk = $this->sunkPlayerShips($game);
+        $sunkVariants = array_filter(array_map(
+            static fn (Ship $ship) => ShipVariant::ofBattleShip($ship->length, $ship->loadout),
+            $sunk,
+        ));
         $outcome = $profile->settleBattle(
             $game->id(),
             $result,
             'won' === $result ? $island->xpWin : $island->xpLoss,
             'won' === $result ? $island->lootWin : $island->lootLoss,
-            $this->sunkPlayerShipLengths($game),
+            array_map(static fn (Ship $ship) => $ship->length, $sunk),
             $this->sunkEnemyShipCount($game),
+            $sunkVariants,
         );
         $this->profiles->save($profile);
 
@@ -130,12 +139,12 @@ final class SettleBattle
     }
 
     /**
-     * Długości statków gracza zatopionych w bitwie — liczone ze snapshotu gry:
-     * statek jest zatopiony, gdy wszystkie jego pola zostały trafione przez AI.
+     * Statki gracza zatopione w bitwie — liczone ze snapshotu gry: statek
+     * jest zatopiony, gdy wszystkie jego pola zostały trafione przez AI.
      *
-     * @return list<int>
+     * @return list<Ship>
      */
-    private function sunkPlayerShipLengths(Game $game): array
+    private function sunkPlayerShips(Game $game): array
     {
         $hits = [];
         foreach ($game->opponentShotsWithResults() as $shot) {
@@ -144,7 +153,7 @@ final class SettleBattle
             }
         }
 
-        $lengths = [];
+        $sunk = [];
         foreach ($game->fleet() ?? [] as $ship) {
             $allHit = true;
             foreach ($ship->cells() as $cell) {
@@ -154,10 +163,10 @@ final class SettleBattle
                 }
             }
             if ($allHit) {
-                $lengths[] = $ship->length;
+                $sunk[] = $ship;
             }
         }
 
-        return $lengths;
+        return $sunk;
     }
 }

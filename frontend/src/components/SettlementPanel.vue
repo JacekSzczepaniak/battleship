@@ -27,12 +27,14 @@ const EFFECTS: Record<BuildingTypeName, string> = {
     tartak: 'podwaja urobek złoża drewna',
     kopalnia: 'podwaja urobek złoża stali i złota',
     'rozbudowa-stoczni': 'podnosi poziom stoczni o 1',
+    fort: 'kontratak bez obrony plądruje połowę magazynu zamiast odebrać wyspę',
 };
 
 const SITES: Record<BuildingTypeName, string> = {
     tartak: 'stawia się tylko przy złożu drewna',
     kopalnia: 'stawia się tylko przy złożu stali albo złota',
     'rozbudowa-stoczni': 'tylko przy istniejącej stoczni poziomu 1–2',
+    fort: 'nie w bezpiecznej przystani — kontrataki jej nie dotyczą',
 };
 
 const standing = computed(() => props.buildingTypes.filter(t => props.island.buildings.includes(t.type)));

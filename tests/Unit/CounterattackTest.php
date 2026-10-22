@@ -148,7 +148,7 @@ it('nieobecność do końca okna odbiera wyspę i połowę magazynu, bez strat w
     expect($profile->ownsIsland('wyspa-sygnalowa'))->toBeFalse()
         ->and($profile->counterattack())->toBeNull()
         ->and($profile->lastCounterattack())->toBe([
-            'island' => 'wyspa-sygnalowa', 'tick' => $counterattack['strikeAt'], 'held' => false, 'absent' => true,
+            'island' => 'wyspa-sygnalowa', 'tick' => $counterattack['strikeAt'], 'held' => false, 'absent' => true, 'plundered' => false,
             'stockpileLost' => ['wood' => 10, 'steel' => 3, 'gold' => 1],
         ])
         ->and($profile->stockpile('wyspa-sygnalowa'))->toEqual(new Resources(11, 4, 2))

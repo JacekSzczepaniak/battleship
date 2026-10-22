@@ -30,11 +30,12 @@ final class SettlementApiTest extends WebTestCase
             ['type' => 'tartak', 'buildCost' => ['wood' => 30, 'steel' => 10, 'gold' => 0]],
             ['type' => 'kopalnia', 'buildCost' => ['wood' => 30, 'steel' => 20, 'gold' => 0]],
             ['type' => 'rozbudowa-stoczni', 'buildCost' => ['wood' => 50, 'steel' => 30, 'gold' => 15]],
+            ['type' => 'fort', 'buildCost' => ['wood' => 40, 'steel' => 40, 'gold' => 10]],
         ], $expedition['buildingTypes']);
         $mielizny = $this->island($expedition, 'mielizny');
         self::assertSame([], $mielizny['buildings']);
-        self::assertSame(['tartak' => null, 'kopalnia' => 'site', 'rozbudowa-stoczni' => 'site'], $mielizny['buildBlockers']);
-        self::assertSame(['tartak' => 'not-owned', 'kopalnia' => 'not-owned', 'rozbudowa-stoczni' => 'not-owned'], $this->island($expedition, 'archipelag-mgiel')['buildBlockers']);
+        self::assertSame(['tartak' => null, 'kopalnia' => 'site', 'rozbudowa-stoczni' => 'site', 'fort' => 'resources'], $mielizny['buildBlockers']);
+        self::assertSame(['tartak' => 'not-owned', 'kopalnia' => 'not-owned', 'rozbudowa-stoczni' => 'not-owned', 'fort' => 'not-owned'], $this->island($expedition, 'archipelag-mgiel')['buildBlockers']);
 
         $built = $this->post($client, "/api/profiles/$profileId/islands/mielizny/buildings", ['type' => 'tartak']);
         self::assertResponseStatusCodeSame(201);
@@ -43,7 +44,7 @@ final class SettlementApiTest extends WebTestCase
 
         $mielizny = $this->island($this->expedition($client, $profileId), 'mielizny');
         self::assertSame(['tartak'], $mielizny['buildings']);
-        self::assertSame(['tartak' => 'already-built', 'kopalnia' => 'site', 'rozbudowa-stoczni' => 'site'], $mielizny['buildBlockers']);
+        self::assertSame(['tartak' => 'already-built', 'kopalnia' => 'site', 'rozbudowa-stoczni' => 'site', 'fort' => 'resources'], $mielizny['buildBlockers']);
         self::assertSame([
             'yield' => ['wood' => 6, 'steel' => 0, 'gold' => 0],
             'cap' => ['wood' => 60, 'steel' => 0, 'gold' => 0],
@@ -76,7 +77,7 @@ final class SettlementApiTest extends WebTestCase
         self::assertResponseStatusCodeSame(409);
         self::assertSame('BUILDING_SITE_UNSUITABLE', $this->lastErrorCode($client));
 
-        self::assertSame(['tartak' => null, 'kopalnia' => 'site', 'rozbudowa-stoczni' => 'site'], $this->island($this->expedition($client, $owner), 'mielizny')['buildBlockers']);
+        self::assertSame(['tartak' => null, 'kopalnia' => 'site', 'rozbudowa-stoczni' => 'site', 'fort' => 'resources'], $this->island($this->expedition($client, $owner), 'mielizny')['buildBlockers']);
         $poor = $this->captainAt($client, 'mielizny', owned: ['mielizny'], stock: new Resources(wood: 29, steel: 10));
         self::assertSame('resources', $this->island($this->expedition($client, $poor), 'mielizny')['buildBlockers']['tartak']);
         $this->post($client, "/api/profiles/$poor/islands/mielizny/buildings", ['type' => 'tartak']);
@@ -87,6 +88,32 @@ final class SettlementApiTest extends WebTestCase
         self::assertResponseStatusCodeSame(400);
         $this->post($client, "/api/profiles/$owner/islands/atlantyda/buildings", ['type' => 'tartak']);
         self::assertResponseStatusCodeSame(404);
+    }
+
+    public function testFortStandsOnOwnedIslandButNotInShipwreckBay(): void
+    {
+        $client = static::createClient();
+        $rich = new Resources(100, 100, 100);
+
+        // Zatoka Rozbitka to bezpieczna przystań: kontrataki jej nie dotyczą, fortu się tam nie stawia
+        $harbor = $this->captainAt($client, 'zatoka-rozbitka', owned: ['zatoka-rozbitka'], stock: $rich);
+        self::assertSame('site', $this->island($this->expedition($client, $harbor), 'zatoka-rozbitka')['buildBlockers']['fort']);
+        $this->post($client, "/api/profiles/$harbor/islands/zatoka-rozbitka/buildings", ['type' => 'fort']);
+        self::assertResponseStatusCodeSame(409);
+        self::assertSame('BUILDING_SITE_UNSUITABLE', $this->lastErrorCode($client));
+
+        $owner = $this->captainAt($client, 'mielizny', owned: ['mielizny'], stock: $rich);
+        self::assertNull($this->island($this->expedition($client, $owner), 'mielizny')['buildBlockers']['fort']);
+        $built = $this->post($client, "/api/profiles/$owner/islands/mielizny/buildings", ['type' => 'fort']);
+        self::assertResponseStatusCodeSame(201);
+        self::assertSame(['fort'], $built['buildings']);
+        self::assertSame(['wood' => 60, 'steel' => 60, 'gold' => 90], $built['stockpile']);
+
+        $mielizny = $this->island($this->expedition($client, $owner), 'mielizny');
+        self::assertSame(['fort'], $mielizny['buildings']);
+        self::assertSame('already-built', $mielizny['buildBlockers']['fort']);
+        // fort nie zmienia złoża
+        self::assertSame(['wood' => 3, 'steel' => 0, 'gold' => 0], $mielizny['deposit']['yield']);
     }
 
     /**

@@ -51,18 +51,20 @@ export const SHIP_ICONS: Record<ShipTypeName, string> = {
     transportowiec: '⛴️',
 };
 
-export type BuildingTypeName = 'tartak' | 'kopalnia' | 'rozbudowa-stoczni';
+export type BuildingTypeName = 'tartak' | 'kopalnia' | 'rozbudowa-stoczni' | 'fort';
 
 export const BUILDING_LABELS: Record<BuildingTypeName, string> = {
     tartak: 'Tartak',
     kopalnia: 'Kopalnia',
     'rozbudowa-stoczni': 'Rozbudowa stoczni',
+    fort: 'Fort',
 };
 
 export const BUILDING_ICONS: Record<BuildingTypeName, string> = {
     tartak: '🪚',
     kopalnia: '⚒️',
     'rozbudowa-stoczni': '🏗️',
+    fort: '🏰',
 };
 
 // powód blokady budowy (Domain/Expedition/BuildingBlock); null = można budować
@@ -186,6 +188,8 @@ export interface PendingCounterattackDTO {
     defenseStarted: boolean;
     // pełna bandera (#79): obrońca strzela pierwszy, napastnik bez największego statku
     fullFlag: boolean;
+    // czynny fort na wyspie celu (#81): bez obrony wyspa zostaje, magazyn traci połowę
+    fort: boolean;
 }
 
 export interface LastCounterattackDTO {
@@ -195,6 +199,8 @@ export interface LastCounterattackDTO {
     held: boolean;
     // wyspa utracona, bo nikt nie rozpoczął obrony przed uderzeniem
     absent: boolean;
+    // nieobecność pod fortem (#81): grabież połowy magazynu, bandera została
+    plundered: boolean;
     stockpileLost: ResourcesDTO;
 }
 

@@ -154,7 +154,7 @@ final class ProfileSnapshotMapper
     /**
      * @param array<string,mixed> $state
      *
-     * @return array{pending: array{island: string, announcedAt: int, strikeAt: int, defense: ?string}|null, calmFrom: int, rolledTo: int, last: array{island: string, tick: int, held: bool, absent: bool, stockpileLost: array{wood:int, steel:int, gold:int}}|null}|null
+     * @return array{pending: array{island: string, announcedAt: int, strikeAt: int, defense: ?string}|null, calmFrom: int, rolledTo: int, last: array{island: string, tick: int, held: bool, absent: bool, plundered: bool, stockpileLost: array{wood:int, steel:int, gold:int}}|null}|null
      */
     private function counterattacksFrom(array $state): ?array
     {
@@ -180,6 +180,8 @@ final class ProfileSnapshotMapper
                 'tick' => (int) $last['tick'],
                 'held' => (bool) ($last['held'] ?? false),
                 'absent' => (bool) ($last['absent'] ?? false),
+                // rozstrzygnięcie sprzed fortu (#81) nie było grabieżą
+                'plundered' => (bool) ($last['plundered'] ?? false),
                 'stockpileLost' => Resources::fromArray((array) ($last['stockpileLost'] ?? []))->toArray(),
             ] : null,
         ];

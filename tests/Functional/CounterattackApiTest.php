@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Functional;
 
 use App\Application\Expedition\WorldFactory;
+use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\ProfileRepository;
 use App\Domain\Expedition\Resources;
@@ -32,6 +33,7 @@ final class CounterattackApiTest extends WebTestCase
         self::assertSame(7, $pending['ticksLeft']);
         self::assertFalse($pending['defenseStarted']);
         self::assertFalse($pending['fullFlag']);
+        self::assertFalse($pending['fort']);
 
         $gameId = $this->post($client, "/api/profiles/$profileId/islands/wyspa-sygnalowa/battle", ['shipIds' => [$kuterId]])['id'];
         self::assertResponseStatusCodeSame(201);
@@ -132,13 +134,49 @@ final class CounterattackApiTest extends WebTestCase
         self::assertNull($expedition['counterattack']['pending']);
         self::assertSame([
             'island' => 'wyspa-sygnalowa', 'islandName' => 'Wyspa Sygnałowa', 'tick' => 30, 'held' => false, 'absent' => true,
-            'stockpileLost' => ['wood' => 10, 'steel' => 3, 'gold' => 1],
+            'plundered' => false, 'stockpileLost' => ['wood' => 10, 'steel' => 3, 'gold' => 1],
         ], $expedition['counterattack']['last']);
         self::assertCount(4, $expedition['fleet']);
 
         // wyspa znowu jest areną
         $this->post($client, "/api/profiles/$profileId/islands/wyspa-sygnalowa/battle");
         self::assertResponseStatusCodeSame(201);
+    }
+
+    public function testFortIsTelegraphedInTheWarning(): void
+    {
+        $client = static::createClient();
+        [$profileId] = $this->captainOnOwnedIsland($client, tick: 25, pending: ['island' => 'wyspa-sygnalowa', 'announcedAt' => 20, 'strikeAt' => 32, 'defense' => null], buildings: ['wyspa-sygnalowa' => [BuildingType::Fort]]);
+
+        self::assertTrue($this->expedition($client, $profileId)['counterattack']['pending']['fort']);
+    }
+
+    public function testAbsenceAtIslandWithFortPlundersHalfOfTheStockpileAndKeepsTheFlag(): void
+    {
+        $client = static::createClient();
+        // termin minął (tik 32 > uderzenie w 30), obrony nikt nie rozpoczął, na wyspie stoi fort
+        [$profileId] = $this->captainOnOwnedIsland(
+            $client, tick: 32, pending: ['island' => 'wyspa-sygnalowa', 'announcedAt' => 18, 'strikeAt' => 30, 'defense' => null],
+            stockpile: new Resources(21, 7, 3), buildings: ['wyspa-sygnalowa' => [BuildingType::Fort]],
+        );
+
+        $expedition = $this->expedition($client, $profileId);
+        $islands = array_column($expedition['islands'], null, 'id');
+
+        self::assertTrue($islands['wyspa-sygnalowa']['owned']);
+        self::assertSame(['fort'], $islands['wyspa-sygnalowa']['buildings']);
+        self::assertSame(['wood' => 11, 'steel' => 4, 'gold' => 2], $islands['wyspa-sygnalowa']['stockpile']);
+        self::assertNull($expedition['counterattack']['pending']);
+        self::assertSame([
+            'island' => 'wyspa-sygnalowa', 'islandName' => 'Wyspa Sygnałowa', 'tick' => 30, 'held' => false, 'absent' => true,
+            'plundered' => true, 'stockpileLost' => ['wood' => 10, 'steel' => 3, 'gold' => 1],
+        ], $expedition['counterattack']['last']);
+        self::assertCount(4, $expedition['fleet']);
+
+        // wyspa została pod banderą, więc nie jest areną
+        $refused = $this->post($client, "/api/profiles/$profileId/islands/wyspa-sygnalowa/battle");
+        self::assertResponseStatusCodeSame(409);
+        self::assertSame('NO_COUNTERATTACK', $refused['error']['code']);
     }
 
     public function testOwnedIslandWithoutCounterattackRefusesBattle(): void
@@ -157,11 +195,12 @@ final class CounterattackApiTest extends WebTestCase
      * Sygnałowej pod własną banderą, z zadanym stanem kontrataku.
      *
      * @param array{island:string, announcedAt:int, strikeAt:int, defense:?string}|null $pending
-     * @param array<string, int>|null                                                   $owned   bandery; null = tylko Sygnałowa
+     * @param array<string, int>|null                                                   $owned     bandery; null = tylko Sygnałowa
+     * @param array<string, list<BuildingType>>                                         $buildings budynki osady
      *
      * @return array{0:string, 1:string, 2:list<string>} [id profilu, id kutra, id tratw]
      */
-    private function captainOnOwnedIsland(KernelBrowser $client, int $tick, ?array $pending, ?Resources $stockpile = null, ?array $owned = null): array
+    private function captainOnOwnedIsland(KernelBrowser $client, int $tick, ?array $pending, ?Resources $stockpile = null, ?array $owned = null, array $buildings = []): array
     {
         $profileId = $this->post($client, '/api/profiles', ['name' => 'Jacek'])['id'];
         $repository = static::getContainer()->get(ProfileRepository::class);
@@ -172,7 +211,7 @@ final class CounterattackApiTest extends WebTestCase
             $profile->id(), $profile->name(), 80, [], $profile->fleet(), Resources::none(),
             $profile->worldSeed(), $world->islandPosition('wyspa-sygnalowa'), null, 0, $tick, null,
             null !== $stockpile ? ['wyspa-sygnalowa' => $stockpile] : [], null, [], $owned ?? ['wyspa-sygnalowa' => 0],
-            ['pending' => $pending, 'calmFrom' => 0, 'rolledTo' => $tick - 1, 'last' => null],
+            ['pending' => $pending, 'calmFrom' => 0, 'rolledTo' => $tick - 1, 'last' => null], $buildings,
         ));
 
         return [$profileId, $profile->fleet()[0]->id, [$profile->fleet()[1]->id, $profile->fleet()[2]->id]];

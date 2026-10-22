@@ -9,12 +9,17 @@ use App\Domain\Game\Weapon\WeaponSpecs;
 
 final class FunRuleset implements Ruleset
 {
-    /** @param array<int,int>|null $ships skład floty: długość => liczba sztuk (null = flota klasyczna) */
+    /**
+     * @param array<int,int>|null $ships         skład floty: długość => liczba sztuk (null = flota klasyczna)
+     * @param array<int,int>|null $opponentShips skład floty przeciwnika (null = lustrzany)
+     */
     public function __construct(
         private BoardSize $size = new BoardSize(10, 10),
         private ?array $ships = null,
+        private ?array $opponentShips = null,
     ) {
         FleetComposition::assertValid($ships);
+        FleetComposition::assertValid($opponentShips);
     }
 
     public function name(): string
@@ -32,6 +37,11 @@ final class FunRuleset implements Ruleset
         return $this->ships ?? FleetComposition::CLASSIC;
     }
 
+    public function opponentShips(): array
+    {
+        return $this->opponentShips ?? $this->allowedShips();
+    }
+
     /**
      * Broń wynika ze składu floty: jedno użycie na statek-nośnik
      * (torpeda=niszczyciel, sonar=kuter, nalot=lotniskowiec; patrz stałe
@@ -40,7 +50,17 @@ final class FunRuleset implements Ruleset
      */
     public function weapons(): WeaponSpecs
     {
-        $ships = $this->allowedShips();
+        return self::weaponsFor($this->allowedShips());
+    }
+
+    public function opponentWeapons(): WeaponSpecs
+    {
+        return self::weaponsFor($this->opponentShips());
+    }
+
+    /** @param array<int,int> $ships */
+    private static function weaponsFor(array $ships): WeaponSpecs
+    {
         $torpedoes = $ships[Game::TORPEDO_CARRIER_LENGTH] ?? 0;
         $sonars = $ships[Game::SONAR_CARRIER_LENGTH] ?? 0;
         $airRaids = $ships[Game::AIR_RAID_CARRIER_LENGTH] ?? 0;

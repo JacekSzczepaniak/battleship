@@ -56,6 +56,8 @@ final class GameSnapshotMapper
                 'type' => $game->ruleset()->name(),
                 'board' => ['w' => $size->width, 'h' => $size->height],
                 'ships' => $game->ruleset()->allowedShips(),
+                // skład przeciwnika tylko, gdy nie jest lustrzany (bonus pełnej bandery, #79)
+                'opponentShips' => $game->ruleset()->opponentShips() !== $game->ruleset()->allowedShips() ? $game->ruleset()->opponentShips() : null,
             ],
             'fleet' => $fleet,
             'shots' => $shots,
@@ -183,18 +185,28 @@ final class GameSnapshotMapper
         $board = $data['board'] ?? ['w' => 10, 'h' => 10];
         $size = new BoardSize((int) $board['w'], (int) $board['h']);
 
-        // Skład floty (klucze JSON wracają jako stringi); brak = flota klasyczna
-        $ships = null;
-        if (!empty($data['ships']) && is_array($data['ships'])) {
-            $ships = [];
-            foreach ($data['ships'] as $length => $count) {
-                $ships[(int) $length] = (int) $count;
-            }
-        }
+        // Skład floty (klucze JSON wracają jako stringi); brak = flota klasyczna,
+        // brak składu przeciwnika = lustrzany
+        $ships = $this->compositionOrNull($data['ships'] ?? null);
+        $opponentShips = $this->compositionOrNull($data['opponentShips'] ?? null);
 
         return 'fun' === ($data['type'] ?? 'classic')
-            ? new FunRuleset($size, $ships)
-            : new ClassicRuleset($size, $ships);
+            ? new FunRuleset($size, $ships, $opponentShips)
+            : new ClassicRuleset($size, $ships, $opponentShips);
+    }
+
+    /** @return array<int,int>|null */
+    private function compositionOrNull(mixed $raw): ?array
+    {
+        if (empty($raw) || !is_array($raw)) {
+            return null;
+        }
+        $ships = [];
+        foreach ($raw as $length => $count) {
+            $ships[(int) $length] = (int) $count;
+        }
+
+        return $ships;
     }
 
     /** @return array{player: array<string,int>, opponent: array<string,int>}|null */

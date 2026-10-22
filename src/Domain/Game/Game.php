@@ -2,6 +2,7 @@
 
 namespace App\Domain\Game;
 
+use App\Domain\Game\Weapon\WeaponSpecs;
 use App\Domain\Shared\GameId;
 
 final class Game
@@ -152,13 +153,14 @@ final class Game
             throw new \DomainException('Fleet already placed');
         }
 
-        $this->assertFleetComposition($ships);
+        $this->assertFleetComposition($ships, $this->ruleset->allowedShips());
         $this->playerSide->placeFleet($ships);
         $this->status = GameStatus::InProgress;
     }
 
     /**
-     * Ustawia flotę przeciwnika (walidowana jak flota gracza) i buduje planszę przeciwnika.
+     * Ustawia flotę przeciwnika (walidowana jak flota gracza, ale względem jego
+     * składu z rulesetu) i buduje planszę przeciwnika.
      *
      * @param Ship[] $ships
      */
@@ -168,6 +170,7 @@ final class Game
             throw new \DomainException('Opponent fleet already placed');
         }
 
+        $this->assertFleetComposition($ships, $this->ruleset->opponentShips());
         $this->opponentSide->placeFleet($ships);
     }
 
@@ -271,7 +274,7 @@ final class Game
     private function weaponsStateFor(string $shooter): array
     {
         $out = [];
-        foreach ($this->ruleset->weapons()->limits() as $weapon => $limit) {
+        foreach ($this->weaponsOf($shooter)->limits() as $weapon => $limit) {
             $out[$weapon] = ['used' => $this->weaponUses[$shooter][$weapon] ?? 0, 'limit' => $limit];
         }
 
@@ -304,10 +307,16 @@ final class Game
         }
     }
 
+    /** Specyfikacje broni strony: limity wynikają z jej własnego składu floty. */
+    private function weaponsOf(string $shooter): WeaponSpecs
+    {
+        return 'opponent' === $shooter ? $this->ruleset->opponentWeapons() : $this->ruleset->weapons();
+    }
+
     /** Rzuca, gdy broń niedostępna w rulesecie albo limit danej strony wyczerpany. */
     private function assertWeaponAvailable(string $shooter, string $weapon): void
     {
-        $limit = $this->ruleset->weapons()->limits()[$weapon] ?? 0;
+        $limit = $this->weaponsOf($shooter)->limits()[$weapon] ?? 0;
         if ($limit <= 0) {
             throw new \DomainException(sprintf('%s not available in this ruleset', ucfirst($weapon)));
         }
@@ -333,7 +342,7 @@ final class Game
             return;
         }
 
-        $limit = $this->ruleset->weapons()->torpedo->diagonalUses;
+        $limit = $this->weaponsOf($shooter)->torpedo->diagonalUses;
         if (($this->weaponUses[$shooter]['torpedoDiagonal'] ?? 0) >= $limit) {
             throw new \DomainException('Diagonal torpedo limit reached');
         }
@@ -356,7 +365,7 @@ final class Game
     {
         $this->assertWeaponAvailable($shooter, 'sonar');
 
-        $spec = $this->ruleset->weapons()->sonar;
+        $spec = $this->weaponsOf($shooter)->sonar;
         $radius ??= $spec->radius;
         if ($radius > $spec->radius) {
             throw new \DomainException('Sonar radius exceeds ruleset limit');
@@ -685,7 +694,7 @@ final class Game
         $this->assertWeaponAvailable('opponent', 'airRaid');
         $this->assertWeaponCarrierAfloat($this->opponentSide, self::AIR_RAID_CARRIER_LENGTH, 'Air raid requires an unsunk carrier');
 
-        $max = $this->ruleset->weapons()->airRaid->maxArea;
+        $max = $this->ruleset->opponentWeapons()->airRaid->maxArea;
         if (2 * $area->width + 1 > $max->width || 2 * $area->height + 1 > $max->height) {
             throw new \DomainException('Air Raid area is oversize');
         }
@@ -717,10 +726,12 @@ final class Game
         return $this->opponentSide->hasFleet() ? $this->opponentSide : $this->playerSide;
     }
 
-    /** @param Ship[] $ships */
-    private function assertFleetComposition(array $ships): void
+    /**
+     * @param Ship[]         $ships
+     * @param array<int,int> $expected
+     */
+    private function assertFleetComposition(array $ships, array $expected): void
     {
-        $expected = $this->ruleset->allowedShips();
         $got = [];
         foreach ($ships as $s) {
             $got[$s->length] = ($got[$s->length] ?? 0) + 1;

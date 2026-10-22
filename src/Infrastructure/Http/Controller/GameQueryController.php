@@ -89,6 +89,8 @@ final class GameQueryController
             'ruleset' => $game->ruleset()->name(),
             // skład floty do wystawienia: mapa długość => liczba sztuk
             'allowedShips' => $game->ruleset()->allowedShips(),
+            // skład floty przeciwnika; różni się od allowedShips przy bonusie pełnej bandery (#79)
+            'opponentShips' => $game->ruleset()->opponentShips(),
             'weapons' => $game->weaponsState(),
             'opponentWeapons' => $game->opponentWeaponsState(),
             'mode' => $game->mode(),

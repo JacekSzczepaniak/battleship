@@ -144,17 +144,18 @@ final class GetExpedition
                 // zegar świata: rejs i bitwa kosztują tik
                 'tick' => $profile->tick(),
             ],
-            'counterattack' => $this->counterattackView($profile),
+            'counterattack' => $this->counterattackView($profile, $world),
         ];
     }
 
     /**
-     * Zapowiedź kontrataku (wyspa i za ile tików uderzenie) oraz ostatnie
-     * rozstrzygnięcie — także utrata wyspy pod nieobecność kapitana.
+     * Zapowiedź kontrataku (wyspa, za ile tików uderzenie, bonus pełnej
+     * bandery) oraz ostatnie rozstrzygnięcie — także utrata wyspy pod
+     * nieobecność kapitana.
      *
      * @return array{pending: array<string,mixed>|null, last: array<string,mixed>|null}
      */
-    private function counterattackView(CaptainProfile $profile): array
+    private function counterattackView(CaptainProfile $profile, WorldMap $world): array
     {
         $pending = $profile->counterattack();
         $last = $profile->lastCounterattack();
@@ -168,6 +169,8 @@ final class GetExpedition
                 'ticksLeft' => max(0, $pending['strikeAt'] - $profile->tick()),
                 // rozpoczęta obrona wstrzymuje termin do rozliczenia bitwy
                 'defenseStarted' => null !== $pending['defense'],
+                // pełna bandera (#79): obrońca strzela pierwszy, napastnik bez największego statku
+                'fullFlag' => $profile->hasFullFlag($world),
             ] : null,
             'last' => null !== $last ? [
                 'island' => $last['island'],

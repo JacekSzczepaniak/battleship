@@ -54,6 +54,7 @@ export function useGame() {
     const playerFleet = ref<PlayerFleetItem[]>([]);
     // skład floty (ten sam dla obu stron — AI losuje flotę z rulesetu)
     const allowedShips = ref<Record<string, number>>({});
+    const opponentShips = ref<Record<string, number>>({});
     // długości zatopionych statków: wroga (z projekcji) i własnych (z overlayu)
     const enemySunkLengths = ref<number[]>([]);
     // Notatki gracza a'la saper: „tu nic nie może być" — szkic po stronie klienta,
@@ -145,6 +146,7 @@ export function useGame() {
         opponentWeapons.value = dto.opponentWeapons ?? null;
         playerFleet.value = dto.playerFleet ?? [];
         allowedShips.value = dto.allowedShips ?? {};
+        opponentShips.value = dto.opponentShips ?? dto.allowedShips ?? {};
         shotsTotal.value = dto.shotsCount ?? 0;
     }
 
@@ -164,7 +166,9 @@ export function useGame() {
 
     const playerSunkLengths = computed<number[]>(() => playerFleet.value.filter(isShipSunk).map(s => s.l));
 
-    const enemyTotal = computed(() => Object.values(allowedShips.value).reduce((a, b) => a + b, 0));
+    // składy stron mogą się różnić (bonus pełnej bandery, #79)
+    const enemyTotal = computed(() => Object.values(opponentShips.value).reduce((a, b) => a + b, 0));
+    const playerTotal = computed(() => Object.values(allowedShips.value).reduce((a, b) => a + b, 0));
 
     /**
      * Komórki własnych NIEZATOPIONYCH NISZCZYCIELI (3-masztowców) — legalne
@@ -425,7 +429,7 @@ export function useGame() {
         noteMarks, toggleNote,
         // stats
         shotsCount, shotsTotal, hitsCount, missesCount, duplicatesCount, opponentHitsCount,
-        enemySunkLengths, playerSunkLengths, enemyTotal,
+        enemySunkLengths, playerSunkLengths, enemyTotal, playerTotal, allowedShips, opponentShips,
         // dziennik i toast
         log, toast, toastType,
         lastShot, sunkCells,

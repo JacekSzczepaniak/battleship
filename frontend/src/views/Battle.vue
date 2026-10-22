@@ -8,13 +8,15 @@ import { getExpedition, settleBattle } from '../api/expeditionApi';
 import { clearCurrentBattle, getCurrentBattle } from '../lib/expeditionSession';
 import { getBattleReport, saveBattleReport, type BattleReport } from '../lib/battleSession';
 import { CARRIER_LENGTH, fieldsLabel, shipName } from '../lib/ships';
+import { attackerMissingShip, battleBonusLabel } from '../lib/counterattack';
 import type { TorpedoDirection } from '../api/gameApi';
 
 const {
     gameId, status, finished, turn, loading, shooting, error, disabled, attack, width, height,
     ruleset, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells, aliveShipLengths,
     noteMarks, toggleNote,
-    shotsCount, hitsCount, opponentHitsCount, enemySunkLengths, playerSunkLengths, enemyTotal,
+    shotsCount, hitsCount, opponentHitsCount, enemySunkLengths, playerSunkLengths, enemyTotal, playerTotal,
+    allowedShips, opponentShips,
     log, toast, toastType,
     playerGrid, playerUnderFireOverlay, enemyFogGrid, lastShot, sunkCells,
 } = useGame();
@@ -23,6 +25,19 @@ const router = useRouter();
 const battle = getCurrentBattle();
 const expeditionBattle = computed(() => battle !== null && battle.gameId === gameId.value);
 const gameOver = computed(() => finished.value || status.value === 'won' || status.value === 'lost');
+
+// bonus pełnej bandery (#79): obrona tej wyspy przy wszystkich wyspach pod banderą
+const fullFlagDefense = ref(false);
+const bonusLabel = computed(() => battleBonusLabel(attackerMissingShip(allowedShips.value, opponentShips.value)));
+onMounted(async () => {
+    if (!battle) return;
+    try {
+        const pending = (await getExpedition(battle.profileId)).counterattack.pending;
+        fullFlagDefense.value = !!pending && pending.island === battle.islandId && pending.defenseStarted && pending.fullFlag;
+    } catch {
+        // bez paska bonusu — sama bitwa działa dalej
+    }
+});
 
 // --- bronie ---
 
@@ -353,7 +368,7 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
             </div>
             <div class="hud-block">
                 <div class="kicker">STRATY</div>
-                <div class="hud-val">{{ playerSunkLengths.length }} / {{ enemyTotal }}</div>
+                <div class="hud-val">{{ playerSunkLengths.length }} / {{ playerTotal }}</div>
             </div>
             <div v-if="aiArsenal.length" class="hud-right">
                 <span class="kicker">ARSENAŁ WROGA</span>
@@ -362,6 +377,7 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
                 </span>
             </div>
         </header>
+        <p v-if="fullFlagDefense && expeditionBattle" class="bonus-strip">🚩 {{ bonusLabel }}</p>
 
         <div class="arena">
             <!-- twoje wody -->
@@ -484,6 +500,7 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
 .turn-line .mine { color: var(--accent); }
 .sep { width: 1px; height: 38px; background: var(--line); }
 .hud-val { font: 700 18px var(--font-head); margin-top: 4px; }
+.bonus-strip { margin: 0; padding: 8px 32px; border-bottom: 1px solid var(--line); font: 600 12px var(--font-mono); color: var(--info); }
 .hud-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .ai-pill { display: inline-flex; align-items: center; gap: 6px; padding: 9px 13px; border-radius: 9px; background: var(--bg-card); border: 1px solid var(--line-card); font: 600 12px var(--font-mono); color: var(--text-2); }
 .ai-pill.empty { opacity: .45; }

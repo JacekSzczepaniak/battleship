@@ -1001,6 +1001,18 @@ final class CaptainProfile
         return isset($this->ownedIslands[$islandId]);
     }
 
+    /**
+     * Pełna bandera: wszystkie wyspy akwenu (z Zatoką Rozbitka) pod banderą
+     * kapitana. Daje przewagę w bitwie obronnej i znika z utratą którejkolwiek
+     * wyspy (#79). Dziś jest jeden akwen, więc liczy się cała mapa.
+     */
+    public function hasFullFlag(WorldMap $world): bool
+    {
+        $islands = array_keys($world->islands());
+
+        return [] !== $islands && [] === array_diff($islands, array_keys($this->ownedIslands));
+    }
+
     /** @return array<string, int> wyspy pod banderą: id wyspy → tik zdobycia */
     public function ownedIslands(): array
     {

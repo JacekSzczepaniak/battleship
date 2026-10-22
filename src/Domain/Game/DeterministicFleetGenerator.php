@@ -13,7 +13,7 @@ final class DeterministicFleetGenerator implements FleetGenerator
 {
     public function generate(Ruleset $ruleset): array
     {
-        $composition = $ruleset->allowedShips();
+        $composition = $ruleset->opponentShips();
 
         if (FleetComposition::isClassic($composition)) {
             return $this->classicLayout();

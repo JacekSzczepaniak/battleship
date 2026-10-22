@@ -124,7 +124,7 @@ async function load() {
             shots: hits + g.enemyFogGrid.misses.length,
             hits,
             enemySunk: g.enemyFogGrid.sunk.map(s => s.cells.length),
-            enemyTotal: Object.values(g.allowedShips ?? {}).reduce((a, b) => a + b, 0),
+            enemyTotal: Object.values(g.opponentShips ?? g.allowedShips ?? {}).reduce((a, b) => a + b, 0),
             playerSunk: [],
             expedition: null,
         };

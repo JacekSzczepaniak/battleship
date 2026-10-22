@@ -84,7 +84,7 @@ final class OpponentTurn
         //    broń wymaga żywego nośnika sonaru we flocie AI
         if ($huntMode && $this->hasUses($weapons, 'sonar')
             && $game->opponentHasWeaponCarrier(WeaponKind::Sonar) && $this->decide(self::SONAR_CHANCE)) {
-            $center = $this->bestSonarCenter($view, $game->ruleset()->weapons()->sonar->radius);
+            $center = $this->bestSonarCenter($view, $game->ruleset()->opponentWeapons()->sonar->radius);
             if (null !== $center) {
                 $detected = [];
                 foreach ($game->opponentSonarPing($center) as $cell) {

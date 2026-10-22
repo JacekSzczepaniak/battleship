@@ -109,7 +109,7 @@ it('sonar zwiadowcy działa, dopóki ten statek pływa', function () {
     $game = scoutGame();
 
     expect($game->sonarPing(new Coordinate(5, 5)))->not->toBe([])
-        ->and($game->weaponsState()['sonar'])->toBe(['used' => 1, 'limit' => 2]);
+        ->and($game->weaponsState()['sonar'])->toBe(['used' => 1, 'limit' => 2, 'radius' => 3]);
 
     // zatopienie zwiadowcy (0,0)-(2,0) odbiera sonar, choć zostało jedno użycie
     foreach ([[0, 0], [1, 0], [2, 0]] as [$x, $y]) {

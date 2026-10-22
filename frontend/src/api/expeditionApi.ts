@@ -210,7 +210,7 @@ export interface LastCounterattackDTO {
 
 // drzewko technologii (Epic G): katalog zawiera tylko działające technologie
 export type TechBranchName = 'kadluby' | 'uzbrojenie' | 'nawigacja' | 'osady';
-export type TechnologyName = 'spichlerze' | 'mapy-sztormowe' | 'zegluga-dwusektorowa';
+export type TechnologyName = 'spichlerze' | 'mapy-sztormowe' | 'sonar-dalekiego-zasiegu' | 'zegluga-dwusektorowa';
 
 export const TECH_BRANCH_LABELS: Record<TechBranchName, string> = {
     kadluby: 'Kadłuby',
@@ -222,6 +222,7 @@ export const TECH_BRANCH_LABELS: Record<TechBranchName, string> = {
 export const TECH_LABELS: Record<TechnologyName, string> = {
     spichlerze: 'Spichlerze',
     'mapy-sztormowe': 'Mapy sztormowe',
+    'sonar-dalekiego-zasiegu': 'Sonar dalekiego zasięgu',
     'zegluga-dwusektorowa': 'Żegluga dwusektorowa',
 };
 

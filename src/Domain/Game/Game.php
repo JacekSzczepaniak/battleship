@@ -250,9 +250,10 @@ final class Game
     }
 
     /**
-     * Stan broni specjalnych gracza: użycia i limity z rulesetu.
+     * Stan broni specjalnych gracza: użycia i limity z rulesetu, a sonar
+     * dodatkowo z promieniem krzyża (zależy od technologii gracza, Epic G).
      *
-     * @return array<string, array{used:int, limit:int}>
+     * @return array<string, array{used:int, limit:int, radius?:int}>
      */
     public function weaponsState(): array
     {
@@ -262,20 +263,21 @@ final class Game
     /**
      * Stan broni specjalnych przeciwnika (AI).
      *
-     * @return array<string, array{used:int, limit:int}>
+     * @return array<string, array{used:int, limit:int, radius?:int}>
      */
     public function opponentWeaponsState(): array
     {
         return $this->weaponsStateFor('opponent');
     }
 
-    /** @return array<string, array{used:int, limit:int}> */
+    /** @return array<string, array{used:int, limit:int, radius?:int}> */
     private function weaponsStateFor(string $shooter): array
     {
         $out = [];
         foreach ($this->weaponsOf($shooter)->limits() as $weapon => $limit) {
             $out[$weapon] = ['used' => $this->weaponUses[$shooter][$weapon] ?? 0, 'limit' => $limit];
         }
+        $out['sonar']['radius'] = $this->weaponsOf($shooter)->sonar->radius;
 
         return $out;
     }

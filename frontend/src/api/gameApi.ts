@@ -13,9 +13,11 @@ export interface PlayerFleetItem { x: number; y: number; o: 'h' | 'v'; l: number
 export type RulesetName = 'classic' | 'fun';
 
 export interface WeaponState { used: number; limit: number }
+// promień krzyża sonaru: 3, gracz 4 po zbadaniu Sonaru dalekiego zasięgu
+export interface SonarState extends WeaponState { radius: number }
 export interface WeaponsState {
     torpedo: WeaponState;
-    sonar: WeaponState;
+    sonar: SonarState;
     airRaid: WeaponState;
     // ile z torped może płynąć po przekątnej (podzbiór limitu torpedo)
     torpedoDiagonal?: WeaponState;

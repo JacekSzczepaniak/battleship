@@ -15,18 +15,22 @@ enum Technology: string
     /** Szansa sztormu przy pierwszym wpłynięciu: 10% zamiast 20%. */
     case MapySztormowe = 'mapy-sztormowe';
 
+    /** Promień sonaru gracza w bitwach wyprawy: 4 zamiast 3. */
+    case SonarDalekiegoZasiegu = 'sonar-dalekiego-zasiegu';
+
     public function branch(): TechBranch
     {
         return match ($this) {
             self::Spichlerze => TechBranch::Osady,
             self::MapySztormowe => TechBranch::Nawigacja,
+            self::SonarDalekiegoZasiegu => TechBranch::Uzbrojenie,
         };
     }
 
     public function level(): TechLevel
     {
         return match ($this) {
-            self::Spichlerze, self::MapySztormowe => TechLevel::First,
+            self::Spichlerze, self::MapySztormowe, self::SonarDalekiegoZasiegu => TechLevel::First,
         };
     }
 }

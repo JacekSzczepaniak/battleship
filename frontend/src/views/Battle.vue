@@ -73,9 +73,12 @@ function charges(mode: Exclude<WeaponMode, 'shot'>): string {
     return `${state.limit - state.used}/${state.limit}`;
 }
 
+// promień skanu z reguł gry (technologie gracza ustala backend przy starcie bitwy)
+const sonarRadius = computed(() => weapons.value?.sonar.radius ?? 3);
+
 const weaponCards = computed<WeaponCard[]>(() => [
     { key: 'shot', hotkey: '1', name: 'Salwa', icon: Crosshair, area: 'jedno pole', source: 'każdy okręt', charges: '∞', locked: null },
-    { key: 'sonar', hotkey: '2', name: 'Sonar', icon: Radar, area: 'krzyż · promień 3', source: 'z kutra · nie kończy tury', charges: charges('sonar'), locked: lockReason('sonar') },
+    { key: 'sonar', hotkey: '2', name: 'Sonar', icon: Radar, area: `krzyż · promień ${sonarRadius.value}`, source: 'z kutra · nie kończy tury', charges: charges('sonar'), locked: lockReason('sonar') },
     { key: 'torpedo', hotkey: '3', name: 'Torpeda', icon: Rocket, area: 'linia do krawędzi', source: 'z niszczyciela', charges: charges('torpedo'), locked: lockReason('torpedo') },
     { key: 'airraid', hotkey: '4', name: 'Nalot', icon: Plane, area: 'obszar 3×3', source: 'z lotniskowca', charges: charges('airraid'), locked: lockReason('airraid') },
 ]);
@@ -137,7 +140,7 @@ const previewCells = computed<Set<string>>(() => {
         }
         case 'sonar':
             add(hc.x, hc.y);
-            for (let i = 1; i <= 3; i++) {
+            for (let i = 1; i <= sonarRadius.value; i++) {
                 add(hc.x, hc.y - i);
                 add(hc.x + i, hc.y);
                 add(hc.x, hc.y + i);
@@ -241,7 +244,7 @@ const enemyHint = computed(() => {
     if (turn.value !== 'player') return 'Wróg mierzy…';
     switch (weaponMode.value) {
         case 'torpedo': return 'Torpeda: kliknij podświetlony niszczyciel na SWOICH wodach — popłynie w wybranym kierunku.';
-        case 'sonar': return 'Sonar: kliknij środek skanu (krzyż o promieniu 3).';
+        case 'sonar': return `Sonar: kliknij środek skanu (krzyż o promieniu ${sonarRadius.value}).`;
         case 'airraid': return 'Nalot: kliknij środek obszaru 3×3.';
         default: return 'Kliknij pole, by oddać salwę · PPM — notatka „tu pusto”.';
     }

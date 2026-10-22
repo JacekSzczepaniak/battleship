@@ -5,8 +5,10 @@ namespace App\Application\Expedition;
 use App\Application\Game\CreateGame;
 use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\ProfileRepository;
+use App\Domain\Expedition\Technology;
 use App\Domain\Game\FleetComposition;
 use App\Domain\Game\Game;
+use App\Domain\Game\Weapon\SonarSpec;
 use App\Domain\Shared\ProfileId;
 
 final class StartIslandBattle
@@ -27,7 +29,8 @@ final class StartIslandBattle
      * banderą to obrona przed kontratakiem w toku — napastnik strzela pierwszy;
      * bez kontrataku wyspa pod banderą nie przyjmuje bitwy (#78). Przy pełnej
      * banderze role się odwracają: pierwszy strzał obrońcy, napastnik bez
-     * największego statku (#79).
+     * największego statku (#79). Technologie gracza (Epic G) wchodzą do reguł
+     * gry przy jej starcie — badanie ukończone w trakcie bitwy jej nie zmienia.
      *
      * @param list<string>|null $shipIds skład bitewny; null = dobór domyślny
      */
@@ -75,7 +78,9 @@ final class StartIslandBattle
         $firstTurn = $defense && !$fullFlag ? 'opponent' : 'player';
         $opponentComposition = $fullFlag ? FleetComposition::withoutLargest($composition) : null;
 
-        $game = $this->createGame->handle($island->boardWidth, $island->boardHeight, $island->mode, $composition, $firstTurn, $opponentComposition);
+        $sonarRadius = $profile->hasResearched(Technology::SonarDalekiegoZasiegu) ? SonarSpec::LONG_RANGE_RADIUS : null;
+
+        $game = $this->createGame->handle($island->boardWidth, $island->boardHeight, $island->mode, $composition, $firstTurn, $opponentComposition, sonarRadius: $sonarRadius);
         $shipIds = array_map(static fn ($s) => $s->id, $squad);
         $defense
             ? $profile->startDefense($island->id, $game->id(), $shipIds)

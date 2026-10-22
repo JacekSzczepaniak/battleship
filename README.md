@@ -119,7 +119,8 @@ Dwa konteksty, połączone tylko identyfikatorem gry:
   torpedę, lotniskowiec (4) nalot; zatopienie ostatniego nośnika danej broni ją odbiera.
   Transportowiec (5) broni nie daje — w bitwie to zwykły cel. Warianty statków (inne wyposażenie
   tej samej długości) podaje skład floty w rulesecie, a wróg dostaje je lustrzanie. Parametry
-  broni opisuje `Domain/Game/Weapon/*Spec`.
+  broni opisuje `Domain/Game/Weapon/*Spec`. Technologie gracza (promień sonaru) trafiają do
+  rulesetu przy starcie bitwy wyprawy i tylko po jego stronie — wróg ich nie dostaje.
 - **Wyprawa** — agregat `Domain/Expedition/CaptainProfile`: XP i ranga (`Rank`, 9 stopni),
   flota jako majątek (statki giną albo czekają na remont), materiały, mapa świata z mgłą
   generowana z seeda profilu, rejestr bitew o wyspy.
@@ -163,12 +164,12 @@ Wszystkie ścieżki pod `/api`, JSON. Pełna lista: `docker compose exec app php
 | metoda | ścieżka | co robi |
 |---|---|---|
 | `POST` | `/games` | nowa gra: `mode` (`classic`/`fun`), `width`, `height`, opcjonalnie `ships` i `variants` (`{"3": [{"sonar": 2}]}`) |
-| `GET` | `/games/{id}` | projekcja gry: plansze, mgła wroga, bronie, tura |
+| `GET` | `/games/{id}` | projekcja gry: plansze, mgła wroga, bronie (`used`/`limit`, sonar też `radius`), tura |
 | `POST` | `/games/{id}/fleet` | rozstawienie floty gracza; statek z wariantem niesie `w` (`{"sonar": 2}`) |
 | `POST` | `/games/{id}/shots` | salwa w pole `x`, `y` |
 | `GET` | `/games/{id}/shots` | strzały gracza z wynikami |
 | `POST` | `/games/{id}/torpedo` | torpeda z własnego niszczyciela (`x`, `y`, `direction`) |
-| `POST` | `/games/{id}/sonar` | skan sonarem (krzyż), nie kończy tury |
+| `POST` | `/games/{id}/sonar` | skan sonarem (krzyż o promieniu 3, gracz 4 po Sonarze dalekiego zasięgu), nie kończy tury |
 | `POST` | `/games/{id}/air-raid` | nalot na obszar |
 | `POST` | `/profiles` | nowy profil kapitana |
 | `GET` | `/profiles/{id}/expedition` | profil, flota, typy statków i budynków, wyspy (bandera, budynki), świat, kontratak, drzewko badań |

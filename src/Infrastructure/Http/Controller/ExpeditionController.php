@@ -2,6 +2,7 @@
 
 namespace App\Infrastructure\Http\Controller;
 
+use App\Application\Expedition\BuildBuilding;
 use App\Application\Expedition\BuildShip;
 use App\Application\Expedition\CreateProfile;
 use App\Application\Expedition\GetExpedition;
@@ -10,6 +11,7 @@ use App\Application\Expedition\Sail;
 use App\Application\Expedition\SettleBattle;
 use App\Application\Expedition\StartIslandBattle;
 use App\Application\Expedition\TransferCargo;
+use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\OwnedShip;
 use App\Domain\Expedition\Resources;
 use App\Domain\Expedition\ShipType;
@@ -31,6 +33,7 @@ final class ExpeditionController
         private RepairShip $repairShip,
         private Sail $sail,
         private TransferCargo $transferCargo,
+        private BuildBuilding $buildBuilding,
     ) {
     }
 
@@ -144,6 +147,19 @@ final class ExpeditionController
         $ship = $this->repairShip->handle($id, $islandId, $shipId);
 
         return new JsonResponse($this->shipView($ship));
+    }
+
+    #[Route('/{id}/islands/{islandId}/buildings', name: 'api_profiles_build_building', methods: ['POST'])]
+    public function buildBuilding(string $id, string $islandId, Request $request): JsonResponse
+    {
+        $this->assertUuid($id, 'profile');
+
+        $type = BuildingType::tryFrom((string) ($this->jsonPayload($request)['type'] ?? ''));
+        if (null === $type) {
+            throw new ApiException('Missing or invalid field: type:building-type', 'VALIDATION_ERROR', 400);
+        }
+
+        return new JsonResponse($this->buildBuilding->handle($id, $islandId, $type), 201);
     }
 
     #[Route('/{id}/cargo', name: 'api_profiles_transfer_cargo', methods: ['POST'])]

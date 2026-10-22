@@ -2,6 +2,7 @@
 
 namespace App\Infrastructure\Persistence\Doctrine\Mapper;
 
+use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\OwnedShip;
 use App\Domain\Expedition\Resources;
@@ -36,6 +37,11 @@ final class ProfileSnapshotMapper
             'depositTicks' => $profile->depositTicks(),
             // wyspy pod banderą: id wyspy → tik zdobycia
             'ownedIslands' => $profile->ownedIslands(),
+            // budynki osady: id wyspy → typy budynków
+            'buildings' => array_map(
+                static fn (array $types) => array_map(static fn (BuildingType $t) => $t->value, $types),
+                $profile->buildings(),
+            ),
         ];
     }
 
@@ -110,7 +116,35 @@ final class ProfileSnapshotMapper
             array_map('intval', (array) ($state['depositTicks'] ?? [])),
             // brak klucza = brak bander (bez migracji — stare profile są testowe, #77)
             array_map('intval', (array) ($state['ownedIslands'] ?? [])),
+            $this->buildingsFrom($state),
         );
+    }
+
+    /**
+     * Budynki osady; brak klucza = profil sprzed osad, bez budynków. Nieznany
+     * typ i powtórzony typ na tej samej wyspie są pomijane.
+     *
+     * @param array<string,mixed> $state
+     *
+     * @return array<string, list<BuildingType>>
+     */
+    private function buildingsFrom(array $state): array
+    {
+        $out = [];
+        foreach ((array) ($state['buildings'] ?? []) as $islandId => $types) {
+            $island = [];
+            foreach ((array) $types as $value) {
+                $type = BuildingType::tryFrom((string) $value);
+                if (null !== $type && !in_array($type, $island, true)) {
+                    $island[] = $type;
+                }
+            }
+            if ([] !== $island) {
+                $out[(string) $islandId] = $island;
+            }
+        }
+
+        return $out;
     }
 
     /**

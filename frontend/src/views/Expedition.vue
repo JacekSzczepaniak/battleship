@@ -140,6 +140,17 @@
                             <span v-if="buildBlock(t)" class="muted">{{ buildBlock(t) }}</span>
                         </li>
                     </ul>
+
+                    <template v-if="currentIsland.owned">
+                        <h3>🏘️ Osada — {{ currentIsland.name }}</h3>
+                        <SettlementPanel
+                            :island="currentIsland"
+                            :building-types="expedition.buildingTypes"
+                            :available="addResources(currentIsland.stockpile, expedition.profile.cargo)"
+                            :busy="busy"
+                            @build="onBuildBuilding"
+                        />
+                    </template>
                 </template>
                 <p v-else class="muted">🏗️ Stocznia dostępna po zawinięciu do portu — dopłyń na wyspę.</p>
             </section>
@@ -174,6 +185,9 @@
                             ⛏️ złoże: {{ formatResources(island.deposit.yield) }}/tik
                             <template v-if="island.deposit.active"> · pracuje, urobek czeka w magazynie (do {{ formatResources(island.deposit.cap) }})</template>
                             <template v-else> · ruszy po pierwszej wygranej bitwie</template>
+                        </span>
+                        <span v-if="island.buildings.length" :class="island.owned ? 'deposit' : 'muted'">
+                            🏘️ {{ island.buildings.map(b => BUILDING_LABELS[b]).join(', ') }}<template v-if="!island.owned"> · nieczynne bez bandery</template>
                         </span>
                         <span v-if="island.wins || island.losses" class="muted">
                             bilans: {{ island.wins }}W / {{ island.losses }}P
@@ -223,9 +237,9 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
-    buildShip, createProfile, getExpedition, repairShip, sail, settleBattle, startIslandBattle, transferCargo,
-    RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS,
-    type ExpeditionDTO, type FleetShipDTO, type IslandDTO, type RankName, type ResourcesDTO, type ShipTypeDTO,
+    buildBuilding, buildShip, createProfile, getExpedition, repairShip, sail, settleBattle, startIslandBattle, transferCargo,
+    BUILDING_LABELS, RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS,
+    type BuildingTypeName, type ExpeditionDTO, type FleetShipDTO, type IslandDTO, type RankName, type ResourcesDTO, type ShipTypeDTO,
 } from '../api/expeditionApi';
 import { ApiError } from '../api/http';
 import {
@@ -236,6 +250,7 @@ import { defaultSquad, isUnescortedConvoy, squadCells } from '../lib/squad';
 import { fieldsLabel } from '../lib/ships';
 import { depositLabel, depositState, economyIslands, whereToFind } from '../lib/economy';
 import CargoPanel from '../components/CargoPanel.vue';
+import SettlementPanel from '../components/SettlementPanel.vue';
 import {
     addResources, covers, formatResources, isEmpty, missing, totalResources,
 } from '../lib/resources';
@@ -409,6 +424,23 @@ async function onBuild(t: ShipTypeDTO) {
     error.value = '';
     try {
         await buildShip(profileId, island.id, t.type);
+        expedition.value = await getExpedition(profileId);
+    } catch (e: any) {
+        error.value = e?.message ?? 'Budowa nie powiodła się';
+    } finally {
+        busy.value = false;
+    }
+}
+
+/** Budynek osady na wyspie, przy której stoi kapitan (#80). */
+async function onBuildBuilding(type: BuildingTypeName) {
+    const profileId = getProfileId();
+    const island = currentIsland.value;
+    if (!profileId || !island) return;
+    busy.value = true;
+    error.value = '';
+    try {
+        await buildBuilding(profileId, island.id, type);
         expedition.value = await getExpedition(profileId);
     } catch (e: any) {
         error.value = e?.message ?? 'Budowa nie powiodła się';

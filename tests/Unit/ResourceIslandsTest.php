@@ -19,7 +19,7 @@ function depositWorld(CaptainProfile $profile): WorldMap
 }
 
 /**
- * Kapitan na tiku $tick, z wygraną bitwą o Mielizny (złoże: 3 drewna/tik).
+ * Kapitan na tiku $tick, z Mieliznami (złoże: 3 drewna/tik) pod banderą.
  *
  * @param array<string,int>        $depositTicks
  * @param array<string, Resources> $stockpiles
@@ -30,7 +30,7 @@ function mieliznyOwner(int $tick, array $depositTicks, array $stockpiles = []): 
 
     return CaptainProfile::fromSnapshot(
         CaptainProfile::create('Jacek')->id(), 'Jacek', 40, $battles, null, Resources::none(),
-        tick: $tick, stockpiles: $stockpiles, depositTicks: $depositTicks,
+        tick: $tick, stockpiles: $stockpiles, depositTicks: $depositTicks, ownedIslands: ['mielizny' => 0],
     );
 }
 
@@ -106,7 +106,7 @@ it('wyspa bez wygranej bitwy nie produkuje', function () {
         ->and($profile->depositTicks())->toBe([]);
 });
 
-it('wyspa wygrana przed złożami produkuje od pierwszego naliczenia, bez wyrównania wstecz', function () {
+it('posiadana wyspa bez tiku złoża produkuje od pierwszego naliczenia, bez wyrównania wstecz', function () {
     $m = new ProfileSnapshotMapper();
     $profile = mieliznyOwner(tick: 50, depositTicks: []);
     $profile->ensureWorldState(depositWorld($profile));
@@ -120,6 +120,19 @@ it('wyspa wygrana przed złożami produkuje od pierwszego naliczenia, bez wyrów
     $restored->ensureWorldState(depositWorld($restored));
 
     expect($restored->stockpile('mielizny')->wood)->toBe(6);
+});
+
+it('wygrana bez bandery nie uruchamia złoża', function () {
+    // rekord wygranej bez bandery (profil sprzed #77) — złoże pracuje tylko pod banderą
+    $battles = [(string) GameId::new() => ['island' => 'mielizny', 'settled' => true, 'result' => 'won']];
+    $profile = CaptainProfile::fromSnapshot(
+        CaptainProfile::create('Jacek')->id(), 'Jacek', 40, $battles, null, Resources::none(),
+        tick: 50, depositTicks: ['mielizny' => 10],
+    );
+
+    $profile->ensureWorldState(depositWorld($profile));
+
+    expect($profile->stockpile('mielizny')->isZero())->toBeTrue();
 });
 
 it('pierwsza wygrana uruchamia złoże od tiku rozliczenia; porażka nie', function () {

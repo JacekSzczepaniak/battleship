@@ -7,8 +7,9 @@ namespace App\Domain\Expedition;
  * z nagrodami XP i surowców za wygraną i (mniejszymi) za przegraną —
  * z porażek też się uczymy. Stocznia na wyspie buduje i remontuje flotę;
  * jej poziom ogranicza dostępne typy statków (0 = brak stoczni, tylko
- * tratwa). Złoże wyspy produkuje surowiec co tik, odkąd kapitan wygrał
- * o nią bitwę (GAME_DESIGN.md, filar III).
+ * tratwa). Złoże wyspy produkuje surowiec co tik, dopóki wyspa jest pod
+ * banderą kapitana (GAME_DESIGN.md, filar III). Bezpieczną przystań zdobywa
+ * się jak każdą wyspę, ale kontrataki jej nie dotyczą (#78).
  */
 final class Island
 {
@@ -29,6 +30,7 @@ final class Island
         public readonly int $boardWidth,
         public readonly int $boardHeight,
         public readonly Resources $depositYield = new Resources(),
+        public readonly bool $safeHarbor = false,
     ) {
         if (!in_array($mode, ['classic', 'fun'], true)) {
             throw new \InvalidArgumentException('Island mode must be classic|fun');

@@ -94,6 +94,7 @@
                         </ul>
                     </div>
                     <div class="charted">wyspy {{ discoveredIslands }} / {{ expedition.islands.length }} · zbadano {{ chartedPercent }}% mapy</div>
+                    <div class="flags">🚩 Wyspy pod banderą: <b>{{ expedition.profile.ownedIslands }}/{{ expedition.islands.length }}</b></div>
 
                     <div class="where">
                         <Anchor :size="14" />
@@ -223,7 +224,7 @@ function depositShort(island: IslandDTO): string {
     switch (depositState(island)) {
         case 'working': return 'pracuje';
         case 'full': return 'pełny — odbierz';
-        default: return 'czeka na wygraną';
+        default: return 'czeka na banderę';
     }
 }
 
@@ -513,6 +514,8 @@ h1 span { color: var(--info); }
 .res b { display: block; font: 700 15px var(--font-head); }
 .res span { font: 500 9px var(--font-mono); color: var(--text-muted); }
 .charted { margin-top: -12px; font: 500 11px var(--font-mono); color: var(--text-dim); }
+.flags { font: 500 12px var(--font-mono); color: var(--text-muted); }
+.flags b { color: var(--text); }
 
 .where { display: flex; align-items: center; gap: 8px; font: 500 12px var(--font-mono); color: var(--text-muted); }
 .where b { color: var(--text); font-weight: 600; }

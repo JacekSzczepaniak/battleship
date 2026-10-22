@@ -33,7 +33,7 @@ final class CaptainProfile
     private const CARTOGRAPHY_SECTOR_REWARD = 1;
     private const CARTOGRAPHY_ISLAND_BONUS = 5;
 
-    /** @var array<string, array{island: string, settled: bool, result: ?string, ships?: list<string>, enemySunk?: int}> klucz: gameId */
+    /** @var array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int}> klucz: gameId */
     private array $battles = [];
 
     /** @var list<OwnedShip> */
@@ -50,8 +50,17 @@ final class CaptainProfile
     private Resources $cargo;
 
     /**
-     * Tik, do którego naliczono urobek złoża wyspy; ustawiany przy pierwszej
-     * wygranej bitwie o wyspę — od niej złoże pracuje.
+     * Wyspy pod banderą kapitana: pierwsza wygrana bitwa o wyspę ją zdobywa
+     * (GAME_DESIGN.md, filar III). Tik zdobycia odmierza spokój przed
+     * kontratakiem (#78).
+     *
+     * @var array<string, int> klucz: id wyspy, wartość: tik zdobycia
+     */
+    private array $ownedIslands = [];
+
+    /**
+     * Tik, do którego naliczono urobek złoża wyspy; ustawiany przy zdobyciu
+     * wyspy — złoże pracuje, dopóki wyspa jest pod banderą.
      *
      * @var array<string, int> klucz: id wyspy
      */
@@ -404,18 +413,19 @@ final class CaptainProfile
     }
 
     /**
-     * Złoża wysp zdobytych wygraną bitwą produkują co tik do magazynu wyspy,
-     * aż urobek sięgnie limitu (Island::depositCap()). Liczone leniwie z różnicy
-     * tików — deterministycznie, bez zegara. Wyspa wygrana przed złożami
-     * zaczyna produkować od tiku pierwszego naliczenia, bez wyrównania wstecz.
+     * Złoża wysp pod banderą produkują co tik do magazynu wyspy, aż urobek
+     * sięgnie limitu (Island::depositCap()). Liczone leniwie z różnicy tików —
+     * deterministycznie, bez zegara. Wyspa bez bandery nie produkuje; posiadana
+     * bez tiku naliczenia zaczyna od bieżącego, bez wyrównania wstecz.
      */
     private function accrueDeposits(WorldMap $world): void
     {
         foreach ($world->deposits() as $islandId => $island) {
+            if (!$this->ownsIsland($islandId)) {
+                continue;
+            }
             if (!isset($this->depositTicks[$islandId])) {
-                if ($this->battleStats($islandId)['wins'] > 0) {
-                    $this->depositTicks[$islandId] = $this->tick;
-                }
+                $this->depositTicks[$islandId] = $this->tick;
                 continue;
             }
 
@@ -641,7 +651,7 @@ final class CaptainProfile
             throw new \DomainException('Battle already registered');
         }
 
-        $this->battles[$key] = ['island' => $islandId, 'settled' => false, 'result' => null, 'ships' => $shipIds];
+        $this->battles[$key] = ['island' => $islandId, 'settled' => false, 'result' => null, 'kind' => BattleKind::Capture->value, 'ships' => $shipIds];
         ++$this->tick;
     }
 
@@ -653,14 +663,15 @@ final class CaptainProfile
 
     /**
      * Rozlicza bitwę: XP i surowce nigdy nie giną (przyznawane też za porażkę),
-     * łup trafia do magazynu wyspy, o którą była bitwa. Straty dotykają floty —
+     * łup trafia do magazynu wyspy, o którą była bitwa. Wygrane zdobycie wyspy
+     * bez bandery stawia banderę i uruchamia złoże. Straty dotykają floty —
      * zatopione statki po wygranej wymagają remontu, po przegranej są stracone;
      * ładunek ponad nową pojemność przepada. Idempotentne: druga próba zwraca zera.
      *
      * @param list<int> $sunkLengths    długości statków gracza zatopionych w bitwie
      * @param int       $enemyShipsSunk liczba jednostek wroga zatopionych w bitwie (statystyka kapitana)
      *
-     * @return array{xp:int, loot:Resources, lost:list<string>, damaged:list<string>, cargoLost:Resources}
+     * @return array{xp:int, loot:Resources, lost:list<string>, damaged:list<string>, cargoLost:Resources, captured:bool}
      */
     public function settleBattle(GameId $gameId, string $result, int $xpAward, ?Resources $loot = null, array $sunkLengths = [], int $enemyShipsSunk = 0): array
     {
@@ -678,7 +689,7 @@ final class CaptainProfile
         $key = (string) $gameId;
         $battle = $this->battles[$key] ?? throw new \DomainException('Battle not registered for this profile');
         if ($battle['settled']) {
-            return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => [], 'cargoLost' => Resources::none()];
+            return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => [], 'cargoLost' => Resources::none(), 'captured' => false];
         }
 
         $battle['settled'] = true;
@@ -688,15 +699,37 @@ final class CaptainProfile
 
         $this->xp += $xpAward;
         $this->stockpiles[$battle['island']] = $this->stockpile($battle['island'])->add($loot);
-        if ('won' === $result) {
-            // pierwsza wygrana uruchamia złoże wyspy (jeśli je ma)
-            $this->depositTicks[$battle['island']] ??= $this->tick;
+        // nowy rodzaj bitwy (#78) musi tu rozstrzygnąć, co jego wygrana robi z banderą
+        $captured = match (self::battleKind($battle)) {
+            BattleKind::Capture => 'won' === $result && !$this->ownsIsland($battle['island']),
+        };
+        if ($captured) {
+            $this->ownedIslands[$battle['island']] = $this->tick;
+            // złoże (jeśli wyspa je ma) rusza od tiku zdobycia
+            $this->depositTicks[$battle['island']] = $this->tick;
         }
 
         [$lost, $damaged] = $this->applyLosses($battle['ships'] ?? [], $result, $sunkLengths);
         $cargoLost = $this->trimCargo();
 
-        return ['xp' => $xpAward, 'loot' => $loot, 'lost' => $lost, 'damaged' => $damaged, 'cargoLost' => $cargoLost];
+        return ['xp' => $xpAward, 'loot' => $loot, 'lost' => $lost, 'damaged' => $damaged, 'cargoLost' => $cargoLost, 'captured' => $captured];
+    }
+
+    /** @param array{kind?: string} $battle rekord bez rodzaju pochodzi sprzed bander — to zdobycie */
+    private static function battleKind(array $battle): BattleKind
+    {
+        return BattleKind::tryFrom($battle['kind'] ?? '') ?? BattleKind::Capture;
+    }
+
+    public function ownsIsland(string $islandId): bool
+    {
+        return isset($this->ownedIslands[$islandId]);
+    }
+
+    /** @return array<string, int> wyspy pod banderą: id wyspy → tik zdobycia */
+    public function ownedIslands(): array
+    {
+        return $this->ownedIslands;
     }
 
     /**
@@ -739,7 +772,7 @@ final class CaptainProfile
         return [$lost, $damaged];
     }
 
-    /** @return array{wins:int, losses:int} rozliczone bitwy o daną wyspę */
+    /** @return array{wins:int, losses:int} rozliczone bitwy o daną wyspę, wszystkich rodzajów */
     public function battleStats(string $islandId): array
     {
         $wins = 0;
@@ -781,24 +814,25 @@ final class CaptainProfile
         return $this->unplacedResources;
     }
 
-    /** @return array<string, array{island: string, settled: bool, result: ?string, ships?: list<string>, enemySunk?: int}> */
+    /** @return array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int}> */
     public function battles(): array
     {
         return $this->battles;
     }
 
     /**
-     * @param array<string, array{island: string, settled: bool, result: ?string, ships?: list<string>, enemySunk?: int}> $battles
-     * @param list<OwnedShip>|null                                                                                        $fleet        null = profil sprzed ekonomii — dostaje flotę startową
-     * @param Resources|null                                                                                              $cargo        null = profil sprzed ładowni (patrz $unplaced) albo sprzed ekonomii — drewno startowe do magazynu wyspy
-     * @param int|null                                                                                                    $worldSeed    null = seed wyprowadzony z id (stabilny dla starych profili)
-     * @param array{x:int,y:int}|null                                                                                     $position     null = start ustali ensureWorldState
-     * @param list<string>|null                                                                                           $discovered   sektory "x:y"
-     * @param int|null                                                                                                    $tick         null = profil sprzed tiku: rejsy + zarejestrowane bitwy
-     * @param list<string>|null                                                                                           $visited      null = profil sprzed odwiedzin: tylko obecna pozycja
-     * @param array<string, Resources>                                                                                    $stockpiles   magazyny wysp
-     * @param Resources|null                                                                                              $unplaced     surowce czekające na magazyn wyspy (też jeden magazyn profilu sprzed ładowni) — rozłożone przy ensureWorldState()
-     * @param array<string, int>                                                                                          $depositTicks tik ostatniego naliczenia urobku złoża (klucz: id wyspy)
+     * @param array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int}> $battles
+     * @param list<OwnedShip>|null                                                                                                       $fleet        null = profil sprzed ekonomii — dostaje flotę startową
+     * @param Resources|null                                                                                                             $cargo        null = profil sprzed ładowni (patrz $unplaced) albo sprzed ekonomii — drewno startowe do magazynu wyspy
+     * @param int|null                                                                                                                   $worldSeed    null = seed wyprowadzony z id (stabilny dla starych profili)
+     * @param array{x:int,y:int}|null                                                                                                    $position     null = start ustali ensureWorldState
+     * @param list<string>|null                                                                                                          $discovered   sektory "x:y"
+     * @param int|null                                                                                                                   $tick         null = profil sprzed tiku: rejsy + zarejestrowane bitwy
+     * @param list<string>|null                                                                                                          $visited      null = profil sprzed odwiedzin: tylko obecna pozycja
+     * @param array<string, Resources>                                                                                                   $stockpiles   magazyny wysp
+     * @param Resources|null                                                                                                             $unplaced     surowce czekające na magazyn wyspy (też jeden magazyn profilu sprzed ładowni) — rozłożone przy ensureWorldState()
+     * @param array<string, int>                                                                                                         $depositTicks tik ostatniego naliczenia urobku złoża (klucz: id wyspy)
+     * @param array<string, int>                                                                                                         $ownedIslands wyspy pod banderą: id wyspy → tik zdobycia
      */
     public static function fromSnapshot(
         ProfileId $id,
@@ -816,12 +850,14 @@ final class CaptainProfile
         array $stockpiles = [],
         ?Resources $unplaced = null,
         array $depositTicks = [],
+        array $ownedIslands = [],
     ): self {
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
         $self->fleet = $fleet ?? self::startingFleet();
         $self->stockpiles = $stockpiles;
         $self->depositTicks = $depositTicks;
+        $self->ownedIslands = $ownedIslands;
         $self->unplacedResources = $unplaced ?? (null === $cargo ? new Resources(wood: self::STARTING_WOOD) : null);
         // ładunek ponad pojemność (np. zapisany, zanim tratwa straciła ładownię)
         // nie przepada — czeka na magazyn wyspy

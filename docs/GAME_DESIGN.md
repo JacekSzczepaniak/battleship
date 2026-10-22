@@ -78,7 +78,7 @@ powroty. Odrzucone: czas rzeczywisty i hybrydy czasowe.
 ✅ (#48) Morze Rozbitków: stocznie tylko na Zatoce Rozbitka (poziom 1)
 i Wyspie Sygnałowej (poziom 3); złoża na Mieliznach (3 drewna/tik),
 Archipelagu Mgieł (2 stali/tik) i Cieśninie Sztormów (1 złota/tik).
-Złoże pracuje od pierwszej wygranej bitwy o wyspę, urobek czeka w jej
+Złoże pracuje, dopóki wyspa jest pod banderą kapitana, urobek czeka w jej
 magazynie do limitu 10 tików produkcji. Tratwę skleja się na każdej wyspie.
 
 **Zdobywanie wyspy — trzy fazy:** ✅
@@ -89,9 +89,23 @@ magazynie do limitu 10 tików produkcji. Tratwę skleja się na każdej wyspie.
    działa nadbrzeżne, **magazyn prochu** = trafienie wywołuje eksplozję
    łańcuchową). Ta sama mechanika obsługuje bramy-cieśniny.
 
-**Zdobyta wyspa przestaje być areną powtarzalnych bitew** — staje się
-majątkiem. Nowe źródła walki: NPC, piraci, **kontrataki na osady**
-(obrona = bitwa w odwróconych rolach; fort podnosi obronę).
+**Zdobyta wyspa przestaje być areną powtarzalnych bitew** ✅ (Epic E): pierwsza
+wygrana stawia banderę. Posiadana wyspa ma pracujące złoże, a jej magazyn jest
+stawką kontrataku. Zatoka Rozbitka to bezpieczna przystań: da się ją zdobyć,
+ale nikt jej nie atakuje. Nowe źródła walki to NPC, piraci i **kontrataki**:
+- najwyżej jeden naraz; po zdobyciu albo rozstrzygnięciu 8 tików spokoju,
+  potem 15%/tik (seed+tik); cel to losowa posiadana wyspa poza Zatoką,
+- zapowiedź 12 tików przed uderzeniem (największa odległość na mapie 12×12
+  to 11 rejsów),
+- obrona to bitwa w odwróconych rolach: flota musi stać na wyspie w oknie
+  zapowiedzi, wróg ma lustrzany skład i strzela pierwszy, XP i łup jak przy
+  zdobyciu,
+- przegrana obrona albo nieobecność oznacza utratę wyspy: bandera znika,
+  złoże staje, połowa magazynu przepada, wyspa znowu jest areną,
+- pełna bandera na akwenie: obrońca strzela pierwszy, napastnik płynie bez
+  największego statku.
+
+Obrona wyspy bez floty (garnizon, fort) wchodzi z osadami (Epic F).
 
 ## Filar IV — Ekonomia: trzy surowce, ładownia, konwoje ✅
 
@@ -243,10 +257,10 @@ Akwenu 1 zacznie uwierać.
 - Rangi vs akweny: czy progi rosną z liczbą akwenów; gdzie osiągalny admirał; czym zapełnić lukę 250–600 XP (dziś tylko wyspy II poziomu) i które rangi bramkują akwen 2?
 - Specjalizacje: konkretne perki i progi; czy bojowa wpływa na samą bitwę, czy tylko na otoczkę (remont, zwiad)?
 - Pobojowisko: procent odzysku, po ilu tikach resztki znikają?
-- Kontrataki: częstość, siła, co się dzieje przy utracie osady?
 - Ile akwenów na start (2–3?) i rozmiar planszy akwenu (12×12 wystarczy?)
 - Balans z obserwacji: pełna utrata floty przy przegranej, sztormy 20%, koszty statków
 - Abordaż: dokładna mechanika rozstrzygnięcia (rzut? mini-plansza? koszt?)
+- Garnizon: jak broni się wyspa bez floty na miejscu (fort, załoga) i czy kiedyś dzielimy flotę na zespoły?
 
 ## Poczekalnia (pomysły wciąż aktualne, poza głównym torem)
 

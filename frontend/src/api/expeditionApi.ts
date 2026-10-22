@@ -71,6 +71,8 @@ export interface ExpeditionProfileDTO extends ProfileDTO {
     cargoCapacity: number;
     // jednostki wroga zatopione we wszystkich rozliczonych bitwach
     enemyShipsSunk: number;
+    // wyspy pod banderą kapitana
+    ownedIslands: number;
 }
 
 export interface FleetShipDTO {
@@ -105,7 +107,9 @@ export interface IslandDTO {
     lootLoss: ResourcesDTO;
     // 0 = brak stoczni — na wyspie zbudujesz tylko tratwę
     shipyardLevel: number;
-    // złoże: urobek na tik trafia do magazynu wyspy (do limitu), odkąd wygrałeś o nią bitwę
+    // bandera kapitana: pierwsza wygrana bitwa o wyspę ją zdobywa
+    owned: boolean;
+    // złoże: urobek na tik trafia do magazynu wyspy (do limitu), dopóki wyspa jest pod banderą
     deposit: { yield: ResourcesDTO; cap: ResourcesDTO; active: boolean } | null;
     board: { w: number; h: number };
     // ile pól planszy może zająć skład bitewny (20% planszy, #73)
@@ -166,7 +170,9 @@ export interface SettleResultDTO {
     cargoLost: ResourcesDTO;
     lostShips: ShipTypeName[];
     damagedShips: ShipTypeName[];
-    // pierwsza wygrana o wyspę ze złożem: urobek na tik; null = złoże nie ruszyło teraz
+    // wygrana postawiła banderę na wyspie
+    captured: boolean;
+    // zdobycie wyspy ze złożem: urobek na tik; null = złoże nie ruszyło teraz
     depositStarted: ResourcesDTO | null;
 }
 

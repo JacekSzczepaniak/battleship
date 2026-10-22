@@ -29,7 +29,8 @@ final class SettleBattle
      * @return array{result:string, awarded:int, xp:int, rank:string, rankUp:bool,
      *     loot:array{wood:int, steel:int, gold:int}, stockpile:array{wood:int, steel:int, gold:int},
      *     cargo:array{wood:int, steel:int, gold:int}, cargoLost:array{wood:int, steel:int, gold:int},
-     *     lostShips:list<string>, damagedShips:list<string>}
+     *     lostShips:list<string>, damagedShips:list<string>,
+     *     depositStarted:array{wood:int, steel:int, gold:int}|null}
      */
     public function handle(string $profileId, string $gameId): array
     {
@@ -61,6 +62,7 @@ final class SettleBattle
         $rankBefore = $profile->rank();
         // urobek złóż do bieżącego tiku liczy się przed łupem, który trafia do tego samego magazynu
         $profile->ensureWorldState($this->worldFactory->worldFor($profile));
+        $winsBefore = $profile->battleStats($islandId)['wins'];
 
         $outcome = $profile->settleBattle(
             $game->id(),
@@ -85,6 +87,10 @@ final class SettleBattle
             'cargoLost' => $outcome['cargoLost']->toArray(),
             'lostShips' => $outcome['lost'],
             'damagedShips' => $outcome['damaged'],
+            // pierwsza wygrana o wyspę ze złożem uruchamia wydobycie: urobek na tik
+            'depositStarted' => $island->hasDeposit() && 0 === $winsBefore && $profile->battleStats($islandId)['wins'] > 0
+                ? $island->depositYield->toArray()
+                : null,
         ];
     }
 

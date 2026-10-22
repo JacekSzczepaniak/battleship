@@ -166,6 +166,8 @@ export interface SettleResultDTO {
     cargoLost: ResourcesDTO;
     lostShips: ShipTypeName[];
     damagedShips: ShipTypeName[];
+    // pierwsza wygrana o wyspę ze złożem: urobek na tik; null = złoże nie ruszyło teraz
+    depositStarted: ResourcesDTO | null;
 }
 
 export async function createProfile(name: string): Promise<ProfileDTO> {

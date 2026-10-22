@@ -14,7 +14,7 @@ final class Sail
     }
 
     /**
-     * Żegluga o jeden sektor: mgła, kartografia i eventy podróży liczy domena.
+     * Rejs w zasięgu profilu (1 sektor, z Żeglugą dwusektorową 2): mgła, kartografia i eventy podróży liczy domena.
      *
      * @return array<string,mixed>
      */

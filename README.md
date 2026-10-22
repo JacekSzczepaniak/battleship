@@ -173,7 +173,7 @@ Wszystkie ścieżki pod `/api`, JSON. Pełna lista: `docker compose exec app php
 | `POST` | `/games/{id}/air-raid` | nalot na obszar |
 | `POST` | `/profiles` | nowy profil kapitana |
 | `GET` | `/profiles/{id}/expedition` | profil, flota, typy statków i budynków, wyspy (bandera, budynki), świat, kontratak, drzewko badań |
-| `POST` | `/profiles/{id}/sail` | rejs o jeden sektor |
+| `POST` | `/profiles/{id}/sail` | rejs za 1 tik: o jeden sektor, z Żeglugą dwusektorową także o dwa |
 | `POST` | `/profiles/{id}/islands/{islandId}/battle` | bitwa o wyspę albo obrona wyspy pod banderą (kapitan musi stać na wyspie) |
 | `POST` | `/profiles/{id}/islands/{islandId}/buildings` | budynek osady (`type`) na posiadanej wyspie |
 | `POST` | `/profiles/{id}/islands/{islandId}/research` | start badania (`technology`) w uczelni wyspy, na której stoi kapitan |

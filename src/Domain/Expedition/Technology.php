@@ -18,11 +18,14 @@ enum Technology: string
     /** Promień sonaru gracza w bitwach wyprawy: 4 zamiast 3. */
     case SonarDalekiegoZasiegu = 'sonar-dalekiego-zasiegu';
 
+    /** Rejs na sektor odległy o 2 kosztuje 1 tik, jak rejs na sąsiedni. */
+    case ZeglugaDwusektorowa = 'zegluga-dwusektorowa';
+
     public function branch(): TechBranch
     {
         return match ($this) {
             self::Spichlerze => TechBranch::Osady,
-            self::MapySztormowe => TechBranch::Nawigacja,
+            self::MapySztormowe, self::ZeglugaDwusektorowa => TechBranch::Nawigacja,
             self::SonarDalekiegoZasiegu => TechBranch::Uzbrojenie,
         };
     }
@@ -31,6 +34,7 @@ enum Technology: string
     {
         return match ($this) {
             self::Spichlerze, self::MapySztormowe, self::SonarDalekiegoZasiegu => TechLevel::First,
+            self::ZeglugaDwusektorowa => TechLevel::Second,
         };
     }
 }

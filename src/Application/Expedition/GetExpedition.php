@@ -145,6 +145,8 @@ final class GetExpedition
                 'atIsland' => $world->islandAt($position['x'], $position['y']),
                 // Mapy sztormowe (Epic G) obniżają szansę z 20% do 10%
                 'stormChance' => $profile->stormChance(),
+                // Żegluga dwusektorowa (Epic G) wydłuża rejs za 1 tik z 1 do 2 sektorów
+                'sailRange' => $profile->sailRange(),
                 // zegar świata: rejs i bitwa kosztują tik
                 'tick' => $profile->tick(),
             ],

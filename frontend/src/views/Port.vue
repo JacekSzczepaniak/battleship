@@ -78,7 +78,21 @@
                             <div><b>{{ expedition.profile.cargo[r.key] }}</b><span>{{ r.label.toUpperCase() }}</span></div>
                         </div>
                     </div>
-                    <div v-if="currentIsland" class="charted">magazyn · {{ currentIsland.name }}: {{ formatResources(currentIsland.stockpile, 'pusty') }}</div>
+                    <div v-if="stores.length" class="stores">
+                        <div class="hold-head">
+                            <span class="kicker">MAGAZYNY I ZŁOŻA</span>
+                            <span v-if="deposits.total" class="hold-cap">złoża {{ deposits.working }} / {{ deposits.total }} pracuje</span>
+                        </div>
+                        <ul>
+                            <li v-for="island in stores" :key="island.id" :class="{ here: island.present }">
+                                <span class="st-name">{{ island.present ? '📍 ' : '' }}{{ island.name }}</span>
+                                <span class="st-stock">{{ formatResources(island.stockpile, 'pusto') }}</span>
+                                <span v-if="island.deposit" class="st-dep" :class="`dep-${depositState(island)}`" :title="depositLabel(island)">
+                                    ⛏ {{ depositShort(island) }}
+                                </span>
+                            </li>
+                        </ul>
+                    </div>
                     <div class="charted">wyspy {{ discoveredIslands }} / {{ expedition.islands.length }} · zbadano {{ chartedPercent }}% mapy</div>
 
                     <div class="where">
@@ -145,7 +159,8 @@ import {
 } from '../lib/expeditionSession';
 import { getTrainingPrefs } from '../lib/battleSession';
 import { carriedWeapon, shipTypeForLength } from '../lib/ships';
-import { RESOURCES, formatResources, totalResources } from '../lib/resources';
+import { RESOURCES, formatResources, isEmpty, totalResources } from '../lib/resources';
+import { depositLabel, depositState, economyIslands } from '../lib/economy';
 
 const router = useRouter();
 
@@ -195,6 +210,22 @@ const chartedPercent = computed(() => {
 const cargoUsed = computed(() => (expedition.value ? totalResources(expedition.value.profile.cargo) : 0));
 
 const currentIsland = computed<IslandDTO | null>(() => expedition.value?.islands.find(i => i.present) ?? null);
+
+// magazyny i złoża (#49): wyspy z zapasami albo złożem — stocznie bez zapasów pomija, port ma mało miejsca
+const stores = computed(() => economyIslands(expedition.value?.islands ?? []).filter(i => !isEmpty(i.stockpile) || i.deposit));
+
+const deposits = computed(() => {
+    const withDeposit = stores.value.filter(i => i.deposit);
+    return { total: withDeposit.length, working: withDeposit.filter(i => depositState(i) === 'working').length };
+});
+
+function depositShort(island: IslandDTO): string {
+    switch (depositState(island)) {
+        case 'working': return 'pracuje';
+        case 'full': return 'pełny — odbierz';
+        default: return 'czeka na wygraną';
+    }
+}
 
 const sortedFleet = computed(() => [...(expedition.value?.fleet ?? [])].sort((a, b) => b.length - a.length));
 
@@ -467,6 +498,16 @@ h1 span { color: var(--info); }
 
 .resources { display: flex; gap: 10px; margin-top: -12px; }
 .hold-head { display: flex; justify-content: space-between; align-items: baseline; }
+.stores { margin-top: 12px; }
+.stores ul { list-style: none; padding: 0; margin: 6px 0 0; display: flex; flex-direction: column; gap: 4px; }
+.stores li { display: flex; gap: 8px; align-items: baseline; font: 500 11px var(--font-mono); color: var(--text-2); }
+.stores li.here .st-name { color: var(--text); font-weight: 700; }
+.st-name { flex: 0 0 auto; }
+.st-stock { flex: 1; color: var(--text-muted); text-align: right; }
+.st-dep { flex: 0 0 auto; }
+.dep-working { color: var(--info); }
+.dep-full { color: var(--warn); }
+.dep-idle { color: var(--text-dim); }
 .hold-cap { font: 600 11px var(--font-mono); color: var(--text-muted); }
 .res { flex: 1; display: flex; align-items: center; gap: 8px; padding: 11px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--line-card); }
 .res b { display: block; font: 700 15px var(--font-head); }

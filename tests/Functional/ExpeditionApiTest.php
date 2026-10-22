@@ -86,6 +86,7 @@ final class ExpeditionApiTest extends WebTestCase
         self::assertSame(['wood' => 35, 'steel' => 5, 'gold' => 0], $settled['stockpile']);
         self::assertSame(['wood' => 0, 'steel' => 0, 'gold' => 0], $settled['cargo']);
         self::assertSame([], $settled['lostShips']);
+        self::assertNull($settled['depositStarted']); // Zatoka Rozbitka nie ma złoża
 
         // 8) idempotencja: drugie rozliczenie bez nagród
         $again = $this->post($client, "/api/profiles/$profileId/battles/$gameId/settle");

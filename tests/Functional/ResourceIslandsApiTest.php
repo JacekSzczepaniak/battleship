@@ -61,6 +61,40 @@ final class ResourceIslandsApiTest extends WebTestCase
         self::assertSame('tratwa', $raft['type']);
     }
 
+    public function testFirstWinStartsDepositOnce(): void
+    {
+        $client = static::createClient();
+        $profileId = $this->post($client, '/api/profiles', ['name' => 'Jacek'])['id'];
+
+        // kapitan zakotwiczony na Mieliznach (złoże drewna), jeszcze bez wygranej
+        $repository = static::getContainer()->get(ProfileRepository::class);
+        $profile = $repository->get(new ProfileId($profileId));
+        $world = static::getContainer()->get(WorldFactory::class)->worldFor($profile);
+        $repository->save(CaptainProfile::fromSnapshot(
+            $profile->id(), $profile->name(), 0, [], $profile->fleet(), Resources::none(),
+            $profile->worldSeed(), $world->islandPosition('mielizny'),
+        ));
+        $kuterId = $profile->fleet()[0]->id;
+
+        // sam kuter: przeciwnik dostaje lustrzany kuter na (0,0) poziomo (generator testowy)
+        $gameId = $this->post($client, "/api/profiles/$profileId/islands/mielizny/battle", ['shipIds' => [$kuterId]])['id'];
+        self::assertResponseStatusCodeSame(201);
+        $this->post($client, "/api/games/$gameId/fleet", ['ships' => [['x' => 5, 'y' => 5, 'o' => 'h', 'l' => 2]]]);
+        self::assertResponseIsSuccessful();
+        foreach ([[0, 0], [1, 0]] as [$x, $y]) {
+            $this->post($client, "/api/games/$gameId/shots", ['x' => $x, 'y' => $y]);
+        }
+
+        $settled = $this->post($client, "/api/profiles/$profileId/battles/$gameId/settle");
+        self::assertResponseIsSuccessful();
+        self::assertSame('won', $settled['result']);
+        self::assertSame(['wood' => 3, 'steel' => 0, 'gold' => 0], $settled['depositStarted']);
+
+        // ponowne rozliczenie nie uruchamia złoża drugi raz
+        $again = $this->post($client, "/api/profiles/$profileId/battles/$gameId/settle");
+        self::assertNull($again['depositStarted']);
+    }
+
     private function lastErrorCode(KernelBrowser $client): ?string
     {
         $body = json_decode($client->getResponse()->getContent() ?: '{}', true);

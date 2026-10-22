@@ -68,10 +68,27 @@
                         :disabled="busy || !cell.sailable"
                         :title="cell.title"
                         @click="onSail(cell.x, cell.y)"
-                    >{{ cell.glyph }}</button>
+                    >{{ cell.glyph }}<small v-if="cell.badge" class="badge">{{ cell.badge }}</small></button>
                 </div>
                 <p v-if="unescortedConvoy" class="convoy-warn">⚠️ Konwój bez eskorty — podwójne straty w sztormie. Eskortuje sprawny kuter, niszczyciel albo lotniskowiec.</p>
                 <p v-if="seaMsg" class="sea-msg">{{ seaMsg }}</p>
+            </section>
+
+            <!-- Magazyny i złoża: podgląd odkrytych wysp; przeładunek tylko w porcie -->
+            <section v-if="economy.length" class="card economy">
+                <h2>🏝️ Magazyny i złoża</h2>
+                <table class="eco">
+                    <thead><tr><th>wyspa</th><th>stocznia</th><th>złoże</th><th>magazyn</th></tr></thead>
+                    <tbody>
+                        <tr v-for="island in economy" :key="island.id" :class="{ here: island.present }">
+                            <th>{{ island.present ? '📍' : '' }} {{ island.name }}</th>
+                            <td>{{ island.shipyardLevel > 0 ? `🏗️ poz. ${island.shipyardLevel}` : '—' }}</td>
+                            <td :class="`dep-${depositState(island)}`">{{ island.deposit ? `⛏️ ${depositLabel(island)}` : '—' }}</td>
+                            <td>{{ formatResources(island.stockpile, 'pusto') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="muted">Urobek złoża czeka w magazynie wyspy — dopłyń, załaduj i zawieź do stoczni.</p>
             </section>
 
             <!-- Flota i port (stocznia dostępna tylko w doku) -->
@@ -97,32 +114,14 @@
                 </ul>
 
                 <template v-if="currentIsland">
-                    <h3>📦 Ładownia i magazyn — {{ currentIsland.name }}
-                        <span class="muted">(ładownia {{ totalResources(expedition.profile.cargo) }}/{{ expedition.profile.cargoCapacity }}, każde przeniesienie = 1 tik)</span>
-                    </h3>
-                    <table class="hold">
-                        <thead><tr><th></th><th>magazyn wyspy</th><th></th><th>ładownia</th></tr></thead>
-                        <tbody>
-                            <tr v-for="r in RESOURCES" :key="r.key">
-                                <th><span class="res-dot" :style="{ background: r.color }"></span> {{ r.label }}</th>
-                                <td>{{ currentIsland.stockpile[r.key] }}</td>
-                                <td class="moves">
-                                    <button
-                                        class="btn small"
-                                        :disabled="busy || loadable(r.key) === 0"
-                                        :title="loadable(r.key) === 0 ? 'magazyn pusty albo ładownia pełna' : `załaduj ${loadable(r.key)}`"
-                                        @click="onTransfer('load', r.key, loadable(r.key))"
-                                    >załaduj →</button>
-                                    <button
-                                        class="btn small"
-                                        :disabled="busy || expedition.profile.cargo[r.key] === 0"
-                                        @click="onTransfer('unload', r.key, expedition.profile.cargo[r.key])"
-                                    >← rozładuj</button>
-                                </td>
-                                <td>{{ expedition.profile.cargo[r.key] }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <h3>📦 Przeładunek — {{ currentIsland.name }}</h3>
+                    <CargoPanel
+                        :island="currentIsland"
+                        :cargo="expedition.profile.cargo"
+                        :capacity="expedition.profile.cargoCapacity"
+                        :busy="busy"
+                        @transfer="onTransfer"
+                    />
 
                     <h3 v-if="currentIsland.shipyardLevel > 0">🏗️ Stocznia — {{ currentIsland.name }} <span class="muted">(poziom {{ currentIsland.shipyardLevel }})</span></h3>
                     <h3 v-else>🪵 {{ currentIsland.name }} — bez stoczni <span class="muted">(tratwę skleisz z desek na każdej wyspie)</span></h3>
@@ -225,7 +224,7 @@ import { useRoute, useRouter } from 'vue-router';
 import {
     buildShip, createProfile, getExpedition, repairShip, sail, settleBattle, startIslandBattle, transferCargo,
     RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS,
-    type ExpeditionDTO, type FleetShipDTO, type IslandDTO, type RankName, type ShipTypeDTO,
+    type ExpeditionDTO, type FleetShipDTO, type IslandDTO, type RankName, type ResourcesDTO, type ShipTypeDTO,
 } from '../api/expeditionApi';
 import { ApiError } from '../api/http';
 import {
@@ -234,8 +233,10 @@ import {
 } from '../lib/expeditionSession';
 import { defaultSquad, isUnescortedConvoy, squadCells } from '../lib/squad';
 import { fieldsLabel } from '../lib/ships';
+import { depositLabel, depositState, economyIslands, whereToFind } from '../lib/economy';
+import CargoPanel from '../components/CargoPanel.vue';
 import {
-    RESOURCES, addResources, covers, formatResources, isEmpty, missing, totalResources, type ResourceKey,
+    addResources, covers, formatResources, isEmpty, missing, totalResources,
 } from '../lib/resources';
 
 const router = useRouter();
@@ -276,13 +277,15 @@ const currentIsland = computed<IslandDTO | null>(
     () => expedition.value?.islands.find(i => i.present) ?? null
 );
 
+const economy = computed<IslandDTO[]>(() => economyIslands(expedition.value?.islands ?? []));
+
 const discoveredIslands = computed<IslandDTO[]>(
     () => expedition.value?.islands.filter(i => i.discovered) ?? []
 );
 
 interface SeaCell {
     key: string; x: number; y: number;
-    cls: Record<string, boolean>; glyph: string; title: string; sailable: boolean;
+    cls: Record<string, boolean>; glyph: string; badge: string; title: string; sailable: boolean;
 }
 
 const seaCells = computed<SeaCell[]>(() => {
@@ -311,8 +314,12 @@ const seaCells = computed<SeaCell[]>(() => {
                 key, x, y, sailable,
                 cls: { fog: !discovered, water: discovered && !island, island: !!island, player: isPlayer, sailable, risk: stormRisk },
                 glyph: isPlayer ? '⛵' : island ? (island.unlocked ? '🏝️' : '🔒') : '',
+                badge: island ? (island.deposit ? '⛏' : island.shipyardLevel > 0 ? '🏗' : '') : '',
                 title: [
                     island ? island.name : discovered ? `${x}:${y}` : 'niezbadane wody',
+                    island && island.shipyardLevel > 0 ? `stocznia poz. ${island.shipyardLevel}` : '',
+                    island?.deposit ? `złoże: ${depositLabel(island)}` : '',
+                    island && !isEmpty(island.stockpile) ? `magazyn: ${formatResources(island.stockpile)}` : '',
                     stormRisk ? `pierwsze wpłynięcie — ryzyko sztormu ${world.stormChance}%` : '',
                 ].filter(Boolean).join(' · '),
             });
@@ -356,8 +363,15 @@ function buildBlock(t: ShipTypeDTO): string | null {
     if (!rankAtLeast(profile.rank, t.requiredRank)) return `wymaga rangi: ${rankLabel(t.requiredRank)}`;
     if (island.shipyardLevel < t.requiredShipyardLevel) return shipyardMissing(island, t.requiredShipyardLevel);
     const available = addResources(island.stockpile, profile.cargo);
-    if (!covers(available, t.buildCost)) return missing(available, t.buildCost);
+    if (!covers(available, t.buildCost)) return withSources(available, t.buildCost);
     return null;
+}
+
+/** „brakuje: 10 stali · leży w: Archipelag Mgieł: 14 stali” — gdzie szukać surowców do budowy/remontu. */
+function withSources(available: ResourcesDTO, cost: ResourcesDTO): string {
+    const short = missing(available, cost);
+    const sources = whereToFind(expedition.value?.islands ?? [], cost, currentIsland.value?.id ?? '');
+    return sources ? `${short} · leży w: ${sources}` : short;
 }
 
 /** Stocznie są tylko na dwóch wyspach (#48) — podpowiedź, dokąd płynąć. */
@@ -380,7 +394,7 @@ function repairBlock(ship: FleetShipDTO): string | null {
     if (!island) return 'dopłyń do portu';
     if (island.shipyardLevel < type.requiredShipyardLevel) return shipyardMissing(island, type.requiredShipyardLevel);
     const available = addResources(island.stockpile, profile.cargo);
-    if (!covers(available, ship.repairCost)) return missing(available, ship.repairCost);
+    if (!covers(available, ship.repairCost)) return withSources(available, ship.repairCost);
     return null;
 }
 
@@ -400,23 +414,15 @@ async function onBuild(t: ShipTypeDTO) {
     }
 }
 
-/** Ile surowca da się załadować: tyle, ile jest w magazynie, ale nie ponad wolne miejsce. */
-function loadable(key: ResourceKey): number {
-    const exp = expedition.value;
-    const island = currentIsland.value;
-    if (!exp || !island) return 0;
-    const room = exp.profile.cargoCapacity - totalResources(exp.profile.cargo);
-    return Math.max(0, Math.min(island.stockpile[key], room));
-}
-
-async function onTransfer(direction: 'load' | 'unload', key: ResourceKey, amount: number) {
+/** Jedno dokowanie przenosi wszystkie wpisane surowce — 1 tik (#49). */
+async function onTransfer(direction: 'load' | 'unload', amount: ResourcesDTO) {
     const profileId = getProfileId();
     const island = currentIsland.value;
-    if (!profileId || !island || amount <= 0) return;
+    if (!profileId || !island || isEmpty(amount)) return;
     busy.value = true;
     error.value = '';
     try {
-        await transferCargo(profileId, island.id, direction, { [key]: amount });
+        await transferCargo(profileId, island.id, direction, amount);
         expedition.value = await getExpedition(profileId);
     } catch (e: any) {
         error.value = e?.message ?? 'Przeładunek nie powiódł się';
@@ -587,14 +593,19 @@ h2, h3 { font-family: var(--font-head); }
 .squad-pick { list-style: none; padding: 0; margin: 0; width: 100%; display: flex; flex-wrap: wrap; gap: 6px 14px; }
 .squad-pick label { cursor: pointer; color: var(--text-2); }
 .squad-pick label.off { opacity: .45; cursor: not-allowed; }
-.hold { border-collapse: collapse; margin: 0.3rem 0 0.6rem; font-size: 14px; }
-.hold th, .hold td { padding: 4px 10px; text-align: left; }
-.hold thead th { font: 600 10px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--text-label); }
-.hold td { font-weight: 600; }
-.hold .moves { display: flex; gap: 6px; }
+.economy h2 { margin: 0 0 0.4rem; font-size: 1.05rem; }
+.eco { border-collapse: collapse; width: 100%; font-size: 13px; }
+.eco th, .eco td { padding: 5px 8px; text-align: left; border-bottom: 1px solid var(--line-card); }
+.eco thead th { font: 600 10px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--text-label); }
+.eco tbody th { font-weight: 600; white-space: nowrap; }
+.eco tr.here { background: var(--bg-card-active); }
+.eco .dep-working { color: var(--info); }
+.eco .dep-full { color: var(--warn); }
+.eco .dep-idle { color: var(--text-muted); }
 .res-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; vertical-align: middle; }
 .sea-grid { display: grid; gap: 3px; margin-top: 0.75rem; }
-.sea-cell { width: 1.7rem; height: 1.7rem; border: 0; border-radius: 4px; padding: 0; font-size: 0.95rem; line-height: 1; cursor: default; }
+.sea-cell { position: relative; width: 1.7rem; height: 1.7rem; border: 0; border-radius: 4px; padding: 0; font-size: 0.95rem; line-height: 1; cursor: default; }
+.sea-cell .badge { position: absolute; right: -2px; bottom: -3px; font-size: 0.6rem; }
 .sea-cell.fog { background: #0a1b23; box-shadow: inset 0 0 0 1px #12303a; }
 .sea-cell.water { background: #0c2029; box-shadow: inset 0 0 0 1px #163540; }
 .sea-cell.island { background: #3b3220; box-shadow: inset 0 0 0 1px #6b5a35; }

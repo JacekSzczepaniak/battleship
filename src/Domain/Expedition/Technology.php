@@ -15,11 +15,14 @@ enum Technology: string
     /** Szansa sztormu przy pierwszym wpłynięciu: 10% zamiast 20%. */
     case MapySztormowe = 'mapy-sztormowe';
 
+    /** Rejs na sektor odległy o 2 kosztuje 1 tik, jak rejs na sąsiedni. */
+    case ZeglugaDwusektorowa = 'zegluga-dwusektorowa';
+
     public function branch(): TechBranch
     {
         return match ($this) {
             self::Spichlerze => TechBranch::Osady,
-            self::MapySztormowe => TechBranch::Nawigacja,
+            self::MapySztormowe, self::ZeglugaDwusektorowa => TechBranch::Nawigacja,
         };
     }
 
@@ -27,6 +30,7 @@ enum Technology: string
     {
         return match ($this) {
             self::Spichlerze, self::MapySztormowe => TechLevel::First,
+            self::ZeglugaDwusektorowa => TechLevel::Second,
         };
     }
 }

@@ -370,8 +370,10 @@ const seaCells = computed<SeaCell[]>(() => {
             const discovered = fog.has(key);
             const island = islandsByPos.get(key) ?? null;
             const isPlayer = x === px && y === py;
-            const sailable = Math.max(Math.abs(x - px), Math.abs(y - py)) === 1;
-            // sztorm grozi przy pierwszym wpłynięciu na sektor (#68)
+            // osiągalne w jednym rejsie: sąsiednie, z Żeglugą dwusektorową także odległe o 2
+            const distance = Math.max(Math.abs(x - px), Math.abs(y - py));
+            const sailable = distance >= 1 && distance <= world.sailRange;
+            // sztorm grozi przy pierwszym wpłynięciu na sektor docelowy (#68)
             const stormRisk = sailable && !visited.has(key);
 
             cells.push({
@@ -389,6 +391,7 @@ const seaCells = computed<SeaCell[]>(() => {
                     island && island.shipyardLevel > 0 ? `stocznia poz. ${island.shipyardLevel}` : '',
                     island?.deposit ? `złoże: ${depositLabel(island)}` : '',
                     island && !isEmpty(island.stockpile) ? `magazyn: ${formatResources(island.stockpile)}` : '',
+                    sailable && distance > 1 ? 'rejs o 2 sektory za 1 tik' : '',
                     stormRisk ? `pierwsze wpłynięcie — ryzyko sztormu ${world.stormChance}%` : '',
                 ].filter(Boolean).join(' · '),
             });

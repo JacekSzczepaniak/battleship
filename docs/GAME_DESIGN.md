@@ -103,7 +103,8 @@ ale nikt jej nie atakuje. Nowe źródła walki to NPC, piraci i **kontrataki**:
   to 11 rejsów),
 - obrona to bitwa w odwróconych rolach: flota musi stać na wyspie w oknie
   zapowiedzi, wróg ma lustrzany skład i strzela pierwszy, XP i łup jak przy
-  zdobyciu,
+  zdobyciu; jedna obrona na kontratak, a rozpoczęta wstrzymuje termin do
+  rozliczenia bitwy,
 - przegrana obrona albo nieobecność oznacza utratę wyspy: bandera znika,
   złoże staje, połowa magazynu przepada, wyspa znowu jest areną,
 - pełna bandera na akwenie: obrońca strzela pierwszy, napastnik płynie bez

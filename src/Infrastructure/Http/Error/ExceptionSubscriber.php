@@ -127,6 +127,9 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             'Island not owned' => ['ISLAND_NOT_OWNED', 409],
             'Building already standing' => ['BUILDING_ALREADY_STANDING', 409],
             'Building site not suitable' => ['BUILDING_SITE_UNSUITABLE', 409],
+            'Island already captured' => ['ISLAND_ALREADY_CAPTURED', 409],
+            'No counterattack on this island' => ['NO_COUNTERATTACK', 409],
+            'Defense already started' => ['DEFENSE_ALREADY_STARTED', 409],
             default => ['VALIDATION_ERROR', 400],
         };
     }

@@ -50,10 +50,10 @@ final class IslandFlagApiTest extends WebTestCase
         self::assertFalse($islands['zatoka-rozbitka']['owned']);
         self::assertFalse($islands['archipelag-mgiel']['deposit']['active']);
 
-        // zdobyta wyspa nadal przyjmuje bitwy, ale drugiej bandery nie daje
-        $again = $this->winBattle($client, $profileId, $kuterId);
-        self::assertFalse($again['captured']);
-        self::assertNull($again['depositStarted']);
+        // zdobyta wyspa nie jest areną: bez kontrataku nie przyjmuje bitwy (#78)
+        $again = $this->post($client, "/api/profiles/$profileId/islands/mielizny/battle", ['shipIds' => [$kuterId]]);
+        self::assertResponseStatusCodeSame(409);
+        self::assertSame('NO_COUNTERATTACK', $again['error']['code']);
         self::assertSame(1, $this->expedition($client, $profileId)['profile']['ownedIslands']);
     }
 

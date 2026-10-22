@@ -33,6 +33,15 @@ final class CaptainProfile
     private const CARTOGRAPHY_SECTOR_REWARD = 1;
     private const CARTOGRAPHY_ISLAND_BONUS = 5;
 
+    /**
+     * Kontrataki (#78): po zdobyciu wyspy albo rozstrzygnięciu kontrataku
+     * tyle tików spokoju, potem szansa zapowiedzi na tik (w %); uderzenie
+     * następuje tyle tików po zapowiedzi.
+     */
+    private const COUNTERATTACK_CALM_TICKS = 8;
+    private const COUNTERATTACK_CHANCE = 15;
+    private const COUNTERATTACK_WARNING_TICKS = 12;
+
     /** @var array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int}> klucz: gameId */
     private array $battles = [];
 
@@ -73,6 +82,29 @@ final class CaptainProfile
      * @var array<string, list<BuildingType>> klucz: id wyspy
      */
     private array $buildings = [];
+
+    /**
+     * Kontratak w toku (najwyżej jeden): wyspa celu, tik zapowiedzi, tik
+     * uderzenia i gra obrony, gdy kapitan ją przyjął — rozpoczęta obrona
+     * wstrzymuje termin do rozliczenia bitwy.
+     *
+     * @var array{island: string, announcedAt: int, strikeAt: int, defense: ?string}|null
+     */
+    private ?array $counterattack = null;
+
+    /** Tik ostatniego zdobycia albo rozstrzygnięcia kontrataku — od niego liczy się spokój. */
+    private int $counterattackCalmFrom = 0;
+
+    /** Tik, do którego rozegrano rzuty kontrataków (leniwie, jak urobek złóż). */
+    private int $counterattackRolledTo = 0;
+
+    /**
+     * Ostatnie rozstrzygnięcie kontrataku — do komunikatu w UI, zwłaszcza
+     * o utracie wyspy pod nieobecność kapitana.
+     *
+     * @var array{island: string, tick: int, held: bool, absent: bool, stockpileLost: array{wood:int, steel:int, gold:int}}|null
+     */
+    private ?array $lastCounterattack = null;
 
     /**
      * Surowce czekające na magazyn wyspy (drewno startowe, profil sprzed
@@ -489,7 +521,75 @@ final class CaptainProfile
         }
 
         $this->placeUnplacedResources($world);
+        $this->rollCounterattacks($world);
         $this->accrueDeposits($world);
+    }
+
+    /**
+     * Rozgrywa kontrataki tik po tiku od ostatniego rzutu (leniwie, jak
+     * urobek złóż — deterministycznie z seed+tik, bez zegara). Każda akcja
+     * zmieniająca bandery woła wcześniej ensureWorldState(), więc rzut dla
+     * tiku widzi stan profilu z tego tiku. Uderzenie bez rozpoczętej obrony
+     * odbiera wyspę (nieobecność nie kosztuje floty).
+     */
+    private function rollCounterattacks(WorldMap $world): void
+    {
+        for ($t = $this->counterattackRolledTo + 1; $t <= $this->tick; ++$t) {
+            if (null !== $this->counterattack) {
+                if (null === $this->counterattack['defense'] && $t >= $this->counterattack['strikeAt']) {
+                    $this->resolveCounterattack($this->counterattack['strikeAt'], held: false, absent: true, world: $world);
+                }
+                continue;
+            }
+            if ($t - $this->counterattackCalmFrom <= self::COUNTERATTACK_CALM_TICKS) {
+                continue;
+            }
+            $targets = array_values(array_filter(
+                array_keys($this->ownedIslands),
+                static fn (string $id) => !$world->isSafeHarbor($id),
+            ));
+            if ([] === $targets || crc32("{$this->worldSeed}:{$t}:counterattack") % 100 >= self::COUNTERATTACK_CHANCE) {
+                continue;
+            }
+            sort($targets);
+            $this->counterattack = [
+                'island' => $targets[crc32("{$this->worldSeed}:{$t}:counterattack-target") % count($targets)],
+                'announcedAt' => $t,
+                'strikeAt' => $t + self::COUNTERATTACK_WARNING_TICKS,
+                'defense' => null,
+            ];
+        }
+        $this->counterattackRolledTo = max($this->counterattackRolledTo, $this->tick);
+    }
+
+    /**
+     * Rozstrzyga kontratak w toku: obroniona wyspa zostaje pod banderą,
+     * utracona traci banderę, złoże i połowę magazynu. Od tego tiku liczy się
+     * spokój przed następną zapowiedzią.
+     */
+    private function resolveCounterattack(int $tick, bool $held, bool $absent, ?WorldMap $world = null): void
+    {
+        if (null === $this->counterattack) {
+            return;
+        }
+        $islandId = $this->counterattack['island'];
+        $this->counterattack = null;
+        $this->counterattackCalmFrom = $tick;
+
+        $lost = Resources::none();
+        if (!$held) {
+            // urobek złoża należy się do tiku uderzenia — potem złoże staje
+            $island = $world?->deposits()[$islandId] ?? null;
+            if (null !== $island) {
+                $this->accrueDeposit($islandId, $island, $tick);
+            }
+            $stock = $this->stockpile($islandId);
+            $lost = new Resources(intdiv($stock->wood, 2), intdiv($stock->steel, 2), intdiv($stock->gold, 2));
+            $this->stockpiles[$islandId] = $stock->subtract($lost);
+            unset($this->ownedIslands[$islandId], $this->depositTicks[$islandId]);
+        }
+
+        $this->lastCounterattack = ['island' => $islandId, 'tick' => $tick, 'held' => $held, 'absent' => $absent, 'stockpileLost' => $lost->toArray()];
     }
 
     /**
@@ -509,21 +609,26 @@ final class CaptainProfile
                 $this->depositTicks[$islandId] = $this->tick;
                 continue;
             }
-
-            $ticks = $this->tick - $this->depositTicks[$islandId];
-            if ($ticks <= 0) {
-                continue;
-            }
-            $stock = $this->stockpile($islandId)->toArray();
-            $cap = $this->depositCap($island)->toArray();
-            $output = $this->depositYield($island)->times($ticks)->toArray();
-            foreach ($output as $resource => $amount) {
-                $output[$resource] = min($amount, max(0, $cap[$resource] - $stock[$resource]));
-            }
-
-            $this->stockpiles[$islandId] = $this->stockpile($islandId)->add(Resources::fromArray($output));
-            $this->depositTicks[$islandId] = $this->tick;
+            $this->accrueDeposit($islandId, $island, $this->tick);
         }
+    }
+
+    /** Urobek złoża jednej wyspy od ostatniego naliczenia do danego tiku. */
+    private function accrueDeposit(string $islandId, Island $island, int $upTo): void
+    {
+        $ticks = $upTo - ($this->depositTicks[$islandId] ?? $upTo);
+        if ($ticks <= 0) {
+            return;
+        }
+        $stock = $this->stockpile($islandId)->toArray();
+        $cap = $this->depositCap($island)->toArray();
+        $output = $this->depositYield($island)->times($ticks)->toArray();
+        foreach ($output as $resource => $amount) {
+            $output[$resource] = min($amount, max(0, $cap[$resource] - $stock[$resource]));
+        }
+
+        $this->stockpiles[$islandId] = $this->stockpile($islandId)->add(Resources::fromArray($output));
+        $this->depositTicks[$islandId] = $upTo;
     }
 
     /**
@@ -721,18 +826,54 @@ final class CaptainProfile
 
     /**
      * Rejestruje rozpoczętą bitwę o wyspę (jedna gra = jedna bitwa). Bitwa
-     * kosztuje tik od razu przy starcie — porzucona też zajęła czas.
+     * kosztuje tik od razu przy starcie — porzucona też zajęła czas. Wyspa
+     * pod banderą nie jest areną: walczy się tam tylko w obronie (#78).
      *
      * @param list<string> $shipIds statki, które wypłynęły (do rozliczenia strat)
      */
     public function startBattle(string $islandId, GameId $gameId, array $shipIds = []): void
+    {
+        if ($this->ownsIsland($islandId)) {
+            throw new \DomainException('Island already captured');
+        }
+        $this->registerBattle($islandId, $gameId, BattleKind::Capture, $shipIds);
+    }
+
+    /**
+     * Przyjmuje bitwę obronną z kontratakiem w toku na wyspie celu, w dowolnym
+     * tiku okna zapowiedzi (obecność sprawdza warstwa aplikacji). Jedna obrona
+     * na kontratak; rozpoczęta wstrzymuje termin uderzenia do rozliczenia.
+     *
+     * @param list<string> $shipIds statki, które wypłynęły (do rozliczenia strat)
+     */
+    public function startDefense(string $islandId, GameId $gameId, array $shipIds = []): void
+    {
+        $this->assertCanDefend($islandId);
+        $this->registerBattle($islandId, $gameId, BattleKind::Defense, $shipIds);
+        $this->counterattack['defense'] = (string) $gameId;
+    }
+
+    /** Rzuca błąd domenowy, gdy na wyspie nie da się teraz przyjąć bitwy obronnej. */
+    public function assertCanDefend(string $islandId): void
+    {
+        $counterattack = $this->counterattack;
+        if (null === $counterattack || $counterattack['island'] !== $islandId || $this->tick >= $counterattack['strikeAt']) {
+            throw new \DomainException('No counterattack on this island');
+        }
+        if (null !== $counterattack['defense']) {
+            throw new \DomainException('Defense already started');
+        }
+    }
+
+    /** @param list<string> $shipIds */
+    private function registerBattle(string $islandId, GameId $gameId, BattleKind $kind, array $shipIds): void
     {
         $key = (string) $gameId;
         if (isset($this->battles[$key])) {
             throw new \DomainException('Battle already registered');
         }
 
-        $this->battles[$key] = ['island' => $islandId, 'settled' => false, 'result' => null, 'kind' => BattleKind::Capture->value, 'ships' => $shipIds];
+        $this->battles[$key] = ['island' => $islandId, 'settled' => false, 'result' => null, 'kind' => $kind->value, 'ships' => $shipIds];
         ++$this->tick;
     }
 
@@ -745,14 +886,16 @@ final class CaptainProfile
     /**
      * Rozlicza bitwę: XP i surowce nigdy nie giną (przyznawane też za porażkę),
      * łup trafia do magazynu wyspy, o którą była bitwa. Wygrane zdobycie wyspy
-     * bez bandery stawia banderę i uruchamia złoże. Straty dotykają floty —
+     * bez bandery stawia banderę i uruchamia złoże. Obrona rozstrzyga kontratak:
+     * wygrana zostawia banderę, przegrana odbiera wyspę i połowę magazynu
+     * (przed łupem za porażkę). Straty dotykają floty —
      * zatopione statki po wygranej wymagają remontu, po przegranej są stracone;
      * ładunek ponad nową pojemność przepada. Idempotentne: druga próba zwraca zera.
      *
      * @param list<int> $sunkLengths    długości statków gracza zatopionych w bitwie
      * @param int       $enemyShipsSunk liczba jednostek wroga zatopionych w bitwie (statystyka kapitana)
      *
-     * @return array{xp:int, loot:Resources, lost:list<string>, damaged:list<string>, cargoLost:Resources, captured:bool}
+     * @return array{xp:int, loot:Resources, lost:list<string>, damaged:list<string>, cargoLost:Resources, captured:bool, defense: array{held:bool, stockpileLost:Resources}|null}
      */
     public function settleBattle(GameId $gameId, string $result, int $xpAward, ?Resources $loot = null, array $sunkLengths = [], int $enemyShipsSunk = 0): array
     {
@@ -770,7 +913,7 @@ final class CaptainProfile
         $key = (string) $gameId;
         $battle = $this->battles[$key] ?? throw new \DomainException('Battle not registered for this profile');
         if ($battle['settled']) {
-            return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => [], 'cargoLost' => Resources::none(), 'captured' => false];
+            return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => [], 'cargoLost' => Resources::none(), 'captured' => false, 'defense' => null];
         }
 
         $battle['settled'] = true;
@@ -779,21 +922,56 @@ final class CaptainProfile
         $this->battles[$key] = $battle;
 
         $this->xp += $xpAward;
-        $this->stockpiles[$battle['island']] = $this->stockpile($battle['island'])->add($loot);
-        // nowy rodzaj bitwy (#78) musi tu rozstrzygnąć, co jego wygrana robi z banderą
-        $captured = match (self::battleKind($battle)) {
-            BattleKind::Capture => 'won' === $result && !$this->ownsIsland($battle['island']),
+        // każdy rodzaj bitwy rozstrzyga, co jego wynik robi z banderą
+        [$captured, $defense] = match (self::battleKind($battle)) {
+            BattleKind::Capture => ['won' === $result && !$this->ownsIsland($battle['island']), null],
+            BattleKind::Defense => [false, $this->settleDefense($key, 'won' === $result)],
         };
         if ($captured) {
             $this->ownedIslands[$battle['island']] = $this->tick;
             // złoże (jeśli wyspa je ma) rusza od tiku zdobycia
             $this->depositTicks[$battle['island']] = $this->tick;
+            $this->counterattackCalmFrom = $this->tick;
         }
+        $this->stockpiles[$battle['island']] = $this->stockpile($battle['island'])->add($loot);
 
         [$lost, $damaged] = $this->applyLosses($battle['ships'] ?? [], $result, $sunkLengths);
         $cargoLost = $this->trimCargo();
 
-        return ['xp' => $xpAward, 'loot' => $loot, 'lost' => $lost, 'damaged' => $damaged, 'cargoLost' => $cargoLost, 'captured' => $captured];
+        return ['xp' => $xpAward, 'loot' => $loot, 'lost' => $lost, 'damaged' => $damaged, 'cargoLost' => $cargoLost, 'captured' => $captured, 'defense' => $defense];
+    }
+
+    /**
+     * Rozstrzyga kontratak, którego obronę toczyła dana gra. Urobek złoża do
+     * bieżącego tiku nalicza wcześniej ensureWorldState() (warstwa aplikacji).
+     *
+     * @return array{held:bool, stockpileLost:Resources}
+     */
+    private function settleDefense(string $gameKey, bool $held): array
+    {
+        if (null === $this->counterattack || $this->counterattack['defense'] !== $gameKey) {
+            throw new \LogicException('Defense battle without its counterattack');
+        }
+        $this->resolveCounterattack($this->tick, held: $held, absent: false);
+
+        return ['held' => $held, 'stockpileLost' => Resources::fromArray($this->lastCounterattack['stockpileLost'] ?? [])];
+    }
+
+    /**
+     * Kontratak w toku: wyspa celu, tik zapowiedzi i uderzenia, gra obrony
+     * (null = obrona nierozpoczęta); null = spokój.
+     *
+     * @return array{island: string, announcedAt: int, strikeAt: int, defense: ?string}|null
+     */
+    public function counterattack(): ?array
+    {
+        return $this->counterattack;
+    }
+
+    /** @return array{island: string, tick: int, held: bool, absent: bool, stockpileLost: array{wood:int, steel:int, gold:int}}|null */
+    public function lastCounterattack(): ?array
+    {
+        return $this->lastCounterattack;
     }
 
     /** @param array{kind?: string} $battle rekord bez rodzaju pochodzi sprzed bander — to zdobycie */
@@ -889,6 +1067,16 @@ final class CaptainProfile
         return $this->depositTicks;
     }
 
+    /**
+     * Stan kontrataków do snapshotu.
+     *
+     * @return array{pending: array{island: string, announcedAt: int, strikeAt: int, defense: ?string}|null, calmFrom: int, rolledTo: int, last: array{island: string, tick: int, held: bool, absent: bool, stockpileLost: array{wood:int, steel:int, gold:int}}|null}
+     */
+    public function counterattackState(): array
+    {
+        return ['pending' => $this->counterattack, 'calmFrom' => $this->counterattackCalmFrom, 'rolledTo' => $this->counterattackRolledTo, 'last' => $this->lastCounterattack];
+    }
+
     /** Surowce, których ensureWorldState() jeszcze nie rozłożyło; null = brak. */
     public function unplacedResources(): ?Resources
     {
@@ -933,6 +1121,7 @@ final class CaptainProfile
         ?Resources $unplaced = null,
         array $depositTicks = [],
         array $ownedIslands = [],
+        ?array $counterattacks = null,
         array $buildings = [],
     ): self {
         $self = new self($id, $name, max(0, $xp));
@@ -959,6 +1148,10 @@ final class CaptainProfile
         $self->visited = null !== $visited
             ? array_fill_keys($visited, true)
             : (null !== $position ? ["{$position['x']}:{$position['y']}" => true] : []);
+        $self->counterattack = $counterattacks['pending'] ?? null;
+        $self->counterattackCalmFrom = $counterattacks['calmFrom'] ?? max([0, ...array_values($ownedIslands)]);
+        $self->counterattackRolledTo = $counterattacks['rolledTo'] ?? $self->tick;
+        $self->lastCounterattack = $counterattacks['last'] ?? null;
 
         return $self;
     }

@@ -133,27 +133,35 @@ it('powód blokady wskazuje pierwszą niespełnioną regułę', function () {
         ->and($owner->buildingBlocker(BuildingType::Tartak, $mielizny, $ownerWorld))->toBeNull();
 });
 
-it('po utracie wyspy tartak stoi, ale nie produkuje; po odbiciu produkuje znowu', function () {
-    // stan po utracie (#78): budynek na wyspie, bandery brak
-    [$profile, $world] = settler(owned: [], buildings: ['mielizny' => [BuildingType::Tartak]], tick: 5, depositTicks: ['mielizny' => 0]);
+it('po utracie wyspy w kontrataku tartak stoi, ale nie produkuje; po odbiciu produkuje znowu', function () {
+    // kontratak (#78) uderza w Mielizny na tiku 2, kapitan nie rozpoczął obrony
+    [$owner, $world] = settler(buildings: ['mielizny' => [BuildingType::Tartak]]);
+    $profile = CaptainProfile::fromSnapshot(
+        $owner->id(), 'Jacek', 40, [], null, Resources::none(), $owner->worldSeed(), $owner->position(),
+        tick: 5, depositTicks: ['mielizny' => 0], ownedIslands: ['mielizny' => 0],
+        counterattacks: ['pending' => ['island' => 'mielizny', 'announcedAt' => 0, 'strikeAt' => 2, 'defense' => null], 'calmFrom' => 0, 'rolledTo' => 0],
+        buildings: $owner->buildings(),
+    );
     $profile->ensureWorldState($world);
 
-    expect($profile->buildingsOn('mielizny'))->toBe([BuildingType::Tartak])
+    // urobek z tartakiem do tiku uderzenia (2 × 6 = 12), połowa przepada, potem złoże stoi
+    expect($profile->ownsIsland('mielizny'))->toBeFalse()
+        ->and($profile->buildingsOn('mielizny'))->toBe([BuildingType::Tartak])
         ->and($profile->hasActiveBuilding('mielizny', BuildingType::Tartak))->toBeFalse()
-        ->and($profile->stockpile('mielizny')->wood)->toBe(0);
+        ->and($profile->stockpile('mielizny')->wood)->toBe(6);
 
     $recapture = GameId::new();
     $profile->startBattle('mielizny', $recapture);
     expect($profile->settleBattle($recapture, 'won', 50)['captured'])->toBeTrue();
 
-    // kolejna bitwa to jeden tik pracy złoża (łup za przegraną pomijamy)
+    // kolejna bitwa (o inną wyspę) to jeden tik pracy złoża
     $next = GameId::new();
-    $profile->startBattle('mielizny', $next);
+    $profile->startBattle('zatoka-rozbitka', $next);
     $profile->settleBattle($next, 'lost', 0);
     $profile->ensureWorldState($world);
 
     expect($profile->hasActiveBuilding('mielizny', BuildingType::Tartak))->toBeTrue()
-        ->and($profile->stockpile('mielizny')->wood)->toBe(6);
+        ->and($profile->stockpile('mielizny')->wood)->toBe(12);
 });
 
 it('budynki przeżywają zapis i odczyt profilu', function () {

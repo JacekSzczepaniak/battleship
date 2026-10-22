@@ -95,6 +95,13 @@
                     </div>
                     <div class="charted">wyspy {{ discoveredIslands }} / {{ expedition.islands.length }} · zbadano {{ chartedPercent }}% mapy</div>
                     <div class="flags">🚩 Wyspy pod banderą: <b>{{ expedition.profile.ownedIslands }}/{{ expedition.islands.length }}</b></div>
+                    <!-- kontratak (#78): zapowiedź z terminem i ostatnie rozstrzygnięcie -->
+                    <div v-if="expedition.counterattack.pending" class="counterattack" :class="{ defending: expedition.counterattack.pending.defenseStarted }">
+                        {{ expedition.counterattack.pending.defenseStarted ? '🛡️' : '⚔️' }} {{ pendingLabel(expedition.counterattack.pending) }}
+                    </div>
+                    <div v-else-if="expedition.counterattack.last" class="flags" :class="{ lost: !expedition.counterattack.last.held }">
+                        {{ expedition.counterattack.last.held ? '🛡️' : '🏴' }} {{ lastLabel(expedition.counterattack.last) }}
+                    </div>
 
                     <div class="where">
                         <Anchor :size="14" />
@@ -162,6 +169,7 @@ import { getTrainingPrefs } from '../lib/battleSession';
 import { carriedWeapon, shipTypeForLength } from '../lib/ships';
 import { RESOURCES, formatResources, isEmpty, totalResources } from '../lib/resources';
 import { depositLabel, depositState, economyIslands } from '../lib/economy';
+import { canDefend, lastLabel, pendingLabel, ticksLabel } from '../lib/counterattack';
 
 const router = useRouter();
 
@@ -263,8 +271,13 @@ const primary = computed<Primary>(() => {
         return { kind: 'resume', label: 'Wróć do bitwy', hint: `trwa bitwa · ${pendingBattle.value.islandName}` };
     }
     const island = currentIsland.value;
+    const pending = expedition.value?.counterattack.pending ?? null;
     // bez floty nie ma czym walczyć o wyspę — tratwę buduje się w stoczni
-    if (island && island.unlocked && (expedition.value?.fleet.length ?? 0) > 0) {
+    if (island && island.owned && canDefend(island, pending) && (expedition.value?.fleet.length ?? 0) > 0) {
+        return { kind: 'island', label: 'Broń wyspy', hint: `kontratak · ${island.name} · uderzenie za ${ticksLabel(pending!.ticksLeft)}` };
+    }
+    // wyspa pod banderą nie jest areną (#78)
+    if (island && island.unlocked && !island.owned && (expedition.value?.fleet.length ?? 0) > 0) {
         return {
             kind: 'island',
             label: 'Nowa bitwa',
@@ -516,6 +529,9 @@ h1 span { color: var(--info); }
 .charted { margin-top: -12px; font: 500 11px var(--font-mono); color: var(--text-dim); }
 .flags { font: 500 12px var(--font-mono); color: var(--text-muted); }
 .flags b { color: var(--text); }
+.flags.lost { color: var(--warn); }
+.counterattack { font: 600 12px var(--font-mono); color: var(--danger); border: 1px solid var(--danger); border-radius: 8px; padding: 6px 9px; margin-top: 6px; }
+.counterattack.defending { color: var(--info); border-color: var(--info); }
 
 .where { display: flex; align-items: center; gap: 8px; font: 500 12px var(--font-mono); color: var(--text-muted); }
 .where b { color: var(--text); font-weight: 600; }

@@ -149,12 +149,34 @@ export interface SailResultDTO {
     atIsland: string | null;
 }
 
+// kontratak (#78): zapowiedź uderza po 12 tikach; obronę przyjmuje flota stojąca na wyspie celu
+export interface PendingCounterattackDTO {
+    island: string;
+    islandName: string;
+    announcedAt: number;
+    strikeAt: number;
+    ticksLeft: number;
+    // rozpoczęta obrona wstrzymuje termin do rozliczenia bitwy
+    defenseStarted: boolean;
+}
+
+export interface LastCounterattackDTO {
+    island: string;
+    islandName: string;
+    tick: number;
+    held: boolean;
+    // wyspa utracona, bo nikt nie rozpoczął obrony przed uderzeniem
+    absent: boolean;
+    stockpileLost: ResourcesDTO;
+}
+
 export interface ExpeditionDTO {
     profile: ExpeditionProfileDTO;
     fleet: FleetShipDTO[];
     shipTypes: ShipTypeDTO[];
     islands: IslandDTO[];
     world: WorldDTO;
+    counterattack: { pending: PendingCounterattackDTO | null; last: LastCounterattackDTO | null };
 }
 
 export interface SettleResultDTO {
@@ -174,6 +196,8 @@ export interface SettleResultDTO {
     captured: boolean;
     // zdobycie wyspy ze złożem: urobek na tik; null = złoże nie ruszyło teraz
     depositStarted: ResourcesDTO | null;
+    // bitwa obronna (#78): czy bandera została i co przepadło z magazynu; null = bitwa o zdobycie
+    defense: { held: boolean; stockpileLost: ResourcesDTO } | null;
 }
 
 export async function createProfile(name: string): Promise<ProfileDTO> {

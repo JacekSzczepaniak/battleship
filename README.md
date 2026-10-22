@@ -144,7 +144,9 @@ FireShotController
 Każda salwa, torpeda i nalot oddaje ruch AI; sonar turę zostawia. Po zakończonej bitwie o wyspę
 `POST /api/profiles/{id}/battles/{gameId}/settle` rozlicza XP, materiały i straty floty ze stanu
 gry — idempotentnie (drugie wywołanie zwraca zera). Pierwsza wygrana o wyspę stawia na niej banderę
-kapitana; złoże pracuje tylko na wyspie pod banderą.
+kapitana; złoże pracuje tylko na wyspie pod banderą. Wyspa pod banderą nie przyjmuje kolejnych bitew
+o zdobycie — walczy się tam tylko w obronie przed zapowiedzianym kontratakiem. Napastnik (AI) oddaje
+wtedy pierwszą salwę zaraz po rozstawieniu floty gracza.
 
 ## API
 
@@ -161,9 +163,9 @@ Wszystkie ścieżki pod `/api`, JSON. Pełna lista: `docker compose exec app php
 | `POST` | `/games/{id}/sonar` | skan sonarem (krzyż), nie kończy tury |
 | `POST` | `/games/{id}/air-raid` | nalot na obszar |
 | `POST` | `/profiles` | nowy profil kapitana |
-| `GET` | `/profiles/{id}/expedition` | profil, flota, typy statków, wyspy (z banderą), świat |
+| `GET` | `/profiles/{id}/expedition` | profil, flota, typy statków, wyspy (z banderą), świat, kontratak |
 | `POST` | `/profiles/{id}/sail` | rejs o jeden sektor |
-| `POST` | `/profiles/{id}/islands/{islandId}/battle` | bitwa o wyspę (kapitan musi stać na wyspie) |
+| `POST` | `/profiles/{id}/islands/{islandId}/battle` | bitwa o wyspę albo obrona wyspy pod banderą (kapitan musi stać na wyspie) |
 | `POST` | `/profiles/{id}/battles/{gameId}/settle` | rozliczenie zakończonej bitwy |
 | `POST` | `/profiles/{id}/ships` | budowa statku w stoczni |
 | `POST` | `/profiles/{id}/ships/{shipId}/repair` | remont statku |

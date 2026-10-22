@@ -2,6 +2,7 @@
 
 namespace App\Application\Expedition;
 
+use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\ProfileRepository;
 use App\Domain\Expedition\ShipType;
@@ -19,10 +20,10 @@ final class GetExpedition
 
     /**
      * Stan wyprawy: profil (XP, ranga, ładownia, liczba bander), flota, katalog
-     * typów statków (do UI stoczni) i wyspy z kłódkami, banderami, stoczniami
-     * i złożami.
+     * typów statków (do UI stoczni), wyspy z kłódkami, banderami, stoczniami
+     * i złożami oraz kontratak w toku i ostatnie rozstrzygnięcie (#78).
      *
-     * @return array{profile: array<string,mixed>, fleet: list<array<string,mixed>>, shipTypes: list<array<string,mixed>>, islands: list<array<string,mixed>>, world: array<string,mixed>}
+     * @return array{profile: array<string,mixed>, fleet: list<array<string,mixed>>, shipTypes: list<array<string,mixed>>, islands: list<array<string,mixed>>, world: array<string,mixed>, counterattack: array<string,mixed>}
      */
     public function handle(string $profileId): array
     {
@@ -129,6 +130,44 @@ final class GetExpedition
                 // zegar świata: rejs i bitwa kosztują tik
                 'tick' => $profile->tick(),
             ],
+            'counterattack' => $this->counterattackView($profile),
         ];
+    }
+
+    /**
+     * Zapowiedź kontrataku (wyspa i za ile tików uderzenie) oraz ostatnie
+     * rozstrzygnięcie — także utrata wyspy pod nieobecność kapitana.
+     *
+     * @return array{pending: array<string,mixed>|null, last: array<string,mixed>|null}
+     */
+    private function counterattackView(CaptainProfile $profile): array
+    {
+        $pending = $profile->counterattack();
+        $last = $profile->lastCounterattack();
+
+        return [
+            'pending' => null !== $pending ? [
+                'island' => $pending['island'],
+                'islandName' => $this->islandName($pending['island']),
+                'announcedAt' => $pending['announcedAt'],
+                'strikeAt' => $pending['strikeAt'],
+                'ticksLeft' => max(0, $pending['strikeAt'] - $profile->tick()),
+                // rozpoczęta obrona wstrzymuje termin do rozliczenia bitwy
+                'defenseStarted' => null !== $pending['defense'],
+            ] : null,
+            'last' => null !== $last ? [
+                'island' => $last['island'],
+                'islandName' => $this->islandName($last['island']),
+                'tick' => $last['tick'],
+                'held' => $last['held'],
+                'absent' => $last['absent'],
+                'stockpileLost' => $last['stockpileLost'],
+            ] : null,
+        ];
+    }
+
+    private function islandName(string $islandId): string
+    {
+        return $this->islands->byId($islandId)->name ?? $islandId;
     }
 }

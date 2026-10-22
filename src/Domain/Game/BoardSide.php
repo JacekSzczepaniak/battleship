@@ -2,6 +2,8 @@
 
 namespace App\Domain\Game;
 
+use App\Domain\Game\Weapon\WeaponKind;
+
 /**
  * Jedna strona gry: flota na planszy + strzały ODDANE W TĘ stronę (z trafieniami).
  * Game składa się z dwóch takich stron (gracza i przeciwnika) — cała logika
@@ -116,22 +118,22 @@ final class BoardSide
         return null !== $ship && !$this->isSunk($ship);
     }
 
-    /** Czy na polu stoi niezatopiony statek o zadanej długości (nośnik broni). */
-    public function hasUnsunkShipOfLengthAt(int $x, int $y, int $length): bool
+    /** Czy na polu stoi niezatopiony nośnik danej broni (wyrzutnia torpedy). */
+    public function hasUnsunkCarrierAt(int $x, int $y, WeaponKind $weapon): bool
     {
         $ship = $this->shipAtKey($x.':'.$y);
 
-        return null !== $ship && $ship->length === $length && !$this->isSunk($ship);
+        return null !== $ship && $ship->loadout->carries($weapon) && !$this->isSunk($ship);
     }
 
-    /** Czy strona ma jeszcze niezatopiony statek o zadanej długości. */
-    public function hasUnsunkShipOfLength(int $length): bool
+    /** Czy strona ma jeszcze niezatopiony nośnik danej broni. */
+    public function hasUnsunkCarrierOf(WeaponKind $weapon): bool
     {
         if (!$this->hasFleet()) {
             return false;
         }
         foreach ($this->board->ships() as $ship) {
-            if ($ship->length === $length && !$this->isSunk($ship)) {
+            if ($ship->loadout->carries($weapon) && !$this->isSunk($ship)) {
                 return true;
             }
         }
@@ -140,12 +142,12 @@ final class BoardSide
     }
 
     /**
-     * Komórki niezatopionych statków tej strony; $length zawęża do statków
-     * o danej długości (legalne wyrzutnie torped = niszczyciele).
+     * Komórki niezatopionych statków tej strony; $carrying zawęża do nośników
+     * danej broni (legalne wyrzutnie torped).
      *
      * @return list<array{x:int,y:int}>
      */
-    public function unsunkShipCells(?int $length = null): array
+    public function unsunkShipCells(?WeaponKind $carrying = null): array
     {
         if (!$this->hasFleet()) {
             return [];
@@ -153,7 +155,7 @@ final class BoardSide
 
         $out = [];
         foreach ($this->board->ships() as $ship) {
-            if ($this->isSunk($ship) || (null !== $length && $ship->length !== $length)) {
+            if ($this->isSunk($ship) || (null !== $carrying && !$ship->loadout->carries($carrying))) {
                 continue;
             }
             foreach ($ship->cells() as $c) {

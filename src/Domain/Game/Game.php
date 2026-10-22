@@ -2,20 +2,19 @@
 
 namespace App\Domain\Game;
 
+use App\Domain\Game\Weapon\Loadout;
+use App\Domain\Game\Weapon\WeaponKind;
 use App\Domain\Game\Weapon\WeaponSpecs;
 use App\Domain\Shared\GameId;
 
+/**
+ * Bitwa. Broń wynika z wyposażenia floty (Ship::$loadout): każdy statek wnosi
+ * do puli swoje użycia i jest nośnikiem swojej broni. Gdy zatonie ostatni
+ * nośnik danej broni, broń jest niedostępna do końca bitwy. Domyślne
+ * wyposażenie wynika z długości (Loadout::defaultFor), warianty z rulesetu.
+ */
 final class Game
 {
-    /**
-     * Broń wynika ze składu floty: długości statków-nośników. Zatopienie
-     * nośnika odbiera broń do końca bitwy (mapowanie na typy floty wyprawy:
-     * kuter=2, niszczyciel=3, lotniskowiec=4 — bitwa zna tylko długości).
-     */
-    public const SONAR_CARRIER_LENGTH = 2;
-    public const TORPEDO_CARRIER_LENGTH = 3;
-    public const AIR_RAID_CARRIER_LENGTH = 4;
-
     private GameStatus $status = GameStatus::Pending;
 
     /** Strona gracza: jego flota + strzały przeciwnika (AI) w nią oddane. */
@@ -153,7 +152,7 @@ final class Game
             throw new \DomainException('Fleet already placed');
         }
 
-        $this->assertFleetComposition($ships, $this->ruleset->allowedShips());
+        $this->assertFleetComposition($ships, $this->ruleset->allowedShips(), $this->ruleset->variants());
         $this->playerSide->placeFleet($ships);
         $this->status = GameStatus::InProgress;
     }
@@ -170,7 +169,7 @@ final class Game
             throw new \DomainException('Opponent fleet already placed');
         }
 
-        $this->assertFleetComposition($ships, $this->ruleset->opponentShips());
+        $this->assertFleetComposition($ships, $this->ruleset->opponentShips(), $this->ruleset->opponentVariants());
         $this->opponentSide->placeFleet($ships);
     }
 
@@ -443,7 +442,7 @@ final class Game
             throw new \DomainException('Torpedo start outside board');
         }
 
-        if (!$this->playerSide->hasUnsunkShipOfLengthAt($start->x, $start->y, self::TORPEDO_CARRIER_LENGTH)) {
+        if (!$this->playerSide->hasUnsunkCarrierAt($start->x, $start->y, WeaponKind::Torpedo)) {
             throw new \DomainException('Torpedo must be launched from an unsunk destroyer');
         }
 
@@ -481,7 +480,7 @@ final class Game
         }
 
         $radius = $this->resolveSonarRadius('player', $radius);
-        $this->assertWeaponCarrierAfloat($this->playerSide, self::SONAR_CARRIER_LENGTH, 'Sonar requires an unsunk scout ship');
+        $this->assertWeaponCarrierAfloat($this->playerSide, WeaponKind::Sonar, 'Sonar requires an unsunk scout ship');
         $this->consumeWeapon('player', 'sonar');
 
         $target = $this->targetSide();
@@ -537,7 +536,7 @@ final class Game
         }
 
         $this->assertWeaponAvailable('player', 'airRaid');
-        $this->assertWeaponCarrierAfloat($this->playerSide, self::AIR_RAID_CARRIER_LENGTH, 'Air raid requires an unsunk carrier');
+        $this->assertWeaponCarrierAfloat($this->playerSide, WeaponKind::AirRaid, 'Air raid requires an unsunk carrier');
 
         $max = $this->ruleset->weapons()->airRaid->maxArea;
         if (2 * $area->width + 1 > $max->width || 2 * $area->height + 1 > $max->height) {
@@ -566,25 +565,25 @@ final class Game
     // --- Bronie specjalne przeciwnika (AI) — lustrzane wobec broni gracza ---
 
     /**
-     * Komórki niezatopionych niszczycieli AI — legalne wyrzutnie jego torped.
+     * Komórki niezatopionych nośników torped AI — legalne wyrzutnie jego torped.
      *
      * @return list<array{x:int,y:int}>
      */
     public function opponentLaunchableCells(): array
     {
-        return $this->opponentSide->unsunkShipCells(self::TORPEDO_CARRIER_LENGTH);
+        return $this->opponentSide->unsunkShipCells(WeaponKind::Torpedo);
     }
 
-    /** Czy AI ma jeszcze niezatopiony nośnik broni o danej długości. */
-    public function opponentHasWeaponCarrier(int $length): bool
+    /** Czy AI ma jeszcze niezatopiony nośnik danej broni. */
+    public function opponentHasWeaponCarrier(WeaponKind $weapon): bool
     {
-        return $this->opponentSide->hasUnsunkShipOfLength($length);
+        return $this->opponentSide->hasUnsunkCarrierOf($weapon);
     }
 
-    /** Rzuca, gdy nośnik broni danej strony został zatopiony. */
-    private function assertWeaponCarrierAfloat(BoardSide $side, int $length, string $message): void
+    /** Rzuca, gdy zatonął ostatni nośnik broni danej strony. */
+    private function assertWeaponCarrierAfloat(BoardSide $side, WeaponKind $weapon, string $message): void
     {
-        if (!$side->hasUnsunkShipOfLength($length)) {
+        if (!$side->hasUnsunkCarrierOf($weapon)) {
             throw new \DomainException($message);
         }
     }
@@ -611,7 +610,7 @@ final class Game
             throw new \DomainException('Torpedo start outside board');
         }
 
-        if (!$this->opponentSide->hasUnsunkShipOfLengthAt($start->x, $start->y, self::TORPEDO_CARRIER_LENGTH)) {
+        if (!$this->opponentSide->hasUnsunkCarrierAt($start->x, $start->y, WeaponKind::Torpedo)) {
             throw new \DomainException('Torpedo must be launched from an unsunk destroyer');
         }
 
@@ -645,7 +644,7 @@ final class Game
         }
 
         $radius = $this->resolveSonarRadius('opponent', $radius);
-        $this->assertWeaponCarrierAfloat($this->opponentSide, self::SONAR_CARRIER_LENGTH, 'Sonar requires an unsunk scout ship');
+        $this->assertWeaponCarrierAfloat($this->opponentSide, WeaponKind::Sonar, 'Sonar requires an unsunk scout ship');
         $this->consumeWeapon('opponent', 'sonar');
 
         $w = $this->ruleset->boardSize()->width;
@@ -692,7 +691,7 @@ final class Game
         }
 
         $this->assertWeaponAvailable('opponent', 'airRaid');
-        $this->assertWeaponCarrierAfloat($this->opponentSide, self::AIR_RAID_CARRIER_LENGTH, 'Air raid requires an unsunk carrier');
+        $this->assertWeaponCarrierAfloat($this->opponentSide, WeaponKind::AirRaid, 'Air raid requires an unsunk carrier');
 
         $max = $this->ruleset->opponentWeapons()->airRaid->maxArea;
         if (2 * $area->width + 1 > $max->width || 2 * $area->height + 1 > $max->height) {
@@ -727,18 +726,31 @@ final class Game
     }
 
     /**
-     * @param Ship[]         $ships
-     * @param array<int,int> $expected
+     * Flota musi zgadzać się ze składem co do długości i wyposażenia statków.
+     *
+     * @param Ship[]                   $ships
+     * @param array<int,int>           $expected
+     * @param array<int,list<Loadout>> $variants
      */
-    private function assertFleetComposition(array $ships, array $expected): void
+    private function assertFleetComposition(array $ships, array $expected, array $variants): void
     {
-        $got = [];
-        foreach ($ships as $s) {
-            $got[$s->length] = ($got[$s->length] ?? 0) + 1;
-        }
-        ksort($expected);
-        ksort($got);
-        if ($got !== $expected) {
+        $count = static function (array $entries): array {
+            $out = [];
+            foreach ($entries as [$length, $loadout]) {
+                $key = $length.'|'.$loadout->key();
+                $out[$key] = ($out[$key] ?? 0) + 1;
+            }
+            ksort($out);
+
+            return $out;
+        };
+
+        $got = $count(array_map(static fn (Ship $s) => [$s->length, $s->loadout], $ships));
+        $want = $count(array_map(
+            static fn (array $s) => [$s['length'], $s['loadout']],
+            FleetComposition::roster($expected, $variants),
+        ));
+        if ($got !== $want) {
             throw new \DomainException('Invalid fleet composition');
         }
     }

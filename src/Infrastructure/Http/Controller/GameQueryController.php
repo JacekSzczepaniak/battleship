@@ -70,14 +70,20 @@ final class GameQueryController
         // Finished raportujemy wprost z domeny
         $finished = $game->isFinished();
 
-        // player fleet export (same format as POST /fleet payload items)
+        // player fleet export (same format as POST /fleet payload items;
+        // `w` tylko przy wyposażeniu innym niż domyślne dla długości, #95)
         $playerFleet = array_map(static function ($s) {
-            return [
+            $item = [
                 'x' => $s->start->x,
                 'y' => $s->start->y,
                 'o' => $s->orientation->value,
                 'l' => $s->length,
             ];
+            if (!$s->hasDefaultLoadout()) {
+                $item['w'] = $s->loadout->toArray();
+            }
+
+            return $item;
         }, $game->fleet() ?? []);
 
         $turn = $finished ? 'none' : $game->turn();

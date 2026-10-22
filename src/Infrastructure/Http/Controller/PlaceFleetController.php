@@ -24,18 +24,23 @@ final class PlaceFleetController
             return new JsonResponse(['error' => 'Invalid payload: expected {"ships":[...]}'], 400);
         }
 
-        // oczekujemy elementów: {x:int,y:int,o:"H"|"V",l:int}
+        // oczekujemy elementów: {x:int,y:int,o:"H"|"V",l:int,w?:{broń:użycia}}
+        // (w = wyposażenie statku z wariantem, #95; brak = domyślne dla długości)
         $ships = [];
         foreach ($data['ships'] as $i => $s) {
             if (!isset($s['x'], $s['y'], $s['o'], $s['l'])) {
                 return new JsonResponse(['error' => "Invalid ship at index $i"], 400);
             }
-            $ships[] = [
+            $ship = [
                 'x' => (int) $s['x'],
                 'y' => (int) $s['y'],
                 'o' => (string) $s['o'],
                 'l' => (int) $s['l'],
             ];
+            if (isset($s['w'])) {
+                $ship['w'] = $s['w'];
+            }
+            $ships[] = $ship;
         }
 
         try {

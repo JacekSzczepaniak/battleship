@@ -5,12 +5,14 @@ namespace App\Infrastructure\Persistence\Doctrine\Mapper;
 use App\Domain\Game\BoardSize;
 use App\Domain\Game\ClassicRuleset;
 use App\Domain\Game\Coordinate;
+use App\Domain\Game\FleetComposition;
 use App\Domain\Game\FunRuleset;
 use App\Domain\Game\Game;
 use App\Domain\Game\GameStatus;
 use App\Domain\Game\Orientation;
 use App\Domain\Game\Ruleset;
 use App\Domain\Game\Ship;
+use App\Domain\Game\Weapon\Loadout;
 use App\Domain\Shared\GameId;
 
 final class GameSnapshotMapper
@@ -21,27 +23,13 @@ final class GameSnapshotMapper
 
         $fleet = null;
         if (null !== $game->fleet()) {
-            $fleet = array_map(function (Ship $s) {
-                return [
-                    'x' => $s->start->x,
-                    'y' => $s->start->y,
-                    'o' => $s->orientation->value,
-                    'l' => $s->length,
-                ];
-            }, $game->fleet());
+            $fleet = array_map($this->shipToArray(...), $game->fleet());
         }
 
         // opponent fleet (optional)
         $opponentFleet = null;
         if (null !== $game->opponentFleet()) {
-            $opponentFleet = array_map(function (Ship $s) {
-                return [
-                    'x' => $s->start->x,
-                    'y' => $s->start->y,
-                    'o' => $s->orientation->value,
-                    'l' => $s->length,
-                ];
-            }, $game->opponentFleet());
+            $opponentFleet = array_map($this->shipToArray(...), $game->opponentFleet());
         }
 
         // shots with results
@@ -58,6 +46,9 @@ final class GameSnapshotMapper
                 'ships' => $game->ruleset()->allowedShips(),
                 // skład przeciwnika tylko, gdy nie jest lustrzany (bonus pełnej bandery, #79)
                 'opponentShips' => $game->ruleset()->opponentShips() !== $game->ruleset()->allowedShips() ? $game->ruleset()->opponentShips() : null,
+                // warianty wyposażenia (#95) tylko, gdy są; wroga tylko, gdy nie są lustrzane
+                'variants' => $this->variantsOrNull($game->ruleset()->variants()),
+                'opponentVariants' => $this->opponentVariantsOrNull($game->ruleset()),
             ],
             'fleet' => $fleet,
             'shots' => $shots,
@@ -106,11 +97,7 @@ final class GameSnapshotMapper
         if (isset($state['fleet']) && is_array($state['fleet'])) {
             $ships = [];
             foreach ($state['fleet'] as $s) {
-                $ships[] = new Ship(
-                    new Coordinate((int) $s['x'], (int) $s['y']),
-                    Orientation::from((string) $s['o']),
-                    (int) $s['l']
-                );
+                $ships[] = $this->shipFromArray($s);
             }
             $game->setFleetFromSnapshot($ships);
         }
@@ -122,11 +109,7 @@ final class GameSnapshotMapper
             $ships = [];
             foreach ($state['opponentFleet'] as $s) {
                 if (isset($s['x'], $s['y'], $s['o'], $s['l'])) {
-                    $ships[] = new Ship(
-                        new Coordinate((int) $s['x'], (int) $s['y']),
-                        Orientation::from((string) $s['o']),
-                        (int) $s['l']
-                    );
+                    $ships[] = $this->shipFromArray($s);
                 }
             }
             if ([] !== $ships) {
@@ -189,10 +172,64 @@ final class GameSnapshotMapper
         // brak składu przeciwnika = lustrzany
         $ships = $this->compositionOrNull($data['ships'] ?? null);
         $opponentShips = $this->compositionOrNull($data['opponentShips'] ?? null);
+        // warianty wyposażenia (#95): brak = same domyślne, brak wroga = lustrzane
+        $variants = FleetComposition::variantsFromArray($data['variants'] ?? null);
+        $opponentVariants = isset($data['opponentVariants']) ? FleetComposition::variantsFromArray($data['opponentVariants']) : null;
 
         return 'fun' === ($data['type'] ?? 'classic')
-            ? new FunRuleset($size, $ships, $opponentShips)
-            : new ClassicRuleset($size, $ships, $opponentShips);
+            ? new FunRuleset($size, $ships, $opponentShips, $variants, $opponentVariants)
+            : new ClassicRuleset($size, $ships, $opponentShips, $variants, $opponentVariants);
+    }
+
+    /**
+     * Statek w snapshotcie; `w` (wyposażenie) tylko, gdy inne niż domyślne
+     * dla długości — snapshoty sprzed #95 i floty bez wariantów się nie zmieniają.
+     *
+     * @return array{x:int,y:int,o:string,l:int,w?:array<string,int>}
+     */
+    private function shipToArray(Ship $s): array
+    {
+        $out = [
+            'x' => $s->start->x,
+            'y' => $s->start->y,
+            'o' => $s->orientation->value,
+            'l' => $s->length,
+        ];
+        if (!$s->hasDefaultLoadout()) {
+            $out['w'] = $s->loadout->toArray();
+        }
+
+        return $out;
+    }
+
+    /** @param array<string,mixed> $s */
+    private function shipFromArray(array $s): Ship
+    {
+        return new Ship(
+            new Coordinate((int) $s['x'], (int) $s['y']),
+            Orientation::from((string) $s['o']),
+            (int) $s['l'],
+            isset($s['w']) && is_array($s['w']) ? Loadout::fromArray($s['w']) : null,
+        );
+    }
+
+    /**
+     * @param array<int,list<Loadout>> $variants
+     *
+     * @return array<int,list<array<string,int>>>|null
+     */
+    private function variantsOrNull(array $variants): ?array
+    {
+        return [] !== $variants ? FleetComposition::variantsToArray($variants) : null;
+    }
+
+    /** @return array<int,list<array<string,int>>>|null */
+    private function opponentVariantsOrNull(Ruleset $ruleset): ?array
+    {
+        $mirror = FleetComposition::variantsWithin($ruleset->variants(), $ruleset->opponentShips());
+        $own = FleetComposition::variantsToArray($ruleset->opponentVariants());
+
+        return $own !== FleetComposition::variantsToArray($mirror) ? $own : null;
     }
 
     /** @return array<int,int>|null */

@@ -2,8 +2,11 @@
 
 namespace App\Domain\Game;
 
+use App\Domain\Game\Weapon\Loadout;
+
 /**
- * Skład floty jako mapa: długość statku => liczba sztuk.
+ * Skład floty jako mapa: długość statku => liczba sztuk, plus opcjonalne
+ * warianty wyposażenia (statki tej samej długości z inną bronią, #95).
  * Domyślnym składem jest flota klasyczna; niestandardowe składy
  * (np. flota wyprawy budowana w stoczniach) przekazuje się do rulesetu.
  */
@@ -32,6 +35,131 @@ final class FleetComposition
                 throw new \InvalidArgumentException('Invalid ship count in fleet composition');
             }
         }
+    }
+
+    /**
+     * Warianty wyposażenia: długość => wyposażenia statków tej długości, które
+     * odbiegają od domyślnego (Loadout::defaultFor). Pozostałe statki danej
+     * długości mają wyposażenie domyślne. Wariantów nie może być więcej niż statków.
+     *
+     * @param array<int,int>                $ships
+     * @param array<int,list<Loadout>>|null $variants
+     */
+    public static function assertValidVariants(array $ships, ?array $variants): void
+    {
+        foreach ($variants ?? [] as $length => $loadouts) {
+            if (count($loadouts) > ($ships[$length] ?? 0)) {
+                throw new \InvalidArgumentException('Ship variants exceed fleet composition');
+            }
+        }
+    }
+
+    /**
+     * Wyposażenia wszystkich statków floty (warianty + domyślne dla reszty).
+     *
+     * @param array<int,int>           $ships
+     * @param array<int,list<Loadout>> $variants
+     *
+     * @return list<array{length:int, loadout:Loadout}>
+     */
+    public static function roster(array $ships, array $variants): array
+    {
+        ksort($ships);
+        $roster = [];
+        foreach ($ships as $length => $count) {
+            $own = $variants[$length] ?? [];
+            for ($i = 0; $i < $count; ++$i) {
+                $roster[] = ['length' => $length, 'loadout' => $own[$i] ?? Loadout::defaultFor($length)];
+            }
+        }
+
+        return $roster;
+    }
+
+    /**
+     * Warianty przycięte do składu (lustro wroga przy mniejszej flocie, #79):
+     * przy braku miejsca odpadają najpierw statki z wyposażeniem domyślnym.
+     *
+     * @param array<int,list<Loadout>> $variants
+     * @param array<int,int>           $ships
+     *
+     * @return array<int,list<Loadout>>
+     */
+    public static function variantsWithin(array $variants, array $ships): array
+    {
+        $out = [];
+        foreach ($variants as $length => $loadouts) {
+            $kept = array_slice($loadouts, 0, $ships[$length] ?? 0);
+            if ([] !== $kept) {
+                $out[$length] = $kept;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Nadaje wygenerowanej flocie wyposażenie z wariantów: pierwsze statki
+     * danej długości dostają warianty, reszta zostaje z domyślnym.
+     *
+     * @param Ship[]                   $ships
+     * @param array<int,list<Loadout>> $variants
+     *
+     * @return Ship[]
+     */
+    public static function equip(array $ships, array $variants): array
+    {
+        $next = [];
+        $out = [];
+        foreach ($ships as $ship) {
+            $i = $next[$ship->length] = ($next[$ship->length] ?? -1) + 1;
+            $variant = $variants[$ship->length][$i] ?? null;
+            $out[] = null === $variant ? $ship : new Ship($ship->start, $ship->orientation, $ship->length, $variant);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Warianty z kształtu snapshotu/API: {długość: [{broń: użycia}, …]}.
+     *
+     * @return array<int,list<Loadout>>
+     */
+    public static function variantsFromArray(mixed $raw): array
+    {
+        if (null === $raw || [] === $raw) {
+            return [];
+        }
+        if (!is_array($raw)) {
+            throw new \InvalidArgumentException('Invalid ship variants');
+        }
+        $variants = [];
+        foreach ($raw as $length => $loadouts) {
+            if (!is_array($loadouts) || !array_is_list($loadouts)) {
+                throw new \InvalidArgumentException('Invalid ship variants');
+            }
+            foreach ($loadouts as $loadout) {
+                if (!is_array($loadout)) {
+                    throw new \InvalidArgumentException('Invalid ship variants');
+                }
+                $variants[(int) $length][] = Loadout::fromArray($loadout);
+            }
+        }
+
+        return $variants;
+    }
+
+    /**
+     * @param array<int,list<Loadout>> $variants
+     *
+     * @return array<int,list<array<string,int>>>
+     */
+    public static function variantsToArray(array $variants): array
+    {
+        return array_map(
+            static fn (array $loadouts) => array_map(static fn (Loadout $l) => $l->toArray(), $loadouts),
+            $variants,
+        );
     }
 
     /**

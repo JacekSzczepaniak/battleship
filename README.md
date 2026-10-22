@@ -114,9 +114,12 @@ Interfejs to osobna aplikacja Vue w `frontend/`, rozmawiająca z backendem wył�
 
 Dwa konteksty, połączone tylko identyfikatorem gry:
 
-- **Bitwa** — agregat `Domain/Game/Game` z dwiema stronami planszy. Bronie wynikają ze składu
-  floty: kuter (2 pola) daje sonar, niszczyciel (3) torpedę, lotniskowiec (4) nalot; zatopiony
-  nośnik odbiera broń. Transportowiec (5) broni nie daje — w bitwie to zwykły cel. Parametry broni opisuje `Domain/Game/Weapon/*Spec`.
+- **Bitwa** — agregat `Domain/Game/Game` z dwiema stronami planszy. Bronie wynikają z wyposażenia
+  statków (`Domain/Game/Weapon/Loadout`): domyślnie kuter (2 pola) daje sonar, niszczyciel (3)
+  torpedę, lotniskowiec (4) nalot; zatopienie ostatniego nośnika danej broni ją odbiera.
+  Transportowiec (5) broni nie daje — w bitwie to zwykły cel. Warianty statków (inne wyposażenie
+  tej samej długości) podaje skład floty w rulesecie, a wróg dostaje je lustrzanie. Parametry
+  broni opisuje `Domain/Game/Weapon/*Spec`.
 - **Wyprawa** — agregat `Domain/Expedition/CaptainProfile`: XP i ranga (`Rank`, 9 stopni),
   flota jako majątek (statki giną albo czekają na remont), materiały, mapa świata z mgłą
   generowana z seeda profilu, rejestr bitew o wyspy.
@@ -159,9 +162,9 @@ Wszystkie ścieżki pod `/api`, JSON. Pełna lista: `docker compose exec app php
 
 | metoda | ścieżka | co robi |
 |---|---|---|
-| `POST` | `/games` | nowa gra: `mode` (`classic`/`fun`), `width`, `height`, opcjonalnie `ships` |
+| `POST` | `/games` | nowa gra: `mode` (`classic`/`fun`), `width`, `height`, opcjonalnie `ships` i `variants` (`{"3": [{"sonar": 2}]}`) |
 | `GET` | `/games/{id}` | projekcja gry: plansze, mgła wroga, bronie, tura |
-| `POST` | `/games/{id}/fleet` | rozstawienie floty gracza |
+| `POST` | `/games/{id}/fleet` | rozstawienie floty gracza; statek z wariantem niesie `w` (`{"sonar": 2}`) |
 | `POST` | `/games/{id}/shots` | salwa w pole `x`, `y` |
 | `GET` | `/games/{id}/shots` | strzały gracza z wynikami |
 | `POST` | `/games/{id}/torpedo` | torpeda z własnego niszczyciela (`x`, `y`, `direction`) |

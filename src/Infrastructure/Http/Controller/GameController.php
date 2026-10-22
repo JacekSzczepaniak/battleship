@@ -4,6 +4,7 @@ namespace App\Infrastructure\Http\Controller;
 
 use App\Application\Game\CreateGame;
 use App\Application\Game\PlaceFleet;
+use App\Domain\Game\FleetComposition;
 use App\Infrastructure\Http\Error\ApiException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -47,7 +48,18 @@ final class GameController
             $ships = $parsed;
         }
 
-        $game = $this->createGame->handle($w, $h, $mode, $ships);
+        // Opcjonalne warianty wyposażenia (#95): {długość: [{broń: użycia}, …]};
+        // statki z wariantem gracz wystawia z polem `w` w POST /fleet
+        $variants = $data['variants'] ?? null;
+        if (null !== $variants) {
+            try {
+                $variants = FleetComposition::variantsFromArray($variants);
+            } catch (\InvalidArgumentException) {
+                throw new ApiException('Invalid variants: expected map {length: [{weapon: uses}]}', 'VALIDATION_ERROR', 400);
+            }
+        }
+
+        $game = $this->createGame->handle($w, $h, $mode, $ships, variants: $variants);
 
         return new JsonResponse([
             'id' => (string) $game->id(),

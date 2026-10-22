@@ -3,8 +3,8 @@
 namespace App\Domain\Expedition;
 
 /**
- * Typ statku floty wyprawy. Długość wiąże typ z bitwą (agregat Game zna tylko
- * długości), a koszty i bramki (ranga, poziom stoczni) napędzają ekonomię.
+ * Typ statku floty wyprawy. Długość wiąże typ z bitwą (z długości wynika też
+ * domyślne wyposażenie statku, Loadout::defaultFor), a koszty i bramki (ranga, poziom stoczni) napędzają ekonomię.
  * Tratwa jest zawsze darmowa — bezpiecznik anty-softlock: rozbitek zawsze
  * może wypłynąć (docs/GAME_DESIGN.md, filar 5).
  */
@@ -24,7 +24,7 @@ enum ShipType: string
             self::Kuter => 2,
             self::Niszczyciel => 3,
             self::Lotniskowiec => 4,
-            // długość spoza nośników broni (Game::*_CARRIER_LENGTH) — w bitwie zwykły cel
+            // długość bez domyślnej broni (Loadout::defaultFor) — w bitwie zwykły cel
             self::Transportowiec => 5,
         };
     }

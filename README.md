@@ -150,7 +150,8 @@ wtedy pierwszą salwę zaraz po rozstawieniu floty gracza. Przy pełnej banderze
 akwenu) pierwszy strzał należy do gracza, a napastnik płynie bez największego statku — skład floty
 AI może się wtedy różnić od składu gracza (`opponentShips` w `GET /api/games/{id}`). Na posiadanej
 wyspie stawia się budynki osady (tartak i kopalnia podwajają urobek złoża, rozbudowa stoczni
-podnosi jej poziom o 1); bez bandery budynki stoją nieczynne.
+podnosi jej poziom o 1, fort poza Zatoką Rozbitka zamienia utratę wyspy pod nieobecność floty
+w grabież połowy magazynu); bez bandery budynki stoją nieczynne.
 
 ## API
 

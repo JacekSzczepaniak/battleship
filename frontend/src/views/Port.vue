@@ -99,9 +99,10 @@
                     <div v-if="expedition.counterattack.pending" class="counterattack" :class="{ defending: expedition.counterattack.pending.defenseStarted }">
                         {{ expedition.counterattack.pending.defenseStarted ? '🛡️' : '⚔️' }} {{ pendingLabel(expedition.counterattack.pending) }}
                         <div v-if="expedition.counterattack.pending.fullFlag" class="full-flag">🚩 {{ FULL_FLAG_BONUS }}</div>
+                        <div v-if="expedition.counterattack.pending.fort && !expedition.counterattack.pending.defenseStarted" class="fort">🏰 {{ FORT_GUARD }}</div>
                     </div>
                     <div v-else-if="expedition.counterattack.last" class="flags" :class="{ lost: !expedition.counterattack.last.held }">
-                        {{ expedition.counterattack.last.held ? '🛡️' : '🏴' }} {{ lastLabel(expedition.counterattack.last) }}
+                        {{ lastIcon(expedition.counterattack.last) }} {{ lastLabel(expedition.counterattack.last) }}
                     </div>
 
                     <div class="where">
@@ -170,7 +171,7 @@ import { getTrainingPrefs } from '../lib/battleSession';
 import { carriedWeapon, shipTypeForLength } from '../lib/ships';
 import { RESOURCES, formatResources, isEmpty, totalResources } from '../lib/resources';
 import { depositLabel, depositState, economyIslands } from '../lib/economy';
-import { canDefend, FULL_FLAG_BONUS, lastLabel, pendingLabel, ticksLabel } from '../lib/counterattack';
+import { canDefend, FORT_GUARD, FULL_FLAG_BONUS, lastIcon, lastLabel, pendingLabel, ticksLabel } from '../lib/counterattack';
 
 const router = useRouter();
 
@@ -534,6 +535,7 @@ h1 span { color: var(--info); }
 .counterattack { font: 600 12px var(--font-mono); color: var(--danger); border: 1px solid var(--danger); border-radius: 8px; padding: 6px 9px; margin-top: 6px; }
 .counterattack.defending { color: var(--info); border-color: var(--info); }
 .counterattack .full-flag { color: var(--info); margin-top: 3px; }
+.counterattack .fort { color: var(--warn); margin-top: 3px; }
 
 .where { display: flex; align-items: center; gap: 8px; font: 500 12px var(--font-mono); color: var(--text-muted); }
 .where b { color: var(--text); font-weight: 600; }

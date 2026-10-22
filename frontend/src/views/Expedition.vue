@@ -60,7 +60,7 @@
                 <span v-if="!counterattack.pending.defenseStarted" class="muted">{{ defenseHint(counterattack.pending) }}</span>
             </section>
             <p v-if="counterattack.last" class="last-counterattack" :class="{ lost: !counterattack.last.held }">
-                {{ counterattack.last.held ? '🛡️' : '🏴' }} {{ lastLabel(counterattack.last) }}
+                {{ lastIcon(counterattack.last) }} {{ lastLabel(counterattack.last) }}
             </p>
 
             <!-- Mapa morza: mgła, wyspy, pozycja -->
@@ -277,7 +277,7 @@ import { fieldsLabel } from '../lib/ships';
 import { depositLabel, depositState, economyIslands, whereToFind } from '../lib/economy';
 import CargoPanel from '../components/CargoPanel.vue';
 import SettlementPanel from '../components/SettlementPanel.vue';
-import { canDefend, defenseHint, FULL_FLAG_BONUS, lastLabel, pendingLabel, ticksLabel } from '../lib/counterattack';
+import { canDefend, defenseHint, FULL_FLAG_BONUS, lastIcon, lastLabel, pendingLabel, ticksLabel } from '../lib/counterattack';
 import {
     addResources, covers, formatResources, isEmpty, missing, totalResources,
 } from '../lib/resources';

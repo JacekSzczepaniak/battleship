@@ -150,8 +150,8 @@ final class GetExpedition
 
     /**
      * Zapowiedź kontrataku (wyspa, za ile tików uderzenie, bonus pełnej
-     * bandery) oraz ostatnie rozstrzygnięcie — także utrata wyspy pod
-     * nieobecność kapitana.
+     * bandery, fort) oraz ostatnie rozstrzygnięcie — także utrata wyspy albo
+     * grabież pod fortem pod nieobecność kapitana.
      *
      * @return array{pending: array<string,mixed>|null, last: array<string,mixed>|null}
      */
@@ -171,6 +171,8 @@ final class GetExpedition
                 'defenseStarted' => null !== $pending['defense'],
                 // pełna bandera (#79): obrońca strzela pierwszy, napastnik bez największego statku
                 'fullFlag' => $profile->hasFullFlag($world),
+                // czynny fort (#81): bez obrony wyspa zostaje pod banderą, magazyn traci połowę
+                'fort' => $profile->hasActiveBuilding($pending['island'], BuildingType::Fort),
             ] : null,
             'last' => null !== $last ? [
                 'island' => $last['island'],
@@ -178,6 +180,8 @@ final class GetExpedition
                 'tick' => $last['tick'],
                 'held' => $last['held'],
                 'absent' => $last['absent'],
+                // nieobecność pod fortem: grabież połowy magazynu, bandera została
+                'plundered' => $last['plundered'],
                 'stockpileLost' => $last['stockpileLost'],
             ] : null,
         ];

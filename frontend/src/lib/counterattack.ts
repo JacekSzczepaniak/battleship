@@ -21,12 +21,19 @@ export function pendingLabel(c: PendingCounterattackDTO): string {
         : `Kontratak: ${c.islandName} — uderzenie za ${ticksLabel(c.ticksLeft)} (tik ${c.strikeAt})`;
 }
 
-/** Jak przebiegnie obrona: kolejność strzałów zależy od pełnej bandery (#79). */
+/**
+ * Jak przebiegnie obrona: kolejność strzałów zależy od pełnej bandery (#79),
+ * a skutek nieobecności od fortu na wyspie (#81).
+ */
 export function defenseHint(c: PendingCounterattackDTO): string {
-    return c.fullFlag
-        ? 'Stań flotą na wyspie i przyjmij bitwę. Bez obrony wyspa przepada razem z połową magazynu.'
-        : 'Stań flotą na wyspie i przyjmij bitwę — napastnik strzela pierwszy. Bez obrony wyspa przepada razem z połową magazynu.';
+    const battle = c.fullFlag
+        ? 'Stań flotą na wyspie i przyjmij bitwę.'
+        : 'Stań flotą na wyspie i przyjmij bitwę — napastnik strzela pierwszy.';
+    return `${battle} ${c.fort ? `Bez obrony ${FORT_GUARD.toLowerCase()}.` : 'Bez obrony wyspa przepada razem z połową magazynu.'}`;
 }
+
+/** Skutek nieobecności na wyspie z fortem w zapowiedzi (zasada telegrafowania, #81). */
+export const FORT_GUARD = 'Fort obroni wyspę przed utratą, magazyn straci połowę';
 
 /** Bonus pełnej bandery w zapowiedzi (zasada telegrafowania, #79). */
 export const FULL_FLAG_BONUS = 'Pełna bandera: strzelasz pierwszy, a napastnik płynie bez największego statku';
@@ -47,12 +54,18 @@ export function battleBonusLabel(missing: number | null): string {
         : 'Pełna bandera: strzelasz pierwszy (napastnik ma jeden statek, więc płynie w pełnym składzie)';
 }
 
-/** Ostatnie rozstrzygnięcie: obrona, przegrana obrona albo utrata pod nieobecność. */
+/** Ostatnie rozstrzygnięcie: obrona, przegrana obrona, grabież pod fortem albo utrata pod nieobecność. */
 export function lastLabel(c: LastCounterattackDTO): string {
     if (c.held) return `Tik ${c.tick} · wyspa obroniona: ${c.islandName} — bandera została`;
     const lost = formatResources(c.stockpileLost, 'nic — magazyn był pusty');
+    if (c.plundered) return `Tik ${c.tick} · grabież: ${c.islandName} (nikt nie stanął do obrony) — fort utrzymał wyspę, z magazynu przepadło: ${lost}`;
     const why = c.absent ? 'nikt nie stanął do obrony' : 'obrona przegrana';
     return `Tik ${c.tick} · wyspa utracona: ${c.islandName} (${why}) — z magazynu przepadło: ${lost}`;
+}
+
+/** Ikona rozstrzygnięcia: obrona, grabież pod fortem albo utrata wyspy. */
+export function lastIcon(c: LastCounterattackDTO): string {
+    return c.held ? '🛡️' : c.plundered ? '🏰' : '🏴';
 }
 
 /** Czy na tej wyspie można teraz przyjąć bitwę obronną (flota na miejscu sprawdzana osobno). */

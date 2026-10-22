@@ -100,9 +100,9 @@ final class CaptainProfile
 
     /**
      * Ostatnie rozstrzygnięcie kontrataku — do komunikatu w UI, zwłaszcza
-     * o utracie wyspy pod nieobecność kapitana.
+     * o utracie wyspy albo grabieży pod fortem (#81) pod nieobecność kapitana.
      *
-     * @var array{island: string, tick: int, held: bool, absent: bool, stockpileLost: array{wood:int, steel:int, gold:int}}|null
+     * @var array{island: string, tick: int, held: bool, absent: bool, plundered: bool, stockpileLost: array{wood:int, steel:int, gold:int}}|null
      */
     private ?array $lastCounterattack = null;
 
@@ -546,7 +546,7 @@ final class CaptainProfile
      * urobek złóż — deterministycznie z seed+tik, bez zegara). Każda akcja
      * zmieniająca bandery woła wcześniej ensureWorldState(), więc rzut dla
      * tiku widzi stan profilu z tego tiku. Uderzenie bez rozpoczętej obrony
-     * odbiera wyspę (nieobecność nie kosztuje floty).
+     * odbiera wyspę, a pod fortem ją plądruje (nieobecność nie kosztuje floty).
      */
     private function rollCounterattacks(WorldMap $world): void
     {
@@ -580,8 +580,10 @@ final class CaptainProfile
 
     /**
      * Rozstrzyga kontratak w toku: obroniona wyspa zostaje pod banderą,
-     * utracona traci banderę, złoże i połowę magazynu. Od tego tiku liczy się
-     * spokój przed następną zapowiedzią.
+     * utracona traci banderę, złoże i połowę magazynu. Nieobecność na wyspie
+     * z czynnym fortem (#81) kończy się grabieżą: przepada połowa magazynu,
+     * a bandera, złoże i budynki zostają. Przegranej obrony fort nie łagodzi.
+     * Od tego tiku liczy się spokój przed następną zapowiedzią.
      */
     private function resolveCounterattack(int $tick, bool $held, bool $absent, ?WorldMap $world = null): void
     {
@@ -592,9 +594,10 @@ final class CaptainProfile
         $this->counterattack = null;
         $this->counterattackCalmFrom = $tick;
 
+        $plundered = !$held && $absent && $this->hasActiveBuilding($islandId, BuildingType::Fort);
         $lost = Resources::none();
         if (!$held) {
-            // urobek złoża należy się do tiku uderzenia — potem złoże staje
+            // urobek złoża należy się do tiku uderzenia — potem złoże staje, chyba że fort utrzymał wyspę
             $island = $world?->deposits()[$islandId] ?? null;
             if (null !== $island) {
                 $this->accrueDeposit($islandId, $island, $tick);
@@ -602,10 +605,12 @@ final class CaptainProfile
             $stock = $this->stockpile($islandId);
             $lost = new Resources(intdiv($stock->wood, 2), intdiv($stock->steel, 2), intdiv($stock->gold, 2));
             $this->stockpiles[$islandId] = $stock->subtract($lost);
-            unset($this->ownedIslands[$islandId], $this->depositTicks[$islandId]);
+            if (!$plundered) {
+                unset($this->ownedIslands[$islandId], $this->depositTicks[$islandId]);
+            }
         }
 
-        $this->lastCounterattack = ['island' => $islandId, 'tick' => $tick, 'held' => $held, 'absent' => $absent, 'stockpileLost' => $lost->toArray()];
+        $this->lastCounterattack = ['island' => $islandId, 'tick' => $tick, 'held' => $held, 'absent' => $absent, 'plundered' => $plundered, 'stockpileLost' => $lost->toArray()];
     }
 
     /**
@@ -984,7 +989,7 @@ final class CaptainProfile
         return $this->counterattack;
     }
 
-    /** @return array{island: string, tick: int, held: bool, absent: bool, stockpileLost: array{wood:int, steel:int, gold:int}}|null */
+    /** @return array{island: string, tick: int, held: bool, absent: bool, plundered: bool, stockpileLost: array{wood:int, steel:int, gold:int}}|null */
     public function lastCounterattack(): ?array
     {
         return $this->lastCounterattack;
@@ -1098,7 +1103,7 @@ final class CaptainProfile
     /**
      * Stan kontrataków do snapshotu.
      *
-     * @return array{pending: array{island: string, announcedAt: int, strikeAt: int, defense: ?string}|null, calmFrom: int, rolledTo: int, last: array{island: string, tick: int, held: bool, absent: bool, stockpileLost: array{wood:int, steel:int, gold:int}}|null}
+     * @return array{pending: array{island: string, announcedAt: int, strikeAt: int, defense: ?string}|null, calmFrom: int, rolledTo: int, last: array{island: string, tick: int, held: bool, absent: bool, plundered: bool, stockpileLost: array{wood:int, steel:int, gold:int}}|null}
      */
     public function counterattackState(): array
     {

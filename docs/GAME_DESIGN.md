@@ -17,14 +17,15 @@ wyspa:  wydobycie → transport → stocznia/osada → technologia
         └── wszystko, co daje wyspa, wraca na morze ──┘
 ```
 
-## Co już działa (zrealizowany „wstęp", stan po 2026-10-21)
+## Co już działa (zrealizowany „wstęp", stan po 2026-10-22)
 
 Bitwa (classic/fun, bronie specjalne z nośników: sonar=kuter, torpeda=
 niszczyciel, nalot=lotniskowiec; zatopiony nośnik odbiera broń) · profil
 kapitana (XP nigdy nie maleje, 9 rang od rozbitka do admirała — progi
 w Filarze VIII; licznik zatopionych jednostek wroga) · flota jako majątek
 (budowa/remont, stocznie, wygrana→remont / przegrana→strata) · rozbudowa
-stoczni w osadzie (#82: Zatoka pod banderą 1→2) · wolne morze
+stoczni w osadzie (#82: Zatoka pod banderą 1→2) · fort w osadzie (#81:
+nieobecność przy kontrataku to grabież połowy magazynu, wyspa zostaje) · wolne morze
 12×12 z mgłą, deterministyczne z seeda profilu · kartografia pasywna ·
 sztormy przy pierwszym wpłynięciu na sektor · geografia=logistyka (bitwa/stocznia
 wymagają obecności) · bandery na wyspach i kontrataki z bitwą obronną; pełna
@@ -93,6 +94,15 @@ podnosi stocznię poziomu 1–2 o jeden poziom, więc w Zatoce pod banderą
 powstają niszczyciel i transportowiec. Bez bandery stocznia wraca do poziomu
 z katalogu. Sygnałowa (poziom 3) i wyspy bez stoczni jej nie dostaną.
 
+✅ (#81) Fort (40 drewna, 40 stali, 10 złota) to budynek osady na dowolnej
+posiadanej wyspie poza Zatoką Rozbitka. Kontratak na wyspę z fortem, gdy do
+uderzenia nikt nie rozpoczął obrony, kończy się grabieżą: połowa magazynu
+przepada, a bandera, złoże i budynki zostają. Kontratak jest rozstrzygnięty,
+więc 8 tików spokoju liczy się od uderzenia. Zapowiedź mówi, że fort obroni
+wyspę przed utratą, a magazyn straci połowę. Gdy flota stoi na miejscu,
+obrona jest zwykłą bitwą i przegrana dalej odbiera wyspę. Bez bandery fort
+nie działa. Pełne oblężenie fortu z własną planszą to Epic H.
+
 **Zdobywanie wyspy — trzy fazy:** ✅
 1. potyczka morska (obecna bitwa = flota strażnicza),
 2. **abordaż**: ostatni niezatopiony statek wroga można abordażować zamiast
@@ -114,13 +124,14 @@ ale nikt jej nie atakuje. Nowe źródła walki to NPC, piraci i **kontrataki**:
   zdobyciu; jedna obrona na kontratak, a rozpoczęta wstrzymuje termin do
   rozliczenia bitwy,
 - przegrana obrona albo nieobecność oznacza utratę wyspy: bandera znika,
-  złoże staje, połowa magazynu przepada, wyspa znowu jest areną,
+  złoże staje, połowa magazynu przepada, wyspa znowu jest areną; nieobecność
+  na wyspie z fortem kończy się grabieżą połowy magazynu bez utraty wyspy (#81),
 - pełna bandera na akwenie: obrońca strzela pierwszy, napastnik płynie bez
   największego statku; gdy lustrzany skład ma jeden statek, bonusem jest
   tylko pierwszy strzał. Bonus widać w zapowiedzi i znika z utratą
   którejkolwiek wyspy.
 
-Obrona wyspy bez floty (garnizon, fort) wchodzi z osadami (Epic F).
+Obrona wyspy bez floty: fort w osadzie (#81, Filar III wyżej).
 
 ## Filar IV — Ekonomia: trzy surowce, ładownia, konwoje ✅
 

@@ -50,6 +50,14 @@ final class CaptainProfile
     private Resources $cargo;
 
     /**
+     * Tik, do którego naliczono urobek złoża wyspy; ustawiany przy pierwszej
+     * wygranej bitwie o wyspę — od niej złoże pracuje.
+     *
+     * @var array<string, int> klucz: id wyspy
+     */
+    private array $depositTicks = [];
+
+    /**
      * Surowce czekające na magazyn wyspy (drewno startowe, profil sprzed
      * ładowni, ładunek ponad pojemność po zmianie zasad) — rozkłada je
      * ensureWorldState(), które zna mapę.
@@ -392,6 +400,39 @@ final class CaptainProfile
         }
 
         $this->placeUnplacedResources($world);
+        $this->accrueDeposits($world);
+    }
+
+    /**
+     * Złoża wysp zdobytych wygraną bitwą produkują co tik do magazynu wyspy,
+     * aż urobek sięgnie limitu (Island::depositCap()). Liczone leniwie z różnicy
+     * tików — deterministycznie, bez zegara. Wyspa wygrana przed złożami
+     * zaczyna produkować od tiku pierwszego naliczenia, bez wyrównania wstecz.
+     */
+    private function accrueDeposits(WorldMap $world): void
+    {
+        foreach ($world->deposits() as $islandId => $island) {
+            if (!isset($this->depositTicks[$islandId])) {
+                if ($this->battleStats($islandId)['wins'] > 0) {
+                    $this->depositTicks[$islandId] = $this->tick;
+                }
+                continue;
+            }
+
+            $ticks = $this->tick - $this->depositTicks[$islandId];
+            if ($ticks <= 0) {
+                continue;
+            }
+            $stock = $this->stockpile($islandId)->toArray();
+            $cap = $island->depositCap()->toArray();
+            $output = $island->depositYield->times($ticks)->toArray();
+            foreach ($output as $resource => $amount) {
+                $output[$resource] = min($amount, max(0, $cap[$resource] - $stock[$resource]));
+            }
+
+            $this->stockpiles[$islandId] = $this->stockpile($islandId)->add(Resources::fromArray($output));
+            $this->depositTicks[$islandId] = $this->tick;
+        }
     }
 
     /**
@@ -647,6 +688,10 @@ final class CaptainProfile
 
         $this->xp += $xpAward;
         $this->stockpiles[$battle['island']] = $this->stockpile($battle['island'])->add($loot);
+        if ('won' === $result) {
+            // pierwsza wygrana uruchamia złoże wyspy (jeśli je ma)
+            $this->depositTicks[$battle['island']] ??= $this->tick;
+        }
 
         [$lost, $damaged] = $this->applyLosses($battle['ships'] ?? [], $result, $sunkLengths);
         $cargoLost = $this->trimCargo();
@@ -724,6 +769,12 @@ final class CaptainProfile
 
     // --- Snapshot (mapper persystencji) ---
 
+    /** @return array<string, int> tik ostatniego naliczenia urobku złoża (klucz: id wyspy) */
+    public function depositTicks(): array
+    {
+        return $this->depositTicks;
+    }
+
     /** Surowce, których ensureWorldState() jeszcze nie rozłożyło; null = brak. */
     public function unplacedResources(): ?Resources
     {
@@ -738,15 +789,16 @@ final class CaptainProfile
 
     /**
      * @param array<string, array{island: string, settled: bool, result: ?string, ships?: list<string>, enemySunk?: int}> $battles
-     * @param list<OwnedShip>|null                                                                                        $fleet      null = profil sprzed ekonomii — dostaje flotę startową
-     * @param Resources|null                                                                                              $cargo      null = profil sprzed ładowni (patrz $unplaced) albo sprzed ekonomii — drewno startowe do magazynu wyspy
-     * @param int|null                                                                                                    $worldSeed  null = seed wyprowadzony z id (stabilny dla starych profili)
-     * @param array{x:int,y:int}|null                                                                                     $position   null = start ustali ensureWorldState
-     * @param list<string>|null                                                                                           $discovered sektory "x:y"
-     * @param int|null                                                                                                    $tick       null = profil sprzed tiku: rejsy + zarejestrowane bitwy
-     * @param list<string>|null                                                                                           $visited    null = profil sprzed odwiedzin: tylko obecna pozycja
-     * @param array<string, Resources>                                                                                    $stockpiles magazyny wysp
-     * @param Resources|null                                                                                              $unplaced   surowce czekające na magazyn wyspy (też jeden magazyn profilu sprzed ładowni) — rozłożone przy ensureWorldState()
+     * @param list<OwnedShip>|null                                                                                        $fleet        null = profil sprzed ekonomii — dostaje flotę startową
+     * @param Resources|null                                                                                              $cargo        null = profil sprzed ładowni (patrz $unplaced) albo sprzed ekonomii — drewno startowe do magazynu wyspy
+     * @param int|null                                                                                                    $worldSeed    null = seed wyprowadzony z id (stabilny dla starych profili)
+     * @param array{x:int,y:int}|null                                                                                     $position     null = start ustali ensureWorldState
+     * @param list<string>|null                                                                                           $discovered   sektory "x:y"
+     * @param int|null                                                                                                    $tick         null = profil sprzed tiku: rejsy + zarejestrowane bitwy
+     * @param list<string>|null                                                                                           $visited      null = profil sprzed odwiedzin: tylko obecna pozycja
+     * @param array<string, Resources>                                                                                    $stockpiles   magazyny wysp
+     * @param Resources|null                                                                                              $unplaced     surowce czekające na magazyn wyspy (też jeden magazyn profilu sprzed ładowni) — rozłożone przy ensureWorldState()
+     * @param array<string, int>                                                                                          $depositTicks tik ostatniego naliczenia urobku złoża (klucz: id wyspy)
      */
     public static function fromSnapshot(
         ProfileId $id,
@@ -763,11 +815,13 @@ final class CaptainProfile
         ?array $visited = null,
         array $stockpiles = [],
         ?Resources $unplaced = null,
+        array $depositTicks = [],
     ): self {
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
         $self->fleet = $fleet ?? self::startingFleet();
         $self->stockpiles = $stockpiles;
+        $self->depositTicks = $depositTicks;
         $self->unplacedResources = $unplaced ?? (null === $cargo ? new Resources(wood: self::STARTING_WOOD) : null);
         // ładunek ponad pojemność (np. zapisany, zanim tratwa straciła ładownię)
         // nie przepada — czeka na magazyn wyspy

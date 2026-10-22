@@ -16,6 +16,7 @@ final class SettleBattle
         private ProfileRepository $profiles,
         private GameRepository $games,
         private IslandCatalog $islands,
+        private WorldFactory $worldFactory,
     ) {
     }
 
@@ -58,6 +59,8 @@ final class SettleBattle
 
         $result = GameStatus::Lost === $game->status() ? 'lost' : 'won';
         $rankBefore = $profile->rank();
+        // urobek złóż do bieżącego tiku liczy się przed łupem, który trafia do tego samego magazynu
+        $profile->ensureWorldState($this->worldFactory->worldFor($profile));
 
         $outcome = $profile->settleBattle(
             $game->id(),

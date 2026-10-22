@@ -103,7 +103,10 @@ export interface IslandDTO {
     xpLoss: number;
     lootWin: ResourcesDTO;
     lootLoss: ResourcesDTO;
+    // 0 = brak stoczni — na wyspie zbudujesz tylko tratwę
     shipyardLevel: number;
+    // złoże: urobek na tik trafia do magazynu wyspy (do limitu), odkąd wygrałeś o nią bitwę
+    deposit: { yield: ResourcesDTO; cap: ResourcesDTO; active: boolean } | null;
     board: { w: number; h: number };
     // ile pól planszy może zająć skład bitewny (20% planszy, #73)
     squadLimit: number;

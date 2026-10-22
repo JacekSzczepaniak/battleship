@@ -14,13 +14,19 @@ final class WorldMap
     public const WIDTH = 12;
     public const HEIGHT = 12;
 
-    /** @param array<string, array{x:int,y:int}> $islands */
-    private function __construct(private array $islands)
+    /**
+     * @param array<string, array{x:int,y:int}> $islands
+     * @param array<string, Island>             $deposits wyspy ze złożem (klucz: id)
+     */
+    private function __construct(private array $islands, private array $deposits)
     {
     }
 
-    /** @param list<string> $islandIds wyspy w kolejności trasy */
-    public static function generate(int $seed, array $islandIds): self
+    /**
+     * @param list<string> $islandIds wyspy w kolejności trasy
+     * @param list<Island> $deposits  wyspy ze złożami — nie zmieniają rozkładu wysp
+     */
+    public static function generate(int $seed, array $islandIds, array $deposits = []): self
     {
         $state = $seed & 0x7FFFFFFF;
         $next = static function (int $mod) use (&$state): int {
@@ -40,7 +46,20 @@ final class WorldMap
             ];
         }
 
-        return new self($islands);
+        $withDeposit = [];
+        foreach ($deposits as $island) {
+            if ($island->hasDeposit() && isset($islands[$island->id])) {
+                $withDeposit[$island->id] = $island;
+            }
+        }
+
+        return new self($islands, $withDeposit);
+    }
+
+    /** @return array<string, Island> wyspy ze złożami na tej mapie */
+    public function deposits(): array
+    {
+        return $this->deposits;
     }
 
     public function isInside(int $x, int $y): bool

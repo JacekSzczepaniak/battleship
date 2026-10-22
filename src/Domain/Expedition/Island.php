@@ -38,6 +38,17 @@ final class Island
         }
     }
 
+    /**
+     * Ile pól planszy może zająć skład wysłany do bitwy: 20% planszy, jak
+     * w klasycznych statkach (20 pól na 10×10) — przy gęstszej flocie trudniej
+     * spudłować niż trafić. Przeciwnik dostaje lustrzany skład, więc limit
+     * działa w obie strony (#73).
+     */
+    public function squadCellLimit(): int
+    {
+        return intdiv($this->boardWidth * $this->boardHeight * 20, 100);
+    }
+
     public function isAccessibleFor(Rank $rank): bool
     {
         return $rank->atLeast($this->requiredRank);

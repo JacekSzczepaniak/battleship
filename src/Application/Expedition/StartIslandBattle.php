@@ -20,11 +20,13 @@ final class StartIslandBattle
 
     /**
      * Rozpoczyna bitwę o wyspę: waliduje rangę, tworzy grę wg zasad wyspy
-     * (plansza z definicji wyspy, skład floty = sprawne statki kapitana —
-     * przeciwnik dostaje lustrzany skład) i rejestruje bitwę w profilu.
-     * Dalej działa zwykły flow gry (fleet/shots).
+     * (plansza z definicji wyspy, skład = wybrane albo domyślnie dobrane sprawne
+     * statki w limicie pól wyspy — przeciwnik dostaje lustrzany skład) i rejestruje
+     * bitwę w profilu. Dalej działa zwykły flow gry (fleet/shots).
+     *
+     * @param list<string>|null $shipIds skład bitewny; null = dobór domyślny
      */
-    public function handle(string $profileId, string $islandId): Game
+    public function handle(string $profileId, string $islandId, ?array $shipIds = null): Game
     {
         $profile = $this->profiles->get(new ProfileId($profileId));
         if (null === $profile) {
@@ -45,19 +47,19 @@ final class StartIslandBattle
             throw new \DomainException('Not at island');
         }
 
-        $activeFleet = $profile->activeFleet();
-        if ([] === $activeFleet) {
+        if ([] === $profile->activeFleet()) {
             throw new \DomainException('No seaworthy ships');
         }
+        $squad = $profile->battleSquad($shipIds, $island->squadCellLimit());
 
         $composition = [];
-        foreach ($activeFleet as $ship) {
+        foreach ($squad as $ship) {
             $length = $ship->type->length();
             $composition[$length] = ($composition[$length] ?? 0) + 1;
         }
 
         $game = $this->createGame->handle($island->boardWidth, $island->boardHeight, $island->mode, $composition);
-        $profile->startBattle($island->id, $game->id(), array_map(static fn ($s) => $s->id, $activeFleet));
+        $profile->startBattle($island->id, $game->id(), array_map(static fn ($s) => $s->id, $squad));
         $this->profiles->save($profile);
 
         return $game;

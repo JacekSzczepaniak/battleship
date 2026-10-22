@@ -30,9 +30,10 @@ export function defaultSquad(fleet: FleetShipDTO[], limit: number): FleetShipDTO
 }
 
 /**
- * Konwój (statki z transportowcem) bez eskorty — statku z bronią. Lustro
- * CaptainProfile::isUnescortedConvoy(): nie atakuje wyspy, w sztormie traci 2×.
+ * Konwój (statki z transportowcem, także uszkodzonym — wozi ładunek) bez
+ * eskorty — sprawnego statku z bronią. Lustro CaptainProfile::isUnescortedConvoy():
+ * nie atakuje wyspy, w sztormie traci 2×.
  */
 export function isUnescortedConvoy(ships: FleetShipDTO[]): boolean {
-    return ships.some(s => s.type === 'transportowiec') && !ships.some(s => ARMED.includes(s.type));
+    return ships.some(s => s.type === 'transportowiec') && !ships.some(s => !s.damaged && ARMED.includes(s.type));
 }

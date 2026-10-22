@@ -95,16 +95,17 @@ it('remont przywraca statek do służby za surowce', function () {
     $profile->startBattle('zatoka-rozbitka', $gameId, [$kuter->id]);
     $outcome = $profile->settleBattle($gameId, 'won', 40, new Resources(wood: 20), [2]);
 
-    // uszkodzony kuter nie wiezie ładunku: pojemność 15 → 0, ładunek przepada
+    // uszkodzony kuter wozi dalej (#92): pojemność 15 zostaje, ładunek też
     expect($kuter->isDamaged())->toBeTrue()
-        ->and($outcome['cargoLost']->wood)->toBe(15)
-        ->and($profile->cargo()->isZero())->toBeTrue();
+        ->and($outcome['cargoLost']->isZero())->toBeTrue()
+        ->and($profile->cargo()->wood)->toBe(15);
 
     $profile->repairShip($kuter->id, 'zatoka-rozbitka');
 
-    // remont (8 drewna) płaci magazyn wyspy, w którym leży łup (5 + 20)
+    // remont (8 drewna) płaci magazyn wyspy, w którym leży łup (5 + 20); ładownia nietknięta
     expect($kuter->isDamaged())->toBeFalse()
-        ->and($profile->stockpile('zatoka-rozbitka')->wood)->toBe(17);
+        ->and($profile->stockpile('zatoka-rozbitka')->wood)->toBe(17)
+        ->and($profile->cargo()->wood)->toBe(15);
 });
 
 it('odrzuca remont sprawnego statku', function () {

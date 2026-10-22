@@ -108,7 +108,7 @@
                     <li v-for="ship in expedition.fleet" :key="ship.id" class="ship" :class="{ dmg: ship.damaged }">
                         <span class="ship-name">{{ SHIP_ICONS[ship.type] }} {{ SHIP_LABELS[ship.type] }}</span>
                         <template v-if="ship.damaged">
-                            <span class="status">🔧 uszkodzony</span>
+                            <span class="status" title="wozi ładunek, ale nie walczy i nie eskortuje — do remontu w stoczni">🔧 uszkodzony</span>
                             <button
                                 class="btn small"
                                 :disabled="busy || repairBlock(ship) !== null"
@@ -396,8 +396,7 @@ async function onSail(x: number, y: number) {
             parts.push(`🌩️ Sztorm! Fale zabrały ${formatResources(result.event.cargoLost!, 'nic — ładownia była pusta')}${convoy}`);
         }
         if (result.event?.effect === 'ship-damaged') {
-            parts.push(`🌩️ Sztorm! ${SHIP_LABELS[result.event.ship!]} uszkodzony`);
-            if (result.event.cargoLost && !isEmpty(result.event.cargoLost)) parts.push(`za burtą: ${formatResources(result.event.cargoLost)}`);
+            parts.push(`🌩️ Sztorm! ${SHIP_LABELS[result.event.ship!]} uszkodzony — ładunek cały`);
         }
         seaMsg.value = parts.join(' · ');
         expedition.value = await getExpedition(profileId);
@@ -592,8 +591,8 @@ const squadPick = ref<Set<string> | null>(null);
 const activeShips = computed(() => (expedition.value?.fleet ?? []).filter(s => !s.damaged));
 const activeCells = computed(() => squadCells(activeShips.value));
 
-// konwój w rejsie: sprawna flota z transportowcem bez statku z bronią
-const unescortedConvoy = computed(() => isUnescortedConvoy(activeShips.value));
+// konwój w rejsie: flota z transportowcem (także uszkodzonym) bez sprawnego statku z bronią
+const unescortedConvoy = computed(() => isUnescortedConvoy(expedition.value?.fleet ?? []));
 
 /** Dobór domyślny zostawia w porcie statki spoza priorytetu (transportowiec), choć jest miejsce. */
 function leavesShipsInPort(island: IslandDTO): boolean {

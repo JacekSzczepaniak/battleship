@@ -28,11 +28,24 @@ function convoyFleet(array $types): array
  */
 function profileBeforeWaves(array $types, Resources $cargo): array
 {
+    return profileBeforeStorm($types, $cargo, shipDamaged: false);
+}
+
+/**
+ * Jak profileBeforeWaves(), ale sztorm o wybranym efekcie: fale albo uszkodzenie statku.
+ *
+ * @param list<ShipType> $types
+ *
+ * @return array{0: CaptainProfile, 1: WorldMap, 2: array{x:int,y:int}}
+ */
+function profileBeforeStorm(array $types, Resources $cargo, bool $shipDamaged): array
+{
     $id = CaptainProfile::create('Jacek')->id();
     $seed = crc32((string) $id) & 0x7FFFFFFF;
     $tick = 0;
     // sail() podbija tik przed rzutem; parzysty rzut efektu = fale (nieparzysty uszkadza statek)
-    while (crc32("$seed:".($tick + 1)) % 100 >= 20 || 0 !== crc32("$seed:".($tick + 1).':effect') % 2) {
+    $effect = $shipDamaged ? 1 : 0;
+    while (crc32("$seed:".($tick + 1)) % 100 >= 20 || $effect !== crc32("$seed:".($tick + 1).':effect') % 2) {
         ++$tick;
     }
 
@@ -103,7 +116,42 @@ it('uszkodzona eskorta nie chroni konwoju', function () {
     $kuter->markDamaged();
     $profile = CaptainProfile::fromSnapshot(CaptainProfile::create('Jacek')->id(), 'Jacek', 1000, [], [$transport, $kuter]);
 
-    expect(CaptainProfile::isUnescortedConvoy($profile->activeFleet()))->toBeTrue();
+    expect(CaptainProfile::isUnescortedConvoy($profile->fleet()))->toBeTrue();
+});
+
+it('uszkodzony transportowiec wozi dalej, więc flota z nim jest konwojem (#92)', function () {
+    [$transport, $tratwa] = convoyFleet([ShipType::Transportowiec, ShipType::Tratwa]);
+    $transport->markDamaged();
+    $profile = CaptainProfile::fromSnapshot(CaptainProfile::create('Jacek')->id(), 'Jacek', 1000, [], [$transport, $tratwa]);
+
+    expect($profile->cargoCapacity())->toBe(60)
+        ->and(CaptainProfile::isUnescortedConvoy($profile->fleet()))->toBeTrue();
+});
+
+it('w sztormie uszkodzony transportowiec bez sprawnej eskorty traci dwa razy więcej', function () {
+    [$profile, $world, $target] = profileBeforeWaves(
+        [ShipType::Transportowiec, ShipType::Kuter],
+        new Resources(wood: 2, steel: 50, gold: 8),
+    );
+    foreach ($profile->fleet() as $ship) {
+        $ship->markDamaged();
+    }
+
+    $event = $profile->sail($target['x'], $target['y'], $world)['event'];
+
+    expect($event['cargoLost'])->toBe(['wood' => 2, 'steel' => 10, 'gold' => 0])
+        ->and($event['unescorted'])->toBeTrue();
+});
+
+it('sztorm uszkadza statek, ale ładunek zostaje w ładowni (#92)', function () {
+    [$profile, $world, $target] = profileBeforeStorm([ShipType::Kuter], new Resources(wood: 15), shipDamaged: true);
+
+    $event = $profile->sail($target['x'], $target['y'], $world)['event'];
+
+    expect($event)->toBe(['type' => 'storm', 'effect' => 'ship-damaged', 'ship' => 'kuter'])
+        ->and($profile->fleet()[0]->isDamaged())->toBeTrue()
+        ->and($profile->cargoCapacity())->toBe(15)
+        ->and($profile->cargo()->wood)->toBe(15); // ładownia pełna — kartografia przepada, ładunek nie
 });
 
 it('fale zabierają 10% ładunku: najpierw drewno, potem stal', function () {

@@ -121,7 +121,7 @@
                                     <div class="ship-name">{{ SHIP_LABELS[ship.type] }}</div>
                                     <div class="ship-role">{{ shipRole(ship.length) }}</div>
                                 </div>
-                                <div class="cond" :title="ship.damaged ? 'uszkodzony — do remontu' : 'sprawny'">
+                                <div class="cond" :title="ship.damaged ? 'uszkodzony — wozi ładunek, nie walczy; do remontu' : 'sprawny'">
                                     <div :class="{ dmg: ship.damaged }"></div>
                                 </div>
                             </li>

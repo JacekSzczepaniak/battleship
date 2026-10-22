@@ -203,10 +203,13 @@ final class CaptainProfile
         return $this->cargo;
     }
 
-    /** Pojemność ładowni = suma pojemności sprawnych statków. */
+    /**
+     * Pojemność ładowni = suma pojemności wszystkich statków floty. Uszkodzony
+     * statek wozi dalej — uszkodzenie odbiera broń, nie ładownię (#92).
+     */
     public function cargoCapacity(): int
     {
-        return array_sum(array_map(static fn (OwnedShip $s) => $s->type->cargoCapacity(), $this->activeFleet()));
+        return array_sum(array_map(static fn (OwnedShip $s) => $s->type->cargoCapacity(), $this->fleet));
     }
 
     public function stockpile(string $islandId): Resources
@@ -271,7 +274,7 @@ final class CaptainProfile
         $this->cargo = $this->cargo->subtract($cost->subtract($fromStock));
     }
 
-    /** Ładunek ponad pojemność (np. po utracie statku) przepada; zwraca, co przepadło. */
+    /** Ładunek ponad pojemność (po utracie statku) przepada; zwraca, co przepadło. */
     private function trimCargo(): Resources
     {
         [$kept, $overflow] = $this->cargo->fitInto($this->cargoCapacity());
@@ -351,17 +354,18 @@ final class CaptainProfile
     }
 
     /**
-     * Konwój = statki z co najmniej jednym transportowcem; eskortuje go statek
-     * z bronią. Reguła nie dotyczy floty bez transportowca, więc same tratwy
-     * nadal walczą (bezpiecznik anty-softlock).
+     * Konwój = statki z co najmniej jednym transportowcem (także uszkodzonym —
+     * wozi ładunek); eskortuje go sprawny statek z bronią. Reguła nie dotyczy
+     * floty bez transportowca, więc same tratwy nadal walczą (bezpiecznik
+     * anty-softlock).
      *
-     * @param list<OwnedShip> $ships sprawne statki
+     * @param list<OwnedShip> $ships
      */
     public static function isUnescortedConvoy(array $ships): bool
     {
         $hasTransport = false;
         foreach ($ships as $ship) {
-            if ($ship->type->isArmed()) {
+            if ($ship->type->isArmed() && !$ship->isDamaged()) {
                 return false;
             }
             $hasTransport = $hasTransport || ShipType::Transportowiec === $ship->type;
@@ -799,14 +803,13 @@ final class CaptainProfile
 
         if (1 === $effectRoll % 2 && [] !== $active) {
             $ship = $active[$effectRoll % count($active)];
+            // uszkodzony statek traci broń, ładownię zachowuje — ładunek zostaje
             $ship->markDamaged();
-            // uszkodzony statek nie wiezie ładunku — nadmiar idzie za burtę
-            $overboard = $this->trimCargo();
 
-            return ['type' => 'storm', 'effect' => 'ship-damaged', 'ship' => $ship->type->value, 'cargoLost' => $overboard->toArray()];
+            return ['type' => 'storm', 'effect' => 'ship-damaged', 'ship' => $ship->type->value];
         }
 
-        $unescorted = self::isUnescortedConvoy($active);
+        $unescorted = self::isUnescortedConvoy($this->fleet);
         $multiplier = $unescorted ? 2 : 1;
         $units = max(
             intdiv($this->cargo->total() * self::STORM_CARGO_LOSS_PERCENT * $multiplier, 100),

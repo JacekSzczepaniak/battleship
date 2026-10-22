@@ -27,7 +27,7 @@ final class GameApiShipLoadoutTest extends WebTestCase
         // stan broni ma dotychczasowy kształt, limity liczą się z wyposażenia
         $view = $this->json($client, 'GET', "/api/games/$id");
         self::assertSame(['used' => 0, 'limit' => 1], $view['weapons']['torpedo']);
-        self::assertSame(['used' => 0, 'limit' => 2], $view['weapons']['sonar']);
+        self::assertSame(['used' => 0, 'limit' => 2, 'radius' => 3], $view['weapons']['sonar']);
         self::assertSame(['used' => 0, 'limit' => 0], $view['weapons']['airRaid']);
         self::assertSame($view['weapons'], $view['opponentWeapons']);
 
@@ -57,7 +57,7 @@ final class GameApiShipLoadoutTest extends WebTestCase
         self::assertResponseIsSuccessful();
 
         $view = $this->json($client, 'GET', "/api/games/$id");
-        self::assertSame(['used' => 1, 'limit' => 2], $view['weapons']['sonar']);
+        self::assertSame(['used' => 1, 'limit' => 2, 'radius' => 3], $view['weapons']['sonar']);
         self::assertSame(['used' => 1, 'limit' => 1], $view['weapons']['torpedo']);
     }
 

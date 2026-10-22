@@ -8,6 +8,12 @@ namespace App\Domain\Game\Weapon;
  */
 final class SonarSpec
 {
+    /** Promień sonaru w trybie fun — wroga zawsze, gracza bez technologii. */
+    public const RADIUS = 3;
+
+    /** Promień sonaru gracza po zbadaniu Sonaru dalekiego zasięgu (Epic G). */
+    public const LONG_RANGE_RADIUS = 4;
+
     public function __construct(
         public readonly int $uses,
         public readonly int $radius = 0,

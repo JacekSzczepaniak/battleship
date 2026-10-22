@@ -26,6 +26,7 @@ const emit = defineEmits<{
 const EFFECTS: Record<TechnologyName, string> = {
     spichlerze: 'magazyn złoża mieści 20 tików produkcji zamiast 10',
     'mapy-sztormowe': 'sztorm przy pierwszym wpłynięciu: 10% zamiast 20%',
+    'sonar-dalekiego-zasiegu': 'sonar w bitwach wyprawy: krzyż o promieniu 4 zamiast 3',
 };
 
 const current = computed(() => props.research.current);

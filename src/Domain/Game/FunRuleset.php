@@ -16,6 +16,8 @@ final class FunRuleset implements Ruleset
      * @param array<int,int>|null           $opponentShips    skład floty przeciwnika (null = lustrzany)
      * @param array<int,list<Loadout>>|null $variants         warianty wyposażenia floty (null = same domyślne)
      * @param array<int,list<Loadout>>|null $opponentVariants warianty przeciwnika (null = lustrzane)
+     * @param int|null                      $sonarRadius      promień sonaru gracza (null = SonarSpec::RADIUS);
+     *                                                        technologie gracza nie przechodzą do lustra
      */
     public function __construct(
         private BoardSize $size = new BoardSize(10, 10),
@@ -23,7 +25,11 @@ final class FunRuleset implements Ruleset
         private ?array $opponentShips = null,
         private ?array $variants = null,
         private ?array $opponentVariants = null,
+        private ?int $sonarRadius = null,
     ) {
+        if (null !== $sonarRadius && $sonarRadius < 0) {
+            throw new \InvalidArgumentException('Negative sonar radius');
+        }
         FleetComposition::assertValid($ships);
         FleetComposition::assertValid($opponentShips);
         FleetComposition::assertValidVariants($this->allowedShips(), $variants);
@@ -68,19 +74,26 @@ final class FunRuleset implements Ruleset
      */
     public function weapons(): WeaponSpecs
     {
-        return self::weaponsFor($this->allowedShips(), $this->variants());
+        return self::weaponsFor($this->allowedShips(), $this->variants(), $this->sonarRadius());
     }
 
+    /** Wróg zawsze z bazowym promieniem sonaru: technologie gracza nie przechodzą do lustra (#54, D6). */
     public function opponentWeapons(): WeaponSpecs
     {
-        return self::weaponsFor($this->opponentShips(), $this->opponentVariants());
+        return self::weaponsFor($this->opponentShips(), $this->opponentVariants(), SonarSpec::RADIUS);
+    }
+
+    /** Promień sonaru gracza — ustalony przy starcie gry i zapisany w jej snapshotcie. */
+    public function sonarRadius(): int
+    {
+        return $this->sonarRadius ?? SonarSpec::RADIUS;
     }
 
     /**
      * @param array<int,int>           $ships
      * @param array<int,list<Loadout>> $variants
      */
-    private static function weaponsFor(array $ships, array $variants): WeaponSpecs
+    private static function weaponsFor(array $ships, array $variants, int $sonarRadius): WeaponSpecs
     {
         $roster = FleetComposition::roster($ships, $variants);
         $uses = static fn (WeaponKind $weapon): int => array_sum(array_map(
@@ -91,7 +104,7 @@ final class FunRuleset implements Ruleset
 
         return new WeaponSpecs(
             torpedo: new TorpedoSpec(uses: $torpedoes, diagonalUses: min(1, $torpedoes)),
-            sonar: new SonarSpec(uses: $uses(WeaponKind::Sonar), radius: 3),
+            sonar: new SonarSpec(uses: $uses(WeaponKind::Sonar), radius: $sonarRadius),
             airRaid: new AirRaidSpec(uses: $uses(WeaponKind::AirRaid), maxArea: new Area(3, 3)),
         );
     }

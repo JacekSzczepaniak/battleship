@@ -33,7 +33,7 @@ final class GameApiFunModeTest extends WebTestCase
         $view = json_decode($client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
         self::assertSame('fun', $view['ruleset']);
         self::assertSame(['used' => 0, 'limit' => 2], $view['weapons']['torpedo']);
-        self::assertSame(['used' => 0, 'limit' => 3], $view['weapons']['sonar']);
+        self::assertSame(['used' => 0, 'limit' => 3, 'radius' => 3], $view['weapons']['sonar']);
         self::assertSame(['used' => 0, 'limit' => 1], $view['weapons']['airRaid']);
 
         // torpedo: full turn — results + AI response + turn back to player
@@ -65,7 +65,7 @@ final class GameApiFunModeTest extends WebTestCase
         $client->request('GET', "/api/games/$id");
         $view = json_decode($client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
         self::assertSame(['used' => 1, 'limit' => 1], $view['weapons']['airRaid']);
-        self::assertSame(['used' => 1, 'limit' => 3], $view['weapons']['sonar']);
+        self::assertSame(['used' => 1, 'limit' => 3, 'radius' => 3], $view['weapons']['sonar']);
 
         // torpeda z wody → 422 TORPEDO_LAUNCH_INVALID (start musi być na niezatopionym statku)
         $client->request('POST', "/api/games/$id/torpedo", server: ['CONTENT_TYPE' => 'application/json'], content: json_encode(['x' => 4, 'y' => 4, 'direction' => 'E']));

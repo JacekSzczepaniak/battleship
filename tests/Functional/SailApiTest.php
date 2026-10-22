@@ -44,7 +44,7 @@ final class SailApiTest extends WebTestCase
         self::assertResponseIsSuccessful();
         self::assertSame($target, $sailed['position']);
         self::assertIsInt($sailed['cartography']);
-        self::assertIsInt($sailed['materials']);
+        self::assertSame(['wood', 'steel', 'gold'], array_keys($sailed['resources']));
 
         // 4) skok przez pół mapy → 409 SAIL_NOT_ADJACENT
         $this->post($client, "/api/profiles/$profileId/sail", [

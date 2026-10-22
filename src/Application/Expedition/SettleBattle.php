@@ -21,12 +21,13 @@ final class SettleBattle
 
     /**
      * Rozlicza zakończoną bitwę: wynik i straty czytane ze stanu gry (nie od
-     * klienta), XP i materiały wg definicji wyspy, idempotentnie (ponowne
+     * klienta), XP i surowce wg definicji wyspy, idempotentnie (ponowne
      * wywołanie → zera). Zatopione statki: wygrana → do remontu, przegrana →
      * stracone.
      *
      * @return array{result:string, awarded:int, xp:int, rank:string, rankUp:bool,
-     *     materialsAwarded:int, materials:int, lostShips:list<string>, damagedShips:list<string>}
+     *     loot:array{wood:int, steel:int, gold:int}, resources:array{wood:int, steel:int, gold:int},
+     *     lostShips:list<string>, damagedShips:list<string>}
      */
     public function handle(string $profileId, string $gameId): array
     {
@@ -61,7 +62,7 @@ final class SettleBattle
             $game->id(),
             $result,
             'won' === $result ? $island->xpWin : $island->xpLoss,
-            'won' === $result ? $island->materialsWin : $island->materialsLoss,
+            'won' === $result ? $island->lootWin : $island->lootLoss,
             $this->sunkPlayerShipLengths($game),
             $this->sunkEnemyShipCount($game),
         );
@@ -73,8 +74,8 @@ final class SettleBattle
             'xp' => $profile->xp(),
             'rank' => $profile->rank()->value,
             'rankUp' => $outcome['xp'] > 0 && $profile->rank() !== $rankBefore,
-            'materialsAwarded' => $outcome['materials'],
-            'materials' => $profile->materials(),
+            'loot' => $outcome['loot']->toArray(),
+            'resources' => $profile->resources()->toArray(),
             'lostShips' => $outcome['lost'],
             'damagedShips' => $outcome['damaged'],
         ];

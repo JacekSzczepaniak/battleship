@@ -36,7 +36,7 @@ final class Sail
             'discoveredNow' => $outcome['discoveredNow'],
             'cartography' => $outcome['cartography'],
             'event' => $outcome['event'],
-            'materials' => $profile->materials(),
+            'resources' => $profile->resources()->toArray(),
             'atIsland' => $world->islandAt($position['x'], $position['y']),
         ];
     }

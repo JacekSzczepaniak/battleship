@@ -4,7 +4,7 @@
 // wynik z pierwszego rozliczenia zapisujemy tutaj.
 
 import type { RulesetName } from '../api/gameApi';
-import type { RankName, SettleResultDTO, ShipTypeName } from '../api/expeditionApi';
+import type { RankName, ResourcesDTO, SettleResultDTO, ShipTypeName } from '../api/expeditionApi';
 
 const PREFS_KEY = 'training.prefs';
 const REPORT_KEY = 'battle.lastReport';
@@ -44,7 +44,7 @@ export interface ExpeditionOutcome {
     /** próg XP następnej rangi po rozliczeniu (null = najwyższa ranga) */
     nextRank: { rank: RankName; xpTarget: number } | null;
     /** stan floty po rozliczeniu */
-    fleet: { id: string; type: ShipTypeName; damaged: boolean; repairCost: number }[];
+    fleet: { id: string; type: ShipTypeName; damaged: boolean; repairCost: ResourcesDTO }[];
 }
 
 export interface BattleReport {

@@ -63,17 +63,17 @@ it('żegluga odkrywa sąsiedztwo i płaci za kartografię', function () {
 
     $pos = $profile->position();
     $target = ['x' => $pos['x'] + ($pos['x'] < WorldMap::WIDTH - 1 ? 1 : -1), 'y' => $pos['y']];
-    $materialsBefore = $profile->materials();
+    $woodBefore = $profile->resources()->wood;
 
     $outcome = $profile->sail($target['x'], $target['y'], $world);
 
     expect($profile->position())->toBe($target)
         ->and($profile->moveCount())->toBe(1);
 
-    // materiały nie spadają poniżej: przed + kartografia - ewentualny sztorm (max 5)
-    $expected = $materialsBefore + $outcome['cartography']
-        - ('materials-lost' === ($outcome['event']['effect'] ?? null) ? $outcome['event']['materials'] : 0);
-    expect($profile->materials())->toBe($expected);
+    // drewno: przed + kartografia - ewentualny sztorm (max 5)
+    $expected = $woodBefore + $outcome['cartography']
+        - ('wood-lost' === ($outcome['event']['effect'] ?? null) ? $outcome['event']['wood'] : 0);
+    expect($profile->resources()->wood)->toBe($expected);
 
     foreach ($outcome['discoveredNow'] as $sector) {
         [$x, $y] = array_map('intval', explode(':', $sector));
@@ -141,7 +141,7 @@ it('stan morski round-tripuje przez snapshot', function () {
     $profile->sail($pos['x'] + ($pos['x'] < WorldMap::WIDTH - 1 ? 1 : -1), $pos['y'], $world);
 
     $restored = CaptainProfile::fromSnapshot(
-        $profile->id(), 'Jacek', 0, [], $profile->fleet(), $profile->materials(),
+        $profile->id(), 'Jacek', 0, [], $profile->fleet(), $profile->resources(),
         $profile->worldSeed(), $profile->position(), $profile->discoveredSectors(), $profile->moveCount(),
     );
 

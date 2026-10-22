@@ -7,6 +7,7 @@ import { RANK_LABELS, SHIP_LABELS, startIslandBattle, type RankName } from '../a
 import { setCurrentBattle } from '../lib/expeditionSession';
 import { getBattleReport, type BattleReport } from '../lib/battleSession';
 import { shipName } from '../lib/ships';
+import { RESOURCES, formatResources } from '../lib/resources';
 
 const route = useRoute();
 const router = useRouter();
@@ -77,7 +78,7 @@ const fleetRows = computed<FleetRow[]>(() => {
             key: s.id,
             name: SHIP_LABELS[s.type],
             state: s.damaged ? 'damaged' as const : 'ok' as const,
-            note: s.damaged ? `do remontu · ${s.repairCost} materiałów` : 'sprawny',
+            note: s.damaged ? `do remontu · ${formatResources(s.repairCost)}` : 'sprawny',
         }))
         .sort((a, b) => (a.state === b.state ? 0 : a.state === 'damaged' ? -1 : 1));
     e.settle.lostShips.forEach((t, i) => rows.unshift({ key: `lost${i}`, name: SHIP_LABELS[t], state: 'lost', note: 'stracony w bitwie' }));
@@ -219,10 +220,10 @@ onMounted(load);
                         <span class="loot-label"><span class="res-dot" style="background: var(--info)"></span> DOŚWIADCZENIE</span>
                         <b>+{{ exp.settle.awarded }}</b>
                     </div>
-                    <div class="loot-tile">
-                        <span class="loot-label"><span class="res-dot" style="background: var(--res-steel)"></span> MATERIAŁY</span>
-                        <b>+{{ exp.settle.materialsAwarded }}</b>
-                        <small>w ładowni: {{ exp.settle.materials }}</small>
+                    <div v-for="r in RESOURCES" :key="r.key" class="loot-tile" :class="{ none: exp.settle.loot[r.key] === 0 }">
+                        <span class="loot-label"><span class="res-dot" :style="{ background: r.color }"></span> {{ r.label.toUpperCase() }}</span>
+                        <b>+{{ exp.settle.loot[r.key] }}</b>
+                        <small>w magazynie: {{ exp.settle.resources[r.key] }}</small>
                     </div>
                 </div>
                 <p v-else class="muted no-loot">Trening nie daje łupów ani XP. Bitwy o wyspy rozegrasz z portu, gdy staniesz przy wyspie.</p>
@@ -304,6 +305,7 @@ h1 { font: 700 84px var(--font-head); line-height: .95; letter-spacing: -.02em; 
 .loot-label .res-dot { width: 10px; height: 10px; }
 .loot-tile b { font: 700 24px var(--font-head); color: var(--info); }
 .loot-tile small { font: 500 10px var(--font-mono); color: var(--text-dim); }
+.loot-tile.none b { color: var(--text-dim); }
 .no-loot { margin: 0; font-size: 13px; }
 .fleet-kicker { margin-top: 16px; }
 .fleet { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }

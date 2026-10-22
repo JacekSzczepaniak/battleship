@@ -19,7 +19,7 @@ final class ExpeditionApiTest extends WebTestCase
     {
         $client = static::createClient();
 
-        // 1) profil kapitana z flotą startową (kuter + 3 tratwy) i materiałami
+        // 1) profil kapitana z flotą startową (kuter + 3 tratwy) i drewnem na start
         $profile = $this->post($client, '/api/profiles', ['name' => 'Jacek']);
         self::assertResponseStatusCodeSame(201);
         self::assertSame('rozbitek', $profile['rank']);
@@ -33,7 +33,7 @@ final class ExpeditionApiTest extends WebTestCase
         self::assertTrue($islands[0]['unlocked']);
         self::assertFalse(end($islands)['unlocked']);
         self::assertSame(['rank' => 'majtek', 'xpNeeded' => 30], $expedition['profile']['nextRank']);
-        self::assertSame(20, $expedition['profile']['materials']);
+        self::assertSame(['wood' => 20, 'steel' => 0, 'gold' => 0], $expedition['profile']['resources']);
         self::assertCount(4, $expedition['fleet']);
         self::assertSame(1, $islands[0]['shipyardLevel']);
         self::assertNotEmpty($expedition['shipTypes']);
@@ -73,25 +73,25 @@ final class ExpeditionApiTest extends WebTestCase
             self::assertResponseIsSuccessful();
         }
 
-        // 7) rozliczenie: XP + materiały wg wyspy; wygrana nie odbiera statków na stałe
+        // 7) rozliczenie: XP + surowce wg wyspy; wygrana nie odbiera statków na stałe
         $settled = $this->post($client, "/api/profiles/$profileId/battles/$gameId/settle");
         self::assertResponseIsSuccessful();
         self::assertSame('won', $settled['result']);
         self::assertSame(40, $settled['awarded']);
-        self::assertSame(20, $settled['materialsAwarded']);
-        self::assertSame(40, $settled['materials']);
+        self::assertSame(['wood' => 15, 'steel' => 5, 'gold' => 0], $settled['loot']);
+        self::assertSame(['wood' => 35, 'steel' => 5, 'gold' => 0], $settled['resources']);
         self::assertSame([], $settled['lostShips']);
 
         // 8) idempotencja: drugie rozliczenie bez nagród
         $again = $this->post($client, "/api/profiles/$profileId/battles/$gameId/settle");
         self::assertResponseIsSuccessful();
         self::assertSame(0, $again['awarded']);
-        self::assertSame(0, $again['materialsAwarded']);
+        self::assertSame(['wood' => 0, 'steel' => 0, 'gold' => 0], $again['loot']);
 
         // licznik zatopień w profilu: cała flota wroga (kuter + 3 tratwy), bez podwojenia po 2. rozliczeniu
         self::assertSame(4, $this->getExpedition($client, $profileId)['profile']['enemyShipsSunk']);
 
-        // 9) stocznia: budowa kutra za 20 materiałów
+        // 9) stocznia: budowa kutra za 20 drewna
         $ship = $this->post($client, "/api/profiles/$profileId/ships", [
             'type' => 'kuter', 'islandId' => 'zatoka-rozbitka',
         ]);
@@ -99,7 +99,7 @@ final class ExpeditionApiTest extends WebTestCase
         self::assertSame('kuter', $ship['type']);
 
         $expedition = $this->getExpedition($client, $profileId);
-        self::assertSame(20, $expedition['profile']['materials']);
+        self::assertSame(['wood' => 15, 'steel' => 5, 'gold' => 0], $expedition['profile']['resources']);
         self::assertCount(5, $expedition['fleet']);
         self::assertSame(1, $expedition['islands'][0]['wins']);
 

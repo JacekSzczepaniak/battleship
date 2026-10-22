@@ -217,6 +217,71 @@ final class CaptainProfile
         return $this->fleet;
     }
 
+    /**
+     * Skład bitewny w limicie pól planszy: wskazane statki albo — gdy nie
+     * wskazano — domyślny dobór (nośniki broni od największego, potem tratwy).
+     * Statki spoza składu czekają w porcie.
+     *
+     * @param list<string>|null $shipIds
+     *
+     * @return list<OwnedShip>
+     */
+    public function battleSquad(?array $shipIds, int $cellLimit): array
+    {
+        if (null === $shipIds) {
+            return $this->defaultSquad($cellLimit);
+        }
+        if ([] === $shipIds || count($shipIds) !== count(array_unique($shipIds))) {
+            throw new \InvalidArgumentException('Squad must list distinct ships');
+        }
+
+        $squad = [];
+        foreach ($shipIds as $shipId) {
+            $ship = $this->shipById($shipId) ?? throw new \DomainException('Ship not found');
+            if ($ship->isDamaged()) {
+                throw new \DomainException('Ship not seaworthy');
+            }
+            $squad[] = $ship;
+        }
+        if (self::squadCells($squad) > $cellLimit) {
+            throw new \DomainException('Squad exceeds island limit');
+        }
+
+        return $squad;
+    }
+
+    /** @return list<OwnedShip> */
+    private function defaultSquad(int $cellLimit): array
+    {
+        // kolejność doboru: nośniki broni od największego, potem tratwy; reszta
+        // (np. jednostki bez uzbrojenia) tylko gdy zostanie miejsce
+        $priority = [ShipType::Lotniskowiec, ShipType::Niszczyciel, ShipType::Kuter, ShipType::Tratwa];
+        $rank = static function (OwnedShip $s) use ($priority): int {
+            $index = array_search($s->type, $priority, true);
+
+            return false === $index ? count($priority) : $index;
+        };
+        $candidates = $this->activeFleet();
+        usort($candidates, static fn (OwnedShip $a, OwnedShip $b) => $rank($a) <=> $rank($b));
+
+        $squad = [];
+        $cells = 0;
+        foreach ($candidates as $ship) {
+            if ($cells + $ship->type->length() <= $cellLimit) {
+                $squad[] = $ship;
+                $cells += $ship->type->length();
+            }
+        }
+
+        return $squad;
+    }
+
+    /** @param list<OwnedShip> $ships */
+    public static function squadCells(array $ships): int
+    {
+        return array_sum(array_map(static fn (OwnedShip $s) => $s->type->length(), $ships));
+    }
+
     /** @return list<OwnedShip> statki zdolne do bitwy (nieuszkodzone) */
     public function activeFleet(): array
     {

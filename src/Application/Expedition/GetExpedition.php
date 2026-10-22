@@ -57,6 +57,8 @@ final class GetExpedition
                 'lootLoss' => $island->lootLoss->toArray(),
                 'shipyardLevel' => $island->shipyardLevel,
                 'board' => ['w' => $island->boardWidth, 'h' => $island->boardHeight],
+                // ile pól planszy może zająć skład bitewny (#73)
+                'squadLimit' => $island->squadCellLimit(),
                 'unlocked' => $island->isAccessibleFor($rank),
                 'stockpile' => $profile->stockpile($island->id)->toArray(),
                 'wins' => $stats['wins'],

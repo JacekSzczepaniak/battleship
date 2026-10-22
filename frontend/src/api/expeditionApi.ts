@@ -100,6 +100,8 @@ export interface IslandDTO {
     lootLoss: ResourcesDTO;
     shipyardLevel: number;
     board: { w: number; h: number };
+    // ile pól planszy może zająć skład bitewny (20% planszy, #73)
+    squadLimit: number;
     unlocked: boolean;
     wins: number;
     losses: number;
@@ -165,8 +167,9 @@ export async function getExpedition(profileId: string): Promise<ExpeditionDTO> {
     return http.get<ExpeditionDTO>(`/profiles/${profileId}/expedition`);
 }
 
-export async function startIslandBattle(profileId: string, islandId: string): Promise<CreateGameResponse> {
-    return http.post<CreateGameResponse>(`/profiles/${profileId}/islands/${islandId}/battle`, {});
+/** Start bitwy o wyspę; bez `shipIds` backend dobiera skład domyślny w limicie wyspy. */
+export async function startIslandBattle(profileId: string, islandId: string, shipIds?: string[]): Promise<CreateGameResponse> {
+    return http.post<CreateGameResponse>(`/profiles/${profileId}/islands/${islandId}/battle`, shipIds ? { shipIds } : {});
 }
 
 export async function settleBattle(profileId: string, gameId: string): Promise<SettleResultDTO> {

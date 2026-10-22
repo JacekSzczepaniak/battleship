@@ -66,11 +66,16 @@ final class ExpeditionController
     }
 
     #[Route('/{id}/islands/{islandId}/battle', name: 'api_profiles_island_battle', methods: ['POST'])]
-    public function startBattle(string $id, string $islandId): JsonResponse
+    public function startBattle(string $id, string $islandId, Request $request): JsonResponse
     {
         $this->assertUuid($id, 'profile');
+        // opcjonalny skład bitewny; brak = dobór domyślny w limicie pól wyspy
+        $shipIds = $this->jsonPayload($request)['shipIds'] ?? null;
+        if (null !== $shipIds && (!is_array($shipIds) || !array_is_list($shipIds) || [] !== array_filter($shipIds, static fn ($s) => !is_string($s)))) {
+            throw new ApiException('Invalid field: shipIds must be a list of ship ids', 'VALIDATION_ERROR', 400);
+        }
 
-        $game = $this->startIslandBattle->handle($id, $islandId);
+        $game = $this->startIslandBattle->handle($id, $islandId, $shipIds);
 
         // Ten sam kształt co POST /api/games — frontend wchodzi w zwykły flow gry
         return new JsonResponse([

@@ -171,10 +171,32 @@
                             bilans: {{ island.wins }}W / {{ island.losses }}P
                         </span>
                     </div>
+                    <div v-if="island.unlocked && island.present" class="squad">
+                        <span :class="{ over: activeCells > island.squadLimit }">
+                            skład: {{ squadCells(squadFor(island)) }} / {{ island.squadLimit }} pól
+                            <template v-if="activeCells > island.squadLimit"> · flota ma {{ activeCells }} pól — część zostanie w porcie</template>
+                        </span>
+                        <button v-if="activeCells > island.squadLimit" class="btn small" @click="togglePicker(island)">
+                            {{ squadPick ? 'skład domyślny' : 'wybierz skład' }}
+                        </button>
+                        <ul v-if="squadPick" class="squad-pick">
+                            <li v-for="ship in activeShips" :key="ship.id">
+                                <label :class="{ off: !squadPick.has(ship.id) && squadCells(squadFor(island)) + ship.length > island.squadLimit }">
+                                    <input
+                                        type="checkbox"
+                                        :checked="squadPick.has(ship.id)"
+                                        :disabled="!squadPick.has(ship.id) && squadCells(squadFor(island)) + ship.length > island.squadLimit"
+                                        @change="toggleShip(ship.id)"
+                                    />
+                                    {{ SHIP_ICONS[ship.type] }} {{ SHIP_LABELS[ship.type] }} · {{ ship.length }} {{ ship.length === 1 ? 'pole' : 'pola' }}
+                                </label>
+                            </li>
+                        </ul>
+                    </div>
                     <button
                         v-if="island.unlocked && island.present"
                         class="btn"
-                        :disabled="starting !== null || pendingBattle !== null"
+                        :disabled="starting !== null || pendingBattle !== null || (squadPick !== null && squadPick.size === 0)"
                         @click="onStartBattle(island)"
                     >
                         {{ starting === island.id ? 'Stawianie żagli…' : '⚔️ Bitwa' }}
@@ -200,6 +222,7 @@ import {
     clearCurrentBattle, clearProfileId, getCurrentBattle, getProfileId,
     setCurrentBattle, setProfileId, type CurrentBattle,
 } from '../lib/expeditionSession';
+import { defaultSquad, squadCells } from '../lib/squad';
 import {
     RESOURCES, addResources, covers, formatResources, isEmpty, missing, totalResources, type ResourceKey,
 } from '../lib/resources';
@@ -460,13 +483,36 @@ async function onCreateProfile() {
     }
 }
 
+// --- skład bitewny (#73): domyślny dobór albo ręczny wybór, gdy flota przekracza limit ---
+
+const squadPick = ref<Set<string> | null>(null);
+const activeShips = computed(() => (expedition.value?.fleet ?? []).filter(s => !s.damaged));
+const activeCells = computed(() => squadCells(activeShips.value));
+
+function squadFor(island: IslandDTO): FleetShipDTO[] {
+    if (squadPick.value) return activeShips.value.filter(s => squadPick.value!.has(s.id));
+    return defaultSquad(expedition.value?.fleet ?? [], island.squadLimit);
+}
+
+function togglePicker(island: IslandDTO) {
+    squadPick.value = squadPick.value ? null : new Set(defaultSquad(expedition.value?.fleet ?? [], island.squadLimit).map(s => s.id));
+}
+
+function toggleShip(shipId: string) {
+    if (!squadPick.value) return;
+    const next = new Set(squadPick.value);
+    if (next.has(shipId)) next.delete(shipId); else next.add(shipId);
+    squadPick.value = next;
+}
+
 async function onStartBattle(island: IslandDTO) {
     const profileId = getProfileId();
     if (!profileId) return;
     starting.value = island.id;
     error.value = '';
     try {
-        const game = await startIslandBattle(profileId, island.id);
+        const shipIds = squadPick.value ? [...squadPick.value] : undefined;
+        const game = await startIslandBattle(profileId, island.id, shipIds);
         setCurrentBattle({ profileId, gameId: game.id, islandId: island.id, islandName: island.name });
         await router.push({ name: 'place-fleet', params: { id: game.id } });
     } catch (e: any) {
@@ -493,6 +539,11 @@ h2, h3 { font-family: var(--font-head); }
 .xp-fill { height: 100%; background: linear-gradient(90deg, var(--info), var(--info-light)); transition: width 0.4s ease; }
 .pending { display: flex; gap: 0.75rem; align-items: center; border-color: var(--accent); }
 .stock { font-weight: 600; color: var(--warn); }
+.squad { display: flex; flex-wrap: wrap; gap: 0.5rem 0.8rem; align-items: center; margin-bottom: 0.6rem; font: 500 12px var(--font-mono); color: var(--text-muted); }
+.squad .over { color: var(--warn); }
+.squad-pick { list-style: none; padding: 0; margin: 0; width: 100%; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.squad-pick label { cursor: pointer; color: var(--text-2); }
+.squad-pick label.off { opacity: .45; cursor: not-allowed; }
 .hold { border-collapse: collapse; margin: 0.3rem 0 0.6rem; font-size: 14px; }
 .hold th, .hold td { padding: 4px 10px; text-align: left; }
 .hold thead th { font: 600 10px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--text-label); }

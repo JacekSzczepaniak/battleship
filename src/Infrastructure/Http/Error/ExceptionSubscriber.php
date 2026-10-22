@@ -114,6 +114,8 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             'Battle not finished yet' => ['BATTLE_NOT_FINISHED', 409],
             'Not enough resources' => ['NOT_ENOUGH_RESOURCES', 409],
             'Cargo capacity exceeded' => ['CARGO_FULL', 409],
+            'Squad exceeds island limit' => ['SQUAD_TOO_LARGE', 409],
+            'Ship not seaworthy' => ['SHIP_NOT_SEAWORTHY', 409],
             'Not at island' => ['NOT_AT_ISLAND', 409],
             'Sector out of bounds' => ['VALIDATION_ERROR', 400],
             'Can only sail to an adjacent sector' => ['SAIL_NOT_ADJACENT', 409],

@@ -62,8 +62,8 @@ final class GetExpedition
                 'xpLoss' => $island->xpLoss,
                 'lootWin' => $island->lootWin->toArray(),
                 'lootLoss' => $island->lootLoss->toArray(),
-                // 0 = brak stoczni (na każdej wyspie zbudujesz tylko tratwę)
-                'shipyardLevel' => $island->shipyardLevel,
+                // 0 = brak stoczni (na każdej wyspie zbudujesz tylko tratwę); z rozbudową pod banderą (#82)
+                'shipyardLevel' => $profile->shipyardLevel($island),
                 // bandera kapitana: pierwsza wygrana bitwa o wyspę ją zdobywa
                 'owned' => $isOwned,
                 // złoże: urobek na tik (z tartakiem/kopalnią), limit czekający w magazynie, czy pracuje (pod banderą)

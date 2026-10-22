@@ -9,6 +9,7 @@ use App\Domain\Game\Coordinate;
 use App\Domain\Game\Direction;
 use App\Domain\Game\Game;
 use App\Domain\Game\ShotResult;
+use App\Domain\Game\Weapon\WeaponKind;
 
 /**
  * Tura przeciwnika (AI) po ofensywnym ruchu gracza.
@@ -16,7 +17,7 @@ use App\Domain\Game\ShotResult;
  * W trybie fun AI korzysta z broni specjalnych (te same limity i reguły co gracz):
  * - sonar: zwiad w trybie hunt — wykryte statki trafiają do kolejki dobijania
  *   (jak u gracza nie zużywa akcji ofensywnej),
- * - torpeda: z pozycji własnego niezatopionego statku, w linię z największą
+ * - torpeda: z pozycji własnego niezatopionego nośnika torped, w linię z największą
  *   liczbą nieostrzelanych pól,
  * - nalot: w najgęstszy nieostrzelany obszar (rozmiar maksymalny z rulesetu).
  * Bronie tylko w trybie hunt (przy dobijaniu zwykły strzał jest skuteczniejszy),
@@ -80,9 +81,9 @@ final class OpponentTurn
         $weapons = 'fun' === $game->ruleset()->name() ? $game->opponentWeaponsState() : [];
 
         // 1) Zwiad: sonar w trybie hunt (nie zużywa akcji ofensywnej);
-        //    broń wymaga żywego nośnika (kutra) we flocie AI
+        //    broń wymaga żywego nośnika sonaru we flocie AI
         if ($huntMode && $this->hasUses($weapons, 'sonar')
-            && $game->opponentHasWeaponCarrier(Game::SONAR_CARRIER_LENGTH) && $this->decide(self::SONAR_CHANCE)) {
+            && $game->opponentHasWeaponCarrier(WeaponKind::Sonar) && $this->decide(self::SONAR_CHANCE)) {
             $center = $this->bestSonarCenter($view, $game->ruleset()->weapons()->sonar->radius);
             if (null !== $center) {
                 $detected = [];
@@ -111,7 +112,7 @@ final class OpponentTurn
         }
 
         if ($huntMode && $this->hasUses($weapons, 'airRaid')
-            && $game->opponentHasWeaponCarrier(Game::AIR_RAID_CARRIER_LENGTH) && $this->decide(self::AIR_RAID_CHANCE)) {
+            && $game->opponentHasWeaponCarrier(WeaponKind::AirRaid) && $this->decide(self::AIR_RAID_CHANCE)) {
             [$halfX, $halfY] = $this->airRaidHalfExtents($game);
             $center = $this->bestAirRaidCenter($view, $halfX, $halfY);
             if (null !== $center) {

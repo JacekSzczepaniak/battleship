@@ -15,11 +15,11 @@ final class DeterministicFleetGenerator implements FleetGenerator
     {
         $composition = $ruleset->opponentShips();
 
-        if (FleetComposition::isClassic($composition)) {
-            return $this->classicLayout();
-        }
+        $ships = FleetComposition::isClassic($composition)
+            ? $this->classicLayout()
+            : $this->rowPackedLayout($composition, $ruleset->boardSize());
 
-        return $this->rowPackedLayout($composition, $ruleset->boardSize());
+        return FleetComposition::equip($ships, $ruleset->opponentVariants());
     }
 
     /** @return Ship[] */

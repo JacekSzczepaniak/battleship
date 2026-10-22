@@ -26,7 +26,7 @@ final class RandomFleetGenerator implements FleetGenerator
         for ($attempt = 0; $attempt < self::MAX_FLEET_ATTEMPTS; ++$attempt) {
             $ships = $this->tryPlaceFleet($lengths, $size);
             if (null !== $ships) {
-                return $ships;
+                return FleetComposition::equip($ships, $ruleset->opponentVariants());
             }
         }
 

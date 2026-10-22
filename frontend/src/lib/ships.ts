@@ -1,6 +1,6 @@
-// Nazwy i role jednostek po stronie UI. Silnik zna statki po długości, a broń
-// wynika ze składu floty (Game::*_CARRIER_LENGTH): kuter(2)=sonar,
-// niszczyciel(3)=torpeda, lotniskowiec(4)=nalot. Transportowiec(5) broni nie ma.
+// Nazwy i role jednostek po stronie UI. Broń wynika z wyposażenia statku; domyślne
+// zależy od długości (Loadout::defaultFor): kuter(2)=sonar, niszczyciel(3)=torpeda,
+// lotniskowiec(4)=nalot. Transportowiec(5) broni nie ma. Warianty (#99) UI jeszcze nie zna.
 
 import type { ShipTypeName } from '../api/expeditionApi';
 

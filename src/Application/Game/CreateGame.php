@@ -7,6 +7,7 @@ use App\Domain\Game\ClassicRuleset;
 use App\Domain\Game\FunRuleset;
 use App\Domain\Game\Game;
 use App\Domain\Game\GameRepository;
+use App\Domain\Game\Weapon\Loadout;
 
 final class CreateGame
 {
@@ -15,14 +16,17 @@ final class CreateGame
     }
 
     /**
-     * @param array<int,int>|null $ships         skład floty (długość => sztuki); null = flota klasyczna
-     * @param string              $firstTurn     'opponent' = pierwszą salwę oddaje AI zaraz po rozstawieniu floty (obrona wyspy, #78)
-     * @param array<int,int>|null $opponentShips skład floty AI; null = lustrzany (inny przy bonusie pełnej bandery, #79)
+     * @param array<int,int>|null           $ships         skład floty (długość => sztuki); null = flota klasyczna
+     * @param string                        $firstTurn     'opponent' = pierwszą salwę oddaje AI zaraz po rozstawieniu floty (obrona wyspy, #78)
+     * @param array<int,int>|null           $opponentShips skład floty AI; null = lustrzany (inny przy bonusie pełnej bandery, #79)
+     * @param array<int,list<Loadout>>|null $variants      warianty wyposażenia (#95); AI dostaje je lustrzanie
      */
-    public function handle(?int $w = null, ?int $h = null, string $mode = 'classic', ?array $ships = null, string $firstTurn = 'player', ?array $opponentShips = null): Game
+    public function handle(?int $w = null, ?int $h = null, string $mode = 'classic', ?array $ships = null, string $firstTurn = 'player', ?array $opponentShips = null, ?array $variants = null): Game
     {
         $size = new BoardSize($w ?? 10, $h ?? 10);
-        $rules = 'fun' === $mode ? new FunRuleset($size, $ships, $opponentShips) : new ClassicRuleset($size, $ships, $opponentShips);
+        $rules = 'fun' === $mode
+            ? new FunRuleset($size, $ships, $opponentShips, $variants)
+            : new ClassicRuleset($size, $ships, $opponentShips, $variants);
 
         $game = Game::create($rules);
         $game->setTurn($firstTurn);

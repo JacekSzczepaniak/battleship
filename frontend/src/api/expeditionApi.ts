@@ -170,7 +170,7 @@ export interface SailResultDTO {
     cartography: number;
     // dochód kartograficzny, który nie zmieścił się w ładowni
     cartographyLost: number;
-    // effect: 'cargo-lost' (fale zabrały część ładunku) | 'ship-damaged'; unescorted = konwój bez eskorty, podwójne straty
+    // effect: 'cargo-lost' (fale zabrały część ładunku) | 'ship-damaged' (ładunek zostaje); unescorted = konwój bez eskorty, podwójne straty
     event: { type: string; effect: string; ship?: ShipTypeName; cargoLost?: ResourcesDTO; unescorted?: boolean } | null;
     cargo: ResourcesDTO;
     cargoCapacity: number;

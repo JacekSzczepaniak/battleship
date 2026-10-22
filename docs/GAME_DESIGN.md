@@ -23,7 +23,8 @@ Bitwa (classic/fun, bronie specjalne z nośników: sonar=kuter, torpeda=
 niszczyciel, nalot=lotniskowiec; zatopiony nośnik odbiera broń) · profil
 kapitana (XP nigdy nie maleje, 9 rang od rozbitka do admirała — progi
 w Filarze VIII; licznik zatopionych jednostek wroga) · flota jako majątek
-(budowa/remont, stocznie, wygrana→remont / przegrana→strata) · rozbudowa
+(budowa/remont, stocznie, wygrana→remont / przegrana→strata; uszkodzony
+statek wozi ładunek, ale nie walczy — #92) · rozbudowa
 stoczni w osadzie (#82: Zatoka pod banderą 1→2) · fort w osadzie (#81:
 nieobecność przy kontrataku to grabież połowy magazynu, wyspa zostaje) · wolne morze
 12×12 z mgłą, deterministyczne z seeda profilu · kartografia pasywna ·
@@ -151,6 +152,10 @@ Obrona wyspy bez floty: fort w osadzie (#81, Filar III wyżej).
   zabierają 10% ładunku (min. 5 drewna), konwój bez eskorty — dwa razy
   tyle i nie atakuje wysp. Flota bez transportowca nie podlega regułom
   eskorty — bezpiecznik z zasady 6 zostaje.
+  ✅ (#92) Pojemność ładowni = suma wszystkich statków floty, także
+  uszkodzonych: uszkodzenie odbiera broń, nie ładownię. Uszkodzony statek
+  pływa i wozi, ale nie walczy i nie eskortuje (uszkodzony transportowiec
+  nadal tworzy konwój). Ładunek przepada tylko z utratą statku.
 - **Pobojowisko (pomysł na przyszłość):** po bitwie morskiej na miejscu
   starcia dryfują resztki z zatopionych statków (przynajmniej drewno).
   Zbiera je flota obecna na miejscu albo wysłane po nie transportowce pod
@@ -256,7 +261,8 @@ i progi do zaprojektowania przy epiku.
 6. **Bezpiecznik anty-softlock** — tratwa darmowa na każdej wyspie, kartografia jako dochód
    bez ryzyka, żegluga bez wymogu sprawnej floty. Od #47 kartografia płaci
    tylko do ładowni, więc flota z samych tratw jej nie zbiera — rozbitkowi
-   zostają łupy z bitew (także porażek) w magazynie wyspy.
+   zostają łupy z bitew (także porażek) w magazynie wyspy. Od #92 uszkodzone
+   statki wożą ładunek, więc surowce na remont da się dowieźć do stoczni.
 7. **Każdy plaster grywalny osobno** — kolejny etap zaczyna się od
    działającej gry.
 8. **Bitwa rozwija się ze światem** — plastry ekonomii/świata nie zamrażają

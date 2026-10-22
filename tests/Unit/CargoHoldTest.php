@@ -37,7 +37,7 @@ function openSeaNeighbour(WorldMap $world): array
     throw new LogicException('No open sea next to start');
 }
 
-it('pojemność ładowni to suma sprawnych statków: flota startowa unosi 15, tratwy nic', function () {
+it('pojemność ładowni to suma statków floty: flota startowa unosi 15, tratwy nic', function () {
     [$profile] = dockedProfile();
 
     // drewno startowe nie mieści się w ładowni — leży w magazynie wyspy startowej

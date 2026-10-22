@@ -30,6 +30,10 @@ final class CaptainProfile
     private const STORM_CARGO_LOSS_PERCENT = 10;
     private const STORM_MIN_WOOD_LOSS = 5;
 
+    /** Zasięg rejsu w sektorach (większa z różnic x i y); z Żeglugą dwusektorową dalszy. */
+    private const SAIL_RANGE = 1;
+    private const SAIL_RANGE_TWO_SECTOR = 2;
+
     /** Nagroda kartograficzna w drewnie: za nowy sektor / bonus za odkrycie wyspy. */
     private const CARTOGRAPHY_SECTOR_REWARD = 1;
     private const CARTOGRAPHY_ISLAND_BONUS = 5;
@@ -685,6 +689,12 @@ final class CaptainProfile
         return $this->hasResearched(Technology::MapySztormowe) ? self::STORM_CHANCE_CHARTED : self::STORM_CHANCE;
     }
 
+    /** Najdalszy sektor osiągalny w jednym rejsie (za 1 tik). */
+    public function sailRange(): int
+    {
+        return $this->hasResearched(Technology::ZeglugaDwusektorowa) ? self::SAIL_RANGE_TWO_SECTOR : self::SAIL_RANGE;
+    }
+
     // --- Wolne morze: żegluga, mgła świata, kartografia ---
 
     public function worldSeed(): int
@@ -912,7 +922,10 @@ final class CaptainProfile
     }
 
     /**
-     * Żegluga o jeden sektor. Pierwsze wpłynięcie na sektor grozi sztormem
+     * Rejs za 1 tik na sektor w zasięgu sailRange(): sąsiedni, a z Żeglugą
+     * dwusektorową także odległy o 2. Sektor, przez który flota przepływa,
+     * nie jest liczony osobno — leży w sąsiedztwie celu, więc przybycie
+     * i tak go odkrywa; nie jest odwiedzony. Pierwsze wpłynięcie na sektor grozi sztormem
      * (deterministycznie z seed+tik — przeładowanie strony nie zmienia
      * losu); powrót na odwiedzony sektor jest bezpieczny. Nowo odkryte
      * sektory dają dochód kartograficzny. Żegluga NIGDY nie
@@ -930,10 +943,12 @@ final class CaptainProfile
         if (!$world->isInside($x, $y)) {
             throw new \DomainException('Sector out of bounds');
         }
-        $dx = abs($x - $this->position['x']);
-        $dy = abs($y - $this->position['y']);
-        if (1 !== max($dx, $dy)) {
+        $distance = max(abs($x - $this->position['x']), abs($y - $this->position['y']));
+        if (0 === $distance || (1 === $this->sailRange() && $distance > 1)) {
             throw new \DomainException('Can only sail to an adjacent sector');
+        }
+        if ($distance > $this->sailRange()) {
+            throw new \DomainException('Sector beyond sailing range');
         }
 
         ++$this->moveCount;

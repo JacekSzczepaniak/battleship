@@ -43,7 +43,7 @@ it('AI robi zwykły strzał, gdy losowanie odmawia użycia broni', function () {
     expect($out['opponentMoves'])->toHaveCount(1);
     expect($game->opponentWeaponsState())->toBe([
         'torpedo' => ['used' => 0, 'limit' => 2],
-        'sonar' => ['used' => 0, 'limit' => 3],
+        'sonar' => ['used' => 0, 'limit' => 3, 'radius' => 3],
         'airRaid' => ['used' => 0, 'limit' => 1],
         'torpedoDiagonal' => ['used' => 0, 'limit' => 1],
     ]);

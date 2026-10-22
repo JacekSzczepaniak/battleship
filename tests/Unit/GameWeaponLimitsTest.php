@@ -60,7 +60,7 @@ it('raportuje stan broni: użycia i limity', function () {
 
     expect($game->weaponsState())->toBe([
         'torpedo' => ['used' => 1, 'limit' => 2],
-        'sonar' => ['used' => 1, 'limit' => 3],
+        'sonar' => ['used' => 1, 'limit' => 3, 'radius' => 3],
         'airRaid' => ['used' => 0, 'limit' => 1],
         'torpedoDiagonal' => ['used' => 0, 'limit' => 1],
     ]);

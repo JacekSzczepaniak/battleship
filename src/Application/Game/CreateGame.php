@@ -20,12 +20,13 @@ final class CreateGame
      * @param string                        $firstTurn     'opponent' = pierwszą salwę oddaje AI zaraz po rozstawieniu floty (obrona wyspy, #78)
      * @param array<int,int>|null           $opponentShips skład floty AI; null = lustrzany (inny przy bonusie pełnej bandery, #79)
      * @param array<int,list<Loadout>>|null $variants      warianty wyposażenia (#95); AI dostaje je lustrzanie
+     * @param int|null                      $sonarRadius   promień sonaru gracza w trybie fun (null = bazowy); AI zostaje przy bazowym
      */
-    public function handle(?int $w = null, ?int $h = null, string $mode = 'classic', ?array $ships = null, string $firstTurn = 'player', ?array $opponentShips = null, ?array $variants = null): Game
+    public function handle(?int $w = null, ?int $h = null, string $mode = 'classic', ?array $ships = null, string $firstTurn = 'player', ?array $opponentShips = null, ?array $variants = null, ?int $sonarRadius = null): Game
     {
         $size = new BoardSize($w ?? 10, $h ?? 10);
         $rules = 'fun' === $mode
-            ? new FunRuleset($size, $ships, $opponentShips, $variants)
+            ? new FunRuleset($size, $ships, $opponentShips, $variants, sonarRadius: $sonarRadius)
             : new ClassicRuleset($size, $ships, $opponentShips, $variants);
 
         $game = Game::create($rules);

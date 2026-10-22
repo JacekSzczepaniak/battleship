@@ -123,6 +123,7 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             'Not at island' => ['NOT_AT_ISLAND', 409],
             'Sector out of bounds' => ['VALIDATION_ERROR', 400],
             'Can only sail to an adjacent sector' => ['SAIL_NOT_ADJACENT', 409],
+            'Sector beyond sailing range' => ['SAIL_OUT_OF_RANGE', 409],
             'Shipyard level too low for this ship type' => ['SHIPYARD_TOO_LOW', 409],
             'Ship not found' => ['SHIP_NOT_FOUND', 404],
             'Ship is not damaged' => ['SHIP_NOT_DAMAGED', 409],

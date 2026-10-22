@@ -13,6 +13,7 @@ use App\Domain\Game\Orientation;
 use App\Domain\Game\Ruleset;
 use App\Domain\Game\Ship;
 use App\Domain\Game\Weapon\Loadout;
+use App\Domain\Game\Weapon\SonarSpec;
 use App\Domain\Shared\GameId;
 
 final class GameSnapshotMapper
@@ -49,6 +50,8 @@ final class GameSnapshotMapper
                 // warianty wyposażenia (#95) tylko, gdy są; wroga tylko, gdy nie są lustrzane
                 'variants' => $this->variantsOrNull($game->ruleset()->variants()),
                 'opponentVariants' => $this->opponentVariantsOrNull($game->ruleset()),
+                // promień sonaru gracza (technologia, Epic G) tylko, gdy inny niż bazowy
+                'sonarRadius' => $this->sonarRadiusOrNull($game->ruleset()),
             ],
             'fleet' => $fleet,
             'shots' => $shots,
@@ -175,9 +178,11 @@ final class GameSnapshotMapper
         // warianty wyposażenia (#95): brak = same domyślne, brak wroga = lustrzane
         $variants = FleetComposition::variantsFromArray($data['variants'] ?? null);
         $opponentVariants = isset($data['opponentVariants']) ? FleetComposition::variantsFromArray($data['opponentVariants']) : null;
+        // promień sonaru gracza: brak = bazowy (snapshoty sprzed Epica G)
+        $sonarRadius = isset($data['sonarRadius']) ? (int) $data['sonarRadius'] : null;
 
         return 'fun' === ($data['type'] ?? 'classic')
-            ? new FunRuleset($size, $ships, $opponentShips, $variants, $opponentVariants)
+            ? new FunRuleset($size, $ships, $opponentShips, $variants, $opponentVariants, $sonarRadius)
             : new ClassicRuleset($size, $ships, $opponentShips, $variants, $opponentVariants);
     }
 
@@ -211,6 +216,11 @@ final class GameSnapshotMapper
             (int) $s['l'],
             isset($s['w']) && is_array($s['w']) ? Loadout::fromArray($s['w']) : null,
         );
+    }
+
+    private function sonarRadiusOrNull(Ruleset $ruleset): ?int
+    {
+        return $ruleset instanceof FunRuleset && SonarSpec::RADIUS !== $ruleset->sonarRadius() ? $ruleset->sonarRadius() : null;
     }
 
     /**

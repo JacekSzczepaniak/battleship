@@ -162,6 +162,8 @@ export interface WorldDTO {
     visited: string[]; // sektory "x:y", na których kapitan był — tam sztorm nie grozi
     atIsland: string | null;
     stormChance: number;
+    // najdalszy sektor osiągalny w jednym rejsie (większa z różnic x i y); Żegluga dwusektorowa: 2
+    sailRange: number;
     // zegar świata: liczba akcji morskich (rejs, bitwa)
     tick: number;
 }
@@ -208,7 +210,7 @@ export interface LastCounterattackDTO {
 
 // drzewko technologii (Epic G): katalog zawiera tylko działające technologie
 export type TechBranchName = 'kadluby' | 'uzbrojenie' | 'nawigacja' | 'osady';
-export type TechnologyName = 'spichlerze' | 'mapy-sztormowe' | 'pojemne-ladownie' | 'dok-remontowy' | 'lepsze-narzedzia';
+export type TechnologyName = 'spichlerze' | 'mapy-sztormowe' | 'sonar-dalekiego-zasiegu' | 'zegluga-dwusektorowa' | 'pojemne-ladownie' | 'dok-remontowy' | 'lepsze-narzedzia';
 
 export const TECH_BRANCH_LABELS: Record<TechBranchName, string> = {
     kadluby: 'Kadłuby',
@@ -220,6 +222,8 @@ export const TECH_BRANCH_LABELS: Record<TechBranchName, string> = {
 export const TECH_LABELS: Record<TechnologyName, string> = {
     spichlerze: 'Spichlerze',
     'mapy-sztormowe': 'Mapy sztormowe',
+    'sonar-dalekiego-zasiegu': 'Sonar dalekiego zasięgu',
+    'zegluga-dwusektorowa': 'Żegluga dwusektorowa',
     'pojemne-ladownie': 'Pojemne ładownie',
     'dok-remontowy': 'Dok remontowy',
     'lepsze-narzedzia': 'Lepsze narzędzia',

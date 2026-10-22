@@ -3,7 +3,7 @@
 namespace App\Domain\Game;
 
 /**
- * Losowy układ floty wg ruleset->allowedShips(): dla każdego statku losuje
+ * Losowy układ floty przeciwnika wg ruleset->opponentShips(): dla każdego statku losuje
  * pozycję do skutku (walidacja przez Board::place()), a przy zablokowanym
  * układzie restartuje całość. Po wyczerpaniu prób wraca do układu
  * deterministycznego, więc nigdy nie kończy się wyjątkiem.
@@ -21,7 +21,7 @@ final class RandomFleetGenerator implements FleetGenerator
     public function generate(Ruleset $ruleset): array
     {
         $size = $ruleset->boardSize();
-        $lengths = $this->lengthsFrom($ruleset->allowedShips());
+        $lengths = $this->lengthsFrom($ruleset->opponentShips());
 
         for ($attempt = 0; $attempt < self::MAX_FLEET_ATTEMPTS; ++$attempt) {
             $ships = $this->tryPlaceFleet($lengths, $size);

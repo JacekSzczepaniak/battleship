@@ -28,6 +28,8 @@ export interface GameViewDTO {
     ruleset: RulesetName;
     // skład floty do wystawienia: mapa długość => liczba sztuk (klucze JSON jako stringi)
     allowedShips?: Record<string, number>;
+    // skład floty przeciwnika; inny niż allowedShips przy bonusie pełnej bandery (#79)
+    opponentShips?: Record<string, number>;
     weapons: WeaponsState;
     opponentWeapons?: WeaponsState;
     mode: 'standard' | 'nonstandard' | string;

@@ -34,6 +34,27 @@ final class FleetComposition
         }
     }
 
+    /**
+     * Skład bez jednego statku najdłuższego (przy kilku równych odpada jeden).
+     * Flota jednostatkowa zostaje bez zmian — bitwa bez floty nie ma sensu.
+     *
+     * @param array<int,int> $ships
+     *
+     * @return array<int,int>
+     */
+    public static function withoutLargest(array $ships): array
+    {
+        if (array_sum($ships) <= 1) {
+            return $ships;
+        }
+        $largest = max(array_keys($ships));
+        if (--$ships[$largest] <= 0) {
+            unset($ships[$largest]);
+        }
+
+        return $ships;
+    }
+
     /** @param array<int,int> $ships */
     public static function isClassic(array $ships): bool
     {

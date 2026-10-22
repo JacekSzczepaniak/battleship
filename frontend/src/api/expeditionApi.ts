@@ -182,6 +182,8 @@ export interface PendingCounterattackDTO {
     ticksLeft: number;
     // rozpoczęta obrona wstrzymuje termin do rozliczenia bitwy
     defenseStarted: boolean;
+    // pełna bandera (#79): obrońca strzela pierwszy, napastnik bez największego statku
+    fullFlag: boolean;
 }
 
 export interface LastCounterattackDTO {

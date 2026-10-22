@@ -56,9 +56,8 @@
             <!-- Kontratak (#78): zapowiedź z terminem i ostatnie rozstrzygnięcie -->
             <section v-if="counterattack.pending" class="card counterattack" :class="{ defending: counterattack.pending.defenseStarted }">
                 <strong>{{ counterattack.pending.defenseStarted ? '🛡️' : '⚔️' }} {{ pendingLabel(counterattack.pending) }}</strong>
-                <span v-if="!counterattack.pending.defenseStarted" class="muted">
-                    Stań flotą na wyspie i przyjmij bitwę — napastnik strzela pierwszy. Bez obrony wyspa przepada razem z połową magazynu.
-                </span>
+                <span v-if="counterattack.pending.fullFlag" class="full-flag">🚩 {{ FULL_FLAG_BONUS }}</span>
+                <span v-if="!counterattack.pending.defenseStarted" class="muted">{{ defenseHint(counterattack.pending) }}</span>
             </section>
             <p v-if="counterattack.last" class="last-counterattack" :class="{ lost: !counterattack.last.held }">
                 {{ counterattack.last.held ? '🛡️' : '🏴' }} {{ lastLabel(counterattack.last) }}
@@ -278,7 +277,7 @@ import { fieldsLabel } from '../lib/ships';
 import { depositLabel, depositState, economyIslands, whereToFind } from '../lib/economy';
 import CargoPanel from '../components/CargoPanel.vue';
 import SettlementPanel from '../components/SettlementPanel.vue';
-import { canDefend, lastLabel, pendingLabel, ticksLabel } from '../lib/counterattack';
+import { canDefend, defenseHint, FULL_FLAG_BONUS, lastLabel, pendingLabel, ticksLabel } from '../lib/counterattack';
 import {
     addResources, covers, formatResources, isEmpty, missing, totalResources,
 } from '../lib/resources';
@@ -678,6 +677,7 @@ h2, h3 { font-family: var(--font-head); }
 .sea-cell .attacked { position: absolute; right: -3px; top: -4px; font-size: 0.6rem; }
 .counterattack { display: flex; flex-direction: column; gap: 0.3rem; border-color: var(--danger); }
 .counterattack.defending { border-color: var(--info); }
+.counterattack .full-flag { font: 600 12px var(--font-mono); color: var(--info); }
 .last-counterattack { margin: -6px 0 14px; font: 500 12px var(--font-mono); color: var(--text-muted); }
 .last-counterattack.lost { color: var(--warn); }
 .warn { color: var(--warn); }

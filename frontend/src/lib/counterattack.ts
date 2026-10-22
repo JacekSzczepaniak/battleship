@@ -3,6 +3,7 @@
 
 import type { IslandDTO, LastCounterattackDTO, PendingCounterattackDTO } from '../api/expeditionApi';
 import { formatResources } from './resources';
+import { shipName } from './ships';
 
 export function ticksLabel(n: number): string {
     if (n === 1) return '1 tik';
@@ -18,6 +19,32 @@ export function pendingLabel(c: PendingCounterattackDTO): string {
     return c.defenseStarted
         ? `Obrona: ${c.islandName} — termin wstrzymany do końca bitwy`
         : `Kontratak: ${c.islandName} — uderzenie za ${ticksLabel(c.ticksLeft)} (tik ${c.strikeAt})`;
+}
+
+/** Jak przebiegnie obrona: kolejność strzałów zależy od pełnej bandery (#79). */
+export function defenseHint(c: PendingCounterattackDTO): string {
+    return c.fullFlag
+        ? 'Stań flotą na wyspie i przyjmij bitwę. Bez obrony wyspa przepada razem z połową magazynu.'
+        : 'Stań flotą na wyspie i przyjmij bitwę — napastnik strzela pierwszy. Bez obrony wyspa przepada razem z połową magazynu.';
+}
+
+/** Bonus pełnej bandery w zapowiedzi (zasada telegrafowania, #79). */
+export const FULL_FLAG_BONUS = 'Pełna bandera: strzelasz pierwszy, a napastnik płynie bez największego statku';
+
+/**
+ * Statek, bez którego płynie napastnik: różnica składów stron bitwy.
+ * null = ten sam skład (napastnik z jednym statkiem zachowuje go, #79).
+ */
+export function attackerMissingShip(own: Record<string, number>, attacker: Record<string, number>): number | null {
+    const missing = Object.keys(own).map(Number).filter(l => (own[l] ?? 0) > (attacker[l] ?? 0));
+    return missing.length ? Math.max(...missing) : null;
+}
+
+/** Pasek bonusu na ekranie bitwy obronnej przy pełnej banderze. */
+export function battleBonusLabel(missing: number | null): string {
+    return missing !== null
+        ? `Pełna bandera: strzelasz pierwszy, napastnik płynie bez statku: ${shipName(missing).toLowerCase()}`
+        : 'Pełna bandera: strzelasz pierwszy (napastnik ma jeden statek, więc płynie w pełnym składzie)';
 }
 
 /** Ostatnie rozstrzygnięcie: obrona, przegrana obrona albo utrata pod nieobecność. */

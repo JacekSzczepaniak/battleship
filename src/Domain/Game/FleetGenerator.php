@@ -9,7 +9,7 @@ namespace App\Domain\Game;
 interface FleetGenerator
 {
     /**
-     * Zwraca flotę zgodną z ruleset->allowedShips(), mieszczącą się na planszy
+     * Zwraca flotę zgodną z ruleset->opponentShips(), mieszczącą się na planszy
      * rulesetu bez kolizji i styku (walidowalną przez Board::placeMany()).
      *
      * @return Ship[]

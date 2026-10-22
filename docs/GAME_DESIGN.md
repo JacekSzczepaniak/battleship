@@ -26,7 +26,9 @@ w Filarze VIII; licznik zatopionych jednostek wroga) · flota jako majątek
 (budowa/remont, stocznie, wygrana→remont / przegrana→strata) · wolne morze
 12×12 z mgłą, deterministyczne z seeda profilu · kartografia pasywna ·
 sztormy przy pierwszym wpłynięciu na sektor · geografia=logistyka (bitwa/stocznia
-wymagają obecności) · UI flow bitwy: port → rozstawianie → bitwa → wynik
+wymagają obecności) · bandery na wyspach i kontrataki z bitwą obronną; pełna
+bandera daje obrońcy pierwszy strzał i odbiera napastnikowi największy statek
+(Epic E) · UI flow bitwy: port → rozstawianie → bitwa → wynik
 (projekt: `docs/design/ui-flow/`). Elementy projektu UI bez pokrycia
 w silniku czekają w zadaniach: energia i „Zakończ turę” (#59), ruch statku
 w bitwie (#60), trzy surowce w UI (#49), abordaż (#55), mapa akwenu jako
@@ -108,7 +110,9 @@ ale nikt jej nie atakuje. Nowe źródła walki to NPC, piraci i **kontrataki**:
 - przegrana obrona albo nieobecność oznacza utratę wyspy: bandera znika,
   złoże staje, połowa magazynu przepada, wyspa znowu jest areną,
 - pełna bandera na akwenie: obrońca strzela pierwszy, napastnik płynie bez
-  największego statku.
+  największego statku; gdy lustrzany skład ma jeden statek, bonusem jest
+  tylko pierwszy strzał. Bonus widać w zapowiedzi i znika z utratą
+  którejkolwiek wyspy.
 
 Obrona wyspy bez floty (garnizon, fort) wchodzi z osadami (Epic F).
 

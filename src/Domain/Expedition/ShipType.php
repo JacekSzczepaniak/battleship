@@ -26,6 +26,20 @@ enum ShipType: string
         };
     }
 
+    /**
+     * Pojemność ładowni (suma surowców). Okręty wojenne wożą mało — duża
+     * ładownia to rola transportowca (#47).
+     */
+    public function cargoCapacity(): int
+    {
+        return match ($this) {
+            self::Tratwa => 5,
+            self::Kuter => 15,
+            self::Niszczyciel => 20,
+            self::Lotniskowiec => 30,
+        };
+    }
+
     /** Koszt budowy: kadłub z drewna, większe jednostki także stal na uzbrojenie. */
     public function buildCost(): Resources
     {

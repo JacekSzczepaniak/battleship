@@ -26,7 +26,8 @@ final class SettleBattle
      * stracone.
      *
      * @return array{result:string, awarded:int, xp:int, rank:string, rankUp:bool,
-     *     loot:array{wood:int, steel:int, gold:int}, resources:array{wood:int, steel:int, gold:int},
+     *     loot:array{wood:int, steel:int, gold:int}, stockpile:array{wood:int, steel:int, gold:int},
+     *     cargo:array{wood:int, steel:int, gold:int}, cargoLost:array{wood:int, steel:int, gold:int},
      *     lostShips:list<string>, damagedShips:list<string>}
      */
     public function handle(string $profileId, string $gameId): array
@@ -75,7 +76,10 @@ final class SettleBattle
             'rank' => $profile->rank()->value,
             'rankUp' => $outcome['xp'] > 0 && $profile->rank() !== $rankBefore,
             'loot' => $outcome['loot']->toArray(),
-            'resources' => $profile->resources()->toArray(),
+            // łup leży w magazynie wyspy bitwy; ładunek ponad pojemność po stratach przepadł
+            'stockpile' => $profile->stockpile($islandId)->toArray(),
+            'cargo' => $profile->cargo()->toArray(),
+            'cargoLost' => $outcome['cargoLost']->toArray(),
             'lostShips' => $outcome['lost'],
             'damagedShips' => $outcome['damaged'],
         ];

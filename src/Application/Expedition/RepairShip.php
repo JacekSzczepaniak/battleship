@@ -46,7 +46,7 @@ final class RepairShip
             throw new \DomainException('Shipyard level too low for this ship type');
         }
 
-        $repaired = $profile->repairShip($shipId);
+        $repaired = $profile->repairShip($shipId, $island->id);
         $this->profiles->save($profile);
 
         return $repaired;

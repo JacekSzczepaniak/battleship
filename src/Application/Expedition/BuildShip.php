@@ -20,7 +20,7 @@ final class BuildShip
     /**
      * Buduje statek w stoczni wyspy, na której kapitan STOI (geografia =
      * logistyka); stocznia musi być wystarczająco duża, a bramkę rangi typu
-     * i koszt w surowcach egzekwuje domena (CaptainProfile::buildShip).
+     * i koszt (magazyn wyspy, potem ładownia) egzekwuje domena (CaptainProfile::buildShip).
      */
     public function handle(string $profileId, string $islandId, ShipType $type): OwnedShip
     {
@@ -40,7 +40,7 @@ final class BuildShip
             throw new \DomainException('Shipyard level too low for this ship type');
         }
 
-        $ship = $profile->buildShip($type);
+        $ship = $profile->buildShip($type, $island->id);
         $this->profiles->save($profile);
 
         return $ship;

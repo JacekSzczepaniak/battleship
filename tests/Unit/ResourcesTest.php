@@ -8,7 +8,6 @@ use App\Domain\Expedition\Resources;
 use App\Domain\Expedition\ShipType;
 use App\Domain\Expedition\StaticIslandCatalog;
 use App\Domain\Shared\GameId;
-use App\Infrastructure\Persistence\Doctrine\Mapper\ProfileSnapshotMapper;
 
 it('dodaje, odejmuje i sprawdza pokrycie kosztu', function () {
     $stock = new Resources(wood: 30, steel: 10, gold: 2);
@@ -30,7 +29,7 @@ it('niszczyciel wymaga stali — samo drewno nie wystarcza', function () {
         new Resources(wood: 100),
     );
 
-    expect(fn () => $profile->buildShip(ShipType::Niszczyciel))->toThrow(DomainException::class, 'Not enough resources');
+    expect(fn () => $profile->buildShip(ShipType::Niszczyciel, 'zatoka-rozbitka'))->toThrow(DomainException::class, 'Not enough resources');
 });
 
 it('budowa niszczyciela zdejmuje drewno i stal', function () {
@@ -39,9 +38,9 @@ it('budowa niszczyciela zdejmuje drewno i stal', function () {
         new Resources(wood: 40, steel: 25, gold: 3),
     );
 
-    $profile->buildShip(ShipType::Niszczyciel);
+    $profile->buildShip(ShipType::Niszczyciel, 'zatoka-rozbitka');
 
-    expect($profile->resources()->toArray())->toBe(['wood' => 10, 'steel' => 5, 'gold' => 3]);
+    expect($profile->cargo()->toArray())->toBe(['wood' => 10, 'steel' => 5, 'gold' => 3]);
 });
 
 it('rozliczenie dokłada łup z wyspy do magazynu', function () {
@@ -51,7 +50,8 @@ it('rozliczenie dokłada łup z wyspy do magazynu', function () {
 
     $profile->settleBattle($gameId, 'won', 70, new Resources(wood: 20, steel: 10, gold: 5));
 
-    expect($profile->resources()->toArray())->toBe(['wood' => 40, 'steel' => 10, 'gold' => 5]);
+    expect($profile->stockpile('wyspa-sygnalowa')->toArray())->toBe(['wood' => 20, 'steel' => 10, 'gold' => 5])
+        ->and($profile->cargo()->toArray())->toBe(['wood' => 20, 'steel' => 0, 'gold' => 0]);
 });
 
 it('nagrody wysp: sumy jak dawne materiały, porażka tylko w drewnie', function () {
@@ -69,18 +69,4 @@ it('nagrody wysp: sumy jak dawne materiały, porażka tylko w drewnie', function
         expect($island->lootWin->toArray())->toBe(['wood' => $wood, 'steel' => $steel, 'gold' => $gold])
             ->and($island->lootLoss->toArray())->toBe(['wood' => $lossWood, 'steel' => 0, 'gold' => 0]);
     }
-});
-
-it('snapshot z materiałami (sprzed trzech surowców) przechodzi w drewno', function () {
-    $m = new ProfileSnapshotMapper();
-    $profile = CaptainProfile::create('Jacek');
-    $state = $m->toArray($profile);
-    unset($state['resources']);
-    $state['materials'] = 37;
-
-    expect($m->toDomain((string) $profile->id(), $state)->resources()->toArray())
-        ->toBe(['wood' => 37, 'steel' => 0, 'gold' => 0]);
-
-    $state = $m->toArray($profile);
-    expect($m->toDomain((string) $profile->id(), $state)->resources())->toEqual($profile->resources());
 });

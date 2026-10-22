@@ -33,7 +33,8 @@ final class ExpeditionApiTest extends WebTestCase
         self::assertTrue($islands[0]['unlocked']);
         self::assertFalse(end($islands)['unlocked']);
         self::assertSame(['rank' => 'majtek', 'xpNeeded' => 30], $expedition['profile']['nextRank']);
-        self::assertSame(['wood' => 20, 'steel' => 0, 'gold' => 0], $expedition['profile']['resources']);
+        self::assertSame(['wood' => 20, 'steel' => 0, 'gold' => 0], $expedition['profile']['cargo']);
+        self::assertSame(30, $expedition['profile']['cargoCapacity']);
         self::assertCount(4, $expedition['fleet']);
         self::assertSame(1, $islands[0]['shipyardLevel']);
         self::assertNotEmpty($expedition['shipTypes']);
@@ -79,7 +80,11 @@ final class ExpeditionApiTest extends WebTestCase
         self::assertSame('won', $settled['result']);
         self::assertSame(40, $settled['awarded']);
         self::assertSame(['wood' => 15, 'steel' => 5, 'gold' => 0], $settled['loot']);
-        self::assertSame(['wood' => 35, 'steel' => 5, 'gold' => 0], $settled['resources']);
+        // łup ląduje w magazynie wyspy bitwy; ładownia traci tylko to, co nie mieści
+        // się po uszkodzeniach (AI strzela losowo — który statek oberwie, bywa różnie)
+        self::assertSame(['wood' => 15, 'steel' => 5, 'gold' => 0], $settled['stockpile']);
+        self::assertSame(20, $settled['cargo']['wood'] + $settled['cargoLost']['wood']);
+        $cargoAfterBattle = $settled['cargo']['wood'];
         self::assertSame([], $settled['lostShips']);
 
         // 8) idempotencja: drugie rozliczenie bez nagród
@@ -91,7 +96,15 @@ final class ExpeditionApiTest extends WebTestCase
         // licznik zatopień w profilu: cała flota wroga (kuter + 3 tratwy), bez podwojenia po 2. rozliczeniu
         self::assertSame(4, $this->getExpedition($client, $profileId)['profile']['enemyShipsSunk']);
 
-        // 9) stocznia: budowa kutra za 20 drewna
+        // 8b) ładownia: 20/30 — 15 drewna nie zmieści się → 409 CARGO_FULL
+        $this->post($client, "/api/profiles/$profileId/cargo", [
+            'islandId' => 'zatoka-rozbitka', 'direction' => 'load', 'wood' => 15,
+        ]);
+        self::assertResponseStatusCodeSame(409);
+        self::assertSame('CARGO_FULL', $this->lastErrorCode($client));
+
+        // 9) stocznia: budowa kutra za 20 drewna — 15 z magazynu wyspy, 5 z ładowni
+        $capacityBefore = $this->getExpedition($client, $profileId)['profile']['cargoCapacity'];
         $ship = $this->post($client, "/api/profiles/$profileId/ships", [
             'type' => 'kuter', 'islandId' => 'zatoka-rozbitka',
         ]);
@@ -99,8 +112,27 @@ final class ExpeditionApiTest extends WebTestCase
         self::assertSame('kuter', $ship['type']);
 
         $expedition = $this->getExpedition($client, $profileId);
-        self::assertSame(['wood' => 15, 'steel' => 5, 'gold' => 0], $expedition['profile']['resources']);
+        self::assertSame(['wood' => $cargoAfterBattle - 5, 'steel' => 0, 'gold' => 0], $expedition['profile']['cargo']);
+        self::assertSame($capacityBefore + 15, $expedition['profile']['cargoCapacity']); // drugi kuter: +15
+        self::assertSame(['wood' => 0, 'steel' => 5, 'gold' => 0], $expedition['islands'][0]['stockpile']);
         self::assertCount(5, $expedition['fleet']);
+
+        // 9b) załadunek stali z magazynu do ładowni — dokowanie kosztuje tik
+        $tickBefore = $expedition['world']['tick'];
+        $moved = $this->post($client, "/api/profiles/$profileId/cargo", [
+            'islandId' => 'zatoka-rozbitka', 'direction' => 'load', 'steel' => 5,
+        ]);
+        self::assertResponseIsSuccessful();
+        self::assertSame(['wood' => $cargoAfterBattle - 5, 'steel' => 5, 'gold' => 0], $moved['cargo']);
+        self::assertSame(['wood' => 0, 'steel' => 0, 'gold' => 0], $moved['stockpile']);
+        self::assertSame($tickBefore + 1, $moved['tick']);
+
+        // 9c) rozładunek ponad stan ładowni → 409 NOT_ENOUGH_RESOURCES
+        $this->post($client, "/api/profiles/$profileId/cargo", [
+            'islandId' => 'zatoka-rozbitka', 'direction' => 'unload', 'wood' => 100,
+        ]);
+        self::assertResponseStatusCodeSame(409);
+        self::assertSame('NOT_ENOUGH_RESOURCES', $this->lastErrorCode($client));
         self::assertSame(1, $expedition['islands'][0]['wins']);
 
         // 10) niszczyciel w stoczni poziomu 1 → 409 SHIPYARD_TOO_LOW
@@ -124,6 +156,13 @@ final class ExpeditionApiTest extends WebTestCase
     }
 
     /** @return array<string,mixed> */
+    private function lastErrorCode(KernelBrowser $client): ?string
+    {
+        $body = json_decode($client->getResponse()->getContent() ?: '{}', true);
+
+        return is_array($body) ? ($body['error']['code'] ?? null) : null;
+    }
+
     private function getExpedition(KernelBrowser $client, string $profileId): array
     {
         $client->request('GET', "/api/profiles/$profileId/expedition");

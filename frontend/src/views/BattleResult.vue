@@ -7,7 +7,7 @@ import { RANK_LABELS, SHIP_LABELS, startIslandBattle, type RankName } from '../a
 import { setCurrentBattle } from '../lib/expeditionSession';
 import { getBattleReport, type BattleReport } from '../lib/battleSession';
 import { shipName } from '../lib/ships';
-import { RESOURCES, formatResources } from '../lib/resources';
+import { RESOURCES, formatResources, isEmpty } from '../lib/resources';
 
 const route = useRoute();
 const router = useRouter();
@@ -223,9 +223,10 @@ onMounted(load);
                     <div v-for="r in RESOURCES" :key="r.key" class="loot-tile" :class="{ none: exp.settle.loot[r.key] === 0 }">
                         <span class="loot-label"><span class="res-dot" :style="{ background: r.color }"></span> {{ r.label.toUpperCase() }}</span>
                         <b>+{{ exp.settle.loot[r.key] }}</b>
-                        <small>w magazynie: {{ exp.settle.resources[r.key] }}</small>
+                        <small>w magazynie: {{ exp.settle.stockpile[r.key] }}</small>
                     </div>
                 </div>
+                <p v-if="exp" class="muted loot-note">Łup czeka w magazynie wyspy {{ exp.islandName }} — załadujesz go w porcie (1 tik).</p>
                 <p v-else class="muted no-loot">Trening nie daje łupów ani XP. Bitwy o wyspy rozegrasz z portu, gdy staniesz przy wyspie.</p>
 
                 <div class="kicker fleet-kicker">STAN FLOTY</div>
@@ -242,6 +243,9 @@ onMounted(load);
                         <div class="bar"><div></div></div>
                     </li>
                 </ul>
+                <p v-if="exp && !isEmpty(exp.settle.cargoLost)" class="cargo-lost">
+                    Za burtą: {{ formatResources(exp.settle.cargoLost) }} — ładunek ponad pojemność floty po stratach.
+                </p>
                 <router-link
                     v-if="exp"
                     class="btn btn-secondary repair"
@@ -306,6 +310,8 @@ h1 { font: 700 84px var(--font-head); line-height: .95; letter-spacing: -.02em; 
 .loot-tile b { font: 700 24px var(--font-head); color: var(--info); }
 .loot-tile small { font: 500 10px var(--font-mono); color: var(--text-dim); }
 .loot-tile.none b { color: var(--text-dim); }
+.loot-note { margin: 0; font-size: 12px; }
+.cargo-lost { margin: 0; font: 500 12px var(--font-body); color: var(--danger); }
 .no-loot { margin: 0; font-size: 13px; }
 .fleet-kicker { margin-top: 16px; }
 .fleet { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }

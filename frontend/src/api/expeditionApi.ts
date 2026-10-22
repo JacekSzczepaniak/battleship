@@ -64,7 +64,9 @@ export interface ProfileDTO {
 
 export interface ExpeditionProfileDTO extends ProfileDTO {
     nextRank: { rank: RankName; xpNeeded: number } | null;
-    resources: ResourcesDTO;
+    // surowce istnieją fizycznie: ładownia floty + magazyny wysp (IslandDTO.stockpile)
+    cargo: ResourcesDTO;
+    cargoCapacity: number;
     // jednostki wroga zatopione we wszystkich rozliczonych bitwach
     enemyShipsSunk: number;
 }
@@ -105,6 +107,7 @@ export interface IslandDTO {
     discovered: boolean;
     position: { x: number; y: number } | null;
     present: boolean;
+    stockpile: ResourcesDTO;
 }
 
 export interface WorldDTO {
@@ -123,8 +126,11 @@ export interface SailResultDTO {
     position: { x: number; y: number };
     discoveredNow: string[];
     cartography: number;
-    event: { type: string; effect: string; ship?: ShipTypeName; wood?: number } | null;
-    resources: ResourcesDTO;
+    // dochód kartograficzny, który nie zmieścił się w ładowni
+    cartographyLost: number;
+    event: { type: string; effect: string; ship?: ShipTypeName; wood?: number; cargoLost?: ResourcesDTO } | null;
+    cargo: ResourcesDTO;
+    cargoCapacity: number;
     atIsland: string | null;
 }
 
@@ -143,7 +149,10 @@ export interface SettleResultDTO {
     rank: RankName;
     rankUp: boolean;
     loot: ResourcesDTO;
-    resources: ResourcesDTO;
+    // łup leży w magazynie wyspy bitwy; ładunek ponad pojemność po stratach przepadł
+    stockpile: ResourcesDTO;
+    cargo: ResourcesDTO;
+    cargoLost: ResourcesDTO;
     lostShips: ShipTypeName[];
     damagedShips: ShipTypeName[];
 }
@@ -170,6 +179,20 @@ export async function buildShip(profileId: string, islandId: string, type: ShipT
 
 export async function repairShip(profileId: string, islandId: string, shipId: string): Promise<FleetShipDTO> {
     return http.post<FleetShipDTO>(`/profiles/${profileId}/ships/${shipId}/repair`, { islandId });
+}
+
+export interface CargoTransferDTO {
+    cargo: ResourcesDTO;
+    cargoCapacity: number;
+    stockpile: ResourcesDTO;
+    tick: number;
+}
+
+/** Załadunek (magazyn → ładownia) albo rozładunek; dokowanie kosztuje tik. */
+export async function transferCargo(
+    profileId: string, islandId: string, direction: 'load' | 'unload', amount: Partial<ResourcesDTO>,
+): Promise<CargoTransferDTO> {
+    return http.post<CargoTransferDTO>(`/profiles/${profileId}/cargo`, { islandId, direction, ...amount });
 }
 
 export async function sail(profileId: string, x: number, y: number): Promise<SailResultDTO> {

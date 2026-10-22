@@ -28,6 +28,7 @@ const EFFECTS: Record<BuildingTypeName, string> = {
     kopalnia: 'podwaja urobek złoża stali i złota',
     'rozbudowa-stoczni': 'podnosi poziom stoczni o 1',
     fort: 'kontratak bez obrony plądruje połowę magazynu zamiast odebrać wyspę',
+    uczelnia: 'prowadzi badania drzewka technologii — naraz jedno',
 };
 
 const SITES: Record<BuildingTypeName, string> = {
@@ -35,6 +36,7 @@ const SITES: Record<BuildingTypeName, string> = {
     kopalnia: 'stawia się tylko przy złożu stali albo złota',
     'rozbudowa-stoczni': 'tylko przy istniejącej stoczni poziomu 1–2',
     fort: 'nie w bezpiecznej przystani — kontrataki jej nie dotyczą',
+    uczelnia: 'stoi na każdej posiadanej wyspie',
 };
 
 const standing = computed(() => props.buildingTypes.filter(t => props.island.buildings.includes(t.type)));

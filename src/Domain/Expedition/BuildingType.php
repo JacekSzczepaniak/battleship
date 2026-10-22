@@ -24,6 +24,9 @@ enum BuildingType: string
      */
     case Fort = 'fort';
 
+    /** Prowadzi badania drzewka technologii (Epic G); naraz trwa jedno badanie kapitana. */
+    case Uczelnia = 'uczelnia';
+
     public function buildCost(): Resources
     {
         return match ($this) {
@@ -31,6 +34,7 @@ enum BuildingType: string
             self::Kopalnia => new Resources(wood: 30, steel: 20),
             self::RozbudowaStoczni => new Resources(wood: 50, steel: 30, gold: 15),
             self::Fort => new Resources(wood: 40, steel: 40, gold: 10),
+            self::Uczelnia => new Resources(wood: 30, steel: 20, gold: 15),
         };
     }
 
@@ -44,6 +48,8 @@ enum BuildingType: string
             self::RozbudowaStoczni => $island->shipyardLevel > 0 && $island->shipyardLevel < Island::MAX_SHIPYARD_LEVEL,
             // kontrataki nie dotyczą bezpiecznej przystani, więc fort nie miałby tam czego bronić
             self::Fort => !$island->safeHarbor,
+            // uczelnia stoi na każdej posiadanej wyspie, także w bezpiecznej przystani
+            self::Uczelnia => true,
         };
     }
 
@@ -53,7 +59,7 @@ enum BuildingType: string
         return match ($this) {
             self::Tartak => new Resources(wood: $yield->wood),
             self::Kopalnia => new Resources(steel: $yield->steel, gold: $yield->gold),
-            self::RozbudowaStoczni, self::Fort => Resources::none(),
+            self::RozbudowaStoczni, self::Fort, self::Uczelnia => Resources::none(),
         };
     }
 

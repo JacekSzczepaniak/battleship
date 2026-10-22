@@ -171,10 +171,11 @@ Wszystkie ścieżki pod `/api`, JSON. Pełna lista: `docker compose exec app php
 | `POST` | `/games/{id}/sonar` | skan sonarem (krzyż), nie kończy tury |
 | `POST` | `/games/{id}/air-raid` | nalot na obszar |
 | `POST` | `/profiles` | nowy profil kapitana |
-| `GET` | `/profiles/{id}/expedition` | profil, flota, typy statków i budynków, wyspy (bandera, budynki), świat, kontratak |
+| `GET` | `/profiles/{id}/expedition` | profil, flota, typy statków i budynków, wyspy (bandera, budynki), świat, kontratak, drzewko badań |
 | `POST` | `/profiles/{id}/sail` | rejs o jeden sektor |
 | `POST` | `/profiles/{id}/islands/{islandId}/battle` | bitwa o wyspę albo obrona wyspy pod banderą (kapitan musi stać na wyspie) |
 | `POST` | `/profiles/{id}/islands/{islandId}/buildings` | budynek osady (`type`) na posiadanej wyspie |
+| `POST` | `/profiles/{id}/islands/{islandId}/research` | start badania (`technology`) w uczelni wyspy, na której stoi kapitan |
 | `POST` | `/profiles/{id}/battles/{gameId}/settle` | rozliczenie zakończonej bitwy |
 | `POST` | `/profiles/{id}/ships` | budowa statku w stoczni |
 | `POST` | `/profiles/{id}/ships/{shipId}/repair` | remont statku |

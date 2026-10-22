@@ -50,6 +50,10 @@
                         </span>
                     </template>
                     <span v-else class="muted">najwyższa ranga — morza należą do Ciebie</span>
+                    <a v-if="expedition.research.current" href="#badania" class="research-tag" :class="{ paused: expedition.research.current.paused }">
+                        🎓 {{ TECH_LABELS[expedition.research.current.technology] }}:
+                        {{ expedition.research.current.paused ? 'wstrzymane' : `${expedition.research.current.progress}/${expedition.research.current.ticks} tików` }}
+                    </a>
                 </div>
             </section>
 
@@ -99,6 +103,17 @@
                     </tbody>
                 </table>
                 <p class="muted">Urobek złoża czeka w magazynie wyspy — dopłyń, załaduj i zawieź do stoczni.</p>
+            </section>
+
+            <!-- Badania (Epic G): drzewko, badanie w toku, start w uczelni wyspy -->
+            <section id="badania" class="card research">
+                <h2>🎓 Badania</h2>
+                <TechTreePanel
+                    :research="expedition.research"
+                    :available="currentIsland ? addResources(currentIsland.stockpile, expedition.profile.cargo) : null"
+                    :busy="busy"
+                    @research="onStartResearch"
+                />
             </section>
 
             <!-- Flota i port (stocznia dostępna tylko w doku) -->
@@ -263,9 +278,9 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
-    buildBuilding, buildShip, createProfile, getExpedition, repairShip, sail, settleBattle, startIslandBattle, transferCargo,
-    BUILDING_LABELS, RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS,
-    type BuildingTypeName, type ExpeditionDTO, type FleetShipDTO, type IslandDTO, type RankName, type ResourcesDTO, type ShipTypeDTO,
+    buildBuilding, buildShip, createProfile, getExpedition, repairShip, sail, settleBattle, startIslandBattle, startResearch, transferCargo,
+    BUILDING_LABELS, RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, TECH_LABELS,
+    type BuildingTypeName, type TechnologyName, type ExpeditionDTO, type FleetShipDTO, type IslandDTO, type RankName, type ResourcesDTO, type ShipTypeDTO,
 } from '../api/expeditionApi';
 import { ApiError } from '../api/http';
 import {
@@ -277,6 +292,7 @@ import { fieldsLabel } from '../lib/ships';
 import { depositLabel, depositState, economyIslands, whereToFind } from '../lib/economy';
 import CargoPanel from '../components/CargoPanel.vue';
 import SettlementPanel from '../components/SettlementPanel.vue';
+import TechTreePanel from '../components/TechTreePanel.vue';
 import { canDefend, defenseHint, FULL_FLAG_BONUS, lastIcon, lastLabel, pendingLabel, ticksLabel } from '../lib/counterattack';
 import {
     addResources, covers, formatResources, isEmpty, missing, totalResources,
@@ -483,6 +499,23 @@ async function onBuildBuilding(type: BuildingTypeName) {
     }
 }
 
+/** Badanie w uczelni wyspy, przy której stoi kapitan (Epic G). */
+async function onStartResearch(technology: TechnologyName) {
+    const profileId = getProfileId();
+    const island = currentIsland.value;
+    if (!profileId || !island) return;
+    busy.value = true;
+    error.value = '';
+    try {
+        await startResearch(profileId, island.id, technology);
+        expedition.value = await getExpedition(profileId);
+    } catch (e: any) {
+        error.value = e?.message ?? 'Badanie nie ruszyło';
+    } finally {
+        busy.value = false;
+    }
+}
+
 /** Jedno dokowanie przenosi wszystkie wpisane surowce — 1 tik (#49). */
 async function onTransfer(direction: 'load' | 'unload', amount: ResourcesDTO) {
     const profileId = getProfileId();
@@ -663,6 +696,9 @@ h2, h3 { font-family: var(--font-head); }
 .squad-pick label { cursor: pointer; color: var(--text-2); }
 .squad-pick label.off { opacity: .45; cursor: not-allowed; }
 .economy h2 { margin: 0 0 0.4rem; font-size: 1.05rem; }
+.research h2 { margin: 0 0 0.4rem; font-size: 1.05rem; }
+.research-tag { color: var(--info); text-decoration: none; }
+.research-tag.paused { color: var(--warn); }
 .eco { border-collapse: collapse; width: 100%; font-size: 13px; }
 .eco th, .eco td { padding: 5px 8px; text-align: left; border-bottom: 1px solid var(--line-card); }
 .eco thead th { font: 600 10px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--text-label); }

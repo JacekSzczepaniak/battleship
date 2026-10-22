@@ -19,8 +19,9 @@ final class CaptainProfile
      */
     private const STARTING_WOOD = 20;
 
-    /** Szansa sztormu przy wpłynięciu w NIEZBADANY sektor (w %). */
+    /** Szansa sztormu przy wpłynięciu w NIEZBADANY sektor (w %); z Mapami sztormowymi mniejsza. */
     private const STORM_CHANCE = 20;
+    private const STORM_CHANCE_CHARTED = 10;
 
     /**
      * Fale zabierają procent ładunku, ale nie mniej niż minimum drewna (o ile
@@ -82,6 +83,22 @@ final class CaptainProfile
      * @var array<string, list<BuildingType>> klucz: id wyspy
      */
     private array $buildings = [];
+
+    /**
+     * Zbadane technologie (Epic G): działają na stałe od tiku ukończenia.
+     *
+     * @var list<Technology>
+     */
+    private array $researched = [];
+
+    /**
+     * Badanie w toku (najwyżej jedno, niezależnie od liczby uczelni): wyspa
+     * uczelni, tiki pod banderą zaliczone do postępu i tik, do którego je
+     * policzono. Bez bandery na wyspie badanie stoi, ale dalej jest tym jednym.
+     *
+     * @var array{technology: Technology, island: string, progress: int, countedTo: int}|null
+     */
+    private ?array $research = null;
 
     /**
      * Kontratak w toku (najwyżej jeden): wyspa celu, tik zapowiedzi, tik
@@ -507,10 +524,138 @@ final class CaptainProfile
         return min($level, Island::MAX_SHIPYARD_LEVEL);
     }
 
-    /** Ile urobku może czekać w magazynie wyspy: limit rośnie razem z urobkiem. */
+    /** Ile urobku może czekać w magazynie wyspy: limit rośnie razem z urobkiem, Spichlerze go podwajają. */
     public function depositCap(Island $island): Resources
     {
-        return $this->depositYield($island)->times(Island::DEPOSIT_BUFFER_TICKS);
+        $bufferTicks = $this->hasResearched(Technology::Spichlerze) ? Island::DEPOSIT_BUFFER_TICKS_GRANARY : Island::DEPOSIT_BUFFER_TICKS;
+
+        return $this->depositYield($island)->times($bufferTicks);
+    }
+
+    // --- Badania: uczelnia i drzewko technologii (Epic G) ---
+
+    /** @return list<Technology> */
+    public function researched(): array
+    {
+        return $this->researched;
+    }
+
+    public function hasResearched(Technology $technology): bool
+    {
+        return in_array($technology, $this->researched, true);
+    }
+
+    /**
+     * Badanie w toku; null = żadne nie trwa.
+     *
+     * @return array{technology: Technology, island: string, progress: int, countedTo: int}|null
+     */
+    public function research(): ?array
+    {
+        return $this->research;
+    }
+
+    /** Badanie stoi: wyspa jego uczelni straciła banderę. Wznawia je odbicie wyspy. */
+    public function isResearchPaused(): bool
+    {
+        return null !== $this->research && !$this->ownsIsland($this->research['island']);
+    }
+
+    /**
+     * Dlaczego badania nie da się teraz zacząć na wyspie (null = kapitan na
+     * morzu); null = można badać. Kolejność: zbadana, trwa inne badanie,
+     * reguła drzewka (poprzedni poziom, ranga), czynna uczelnia, obecność
+     * kapitana, koszt (magazyn wyspy i ładownia).
+     */
+    public function researchBlocker(Technology $technology, ?Island $island, WorldMap $world): ?ResearchBlock
+    {
+        if ($this->hasResearched($technology)) {
+            return ResearchBlock::Researched;
+        }
+        if (null !== $this->research) {
+            return ResearchBlock::Busy;
+        }
+        $level = $technology->level();
+        $tree = $level->treeBlocker($technology->branch(), $this->researched, $this->rank());
+        if (null !== $tree) {
+            return $tree;
+        }
+
+        return match (true) {
+            null === $island => ResearchBlock::NotPresent,
+            !$this->hasActiveBuilding($island->id, BuildingType::Uczelnia) => ResearchBlock::NoAcademy,
+            !$this->isAt($world, $island->id) => ResearchBlock::NotPresent,
+            !$this->stockpile($island->id)->add($this->cargo)->covers($level->researchCost()) => ResearchBlock::Resources,
+            default => null,
+        };
+    }
+
+    /**
+     * Zaczyna badanie w czynnej uczelni wyspy, na której stoi kapitan.
+     * Płatność jak za budynek; start nie kosztuje tiku, postęp liczą tiki
+     * pod banderą od bieżącego.
+     */
+    public function startResearch(Technology $technology, Island $island, WorldMap $world): void
+    {
+        $this->ensureWorldState($world);
+
+        $blocker = $this->researchBlocker($technology, $island, $world);
+        if (null !== $blocker) {
+            throw new \DomainException($blocker->message($technology));
+        }
+
+        $this->pay($island->id, $technology->level()->researchCost());
+        $this->research = ['technology' => $technology, 'island' => $island->id, 'progress' => 0, 'countedTo' => $this->tick];
+    }
+
+    /** Ile tików pod banderą brakuje do końca badania w toku; null = żadne nie trwa. */
+    public function researchTicksLeft(): ?int
+    {
+        if (null === $this->research) {
+            return null;
+        }
+
+        return $this->research['technology']->level()->researchTicks() - $this->research['progress'];
+    }
+
+    /**
+     * Postęp badania do danego tiku: liczą się tylko tiki z banderą na wyspie
+     * uczelni. Wołane przed każdą zmianą bandery, więc odcinek od ostatniego
+     * naliczenia ma jedną banderę. Ukończone badanie działa od tiku ukończenia,
+     * dlatego urobek złóż do tego tiku nalicza się jeszcze po staremu.
+     */
+    private function accrueResearch(int $upTo, ?WorldMap $world): void
+    {
+        if (null === $this->research || $upTo <= $this->research['countedTo']) {
+            return;
+        }
+        if (!$this->ownsIsland($this->research['island'])) {
+            $this->research['countedTo'] = $upTo;
+
+            return;
+        }
+
+        $doneAt = $this->research['countedTo'] + $this->researchTicksLeft();
+        if ($doneAt > $upTo) {
+            $this->research['progress'] += $upTo - $this->research['countedTo'];
+            $this->research['countedTo'] = $upTo;
+
+            return;
+        }
+
+        foreach ($world?->deposits() ?? [] as $islandId => $island) {
+            if ($this->ownsIsland($islandId) && isset($this->depositTicks[$islandId])) {
+                $this->accrueDeposit($islandId, $island, $doneAt);
+            }
+        }
+        $this->researched[] = $this->research['technology'];
+        $this->research = null;
+    }
+
+    /** Szansa sztormu przy pierwszym wpłynięciu na sektor (w %). */
+    public function stormChance(): int
+    {
+        return $this->hasResearched(Technology::MapySztormowe) ? self::STORM_CHANCE_CHARTED : self::STORM_CHANCE;
     }
 
     // --- Wolne morze: żegluga, mgła świata, kartografia ---
@@ -542,6 +687,7 @@ final class CaptainProfile
 
         $this->placeUnplacedResources($world);
         $this->rollCounterattacks($world);
+        $this->accrueResearch($this->tick, $world);
         $this->accrueDeposits($world);
     }
 
@@ -601,6 +747,8 @@ final class CaptainProfile
         $plundered = !$held && $absent && $this->hasActiveBuilding($islandId, BuildingType::Fort);
         $lost = Resources::none();
         if (!$held) {
+            // badanie w uczelni wyspy liczy tiki pod banderą do tiku uderzenia
+            $this->accrueResearch($tick, $world);
             // urobek złoża należy się do tiku uderzenia — potem złoże staje, chyba że fort utrzymał wyspę
             $island = $world?->deposits()[$islandId] ?? null;
             if (null !== $island) {
@@ -794,7 +942,7 @@ final class CaptainProfile
     /** @return array<string,mixed>|null zdarzenie sztormu (deterministyczne) albo spokojna żegluga */
     private function rollStorm(): ?array
     {
-        if (crc32("{$this->worldSeed}:{$this->tick}") % 100 >= self::STORM_CHANCE) {
+        if (crc32("{$this->worldSeed}:{$this->tick}") % 100 >= $this->stormChance()) {
             return null;
         }
 
@@ -952,6 +1100,8 @@ final class CaptainProfile
             BattleKind::Defense => [false, $this->settleDefense($key, 'won' === $result)],
         };
         if ($captured) {
+            // odbita wyspa wznawia badanie swojej uczelni od tiku zdobycia
+            $this->accrueResearch($this->tick, null);
             $this->ownedIslands[$battle['island']] = $this->tick;
             // złoże (jeśli wyspa je ma) rusza od tiku zdobycia
             $this->depositTicks[$battle['island']] = $this->tick;
@@ -1113,6 +1263,19 @@ final class CaptainProfile
         return ['pending' => $this->counterattack, 'calmFrom' => $this->counterattackCalmFrom, 'rolledTo' => $this->counterattackRolledTo, 'last' => $this->lastCounterattack];
     }
 
+    /**
+     * Stan badań do snapshotu.
+     *
+     * @return array{researched: list<string>, current: array{technology: string, island: string, progress: int, countedTo: int}|null}
+     */
+    public function researchState(): array
+    {
+        return [
+            'researched' => array_map(static fn (Technology $t) => $t->value, $this->researched),
+            'current' => null !== $this->research ? ['technology' => $this->research['technology']->value] + $this->research : null,
+        ];
+    }
+
     /** Surowce, których ensureWorldState() jeszcze nie rozłożyło; null = brak. */
     public function unplacedResources(): ?Resources
     {
@@ -1139,6 +1302,8 @@ final class CaptainProfile
      * @param array<string, int>                                                                                                         $depositTicks tik ostatniego naliczenia urobku złoża (klucz: id wyspy)
      * @param array<string, int>                                                                                                         $ownedIslands wyspy pod banderą: id wyspy → tik zdobycia
      * @param array<string, list<BuildingType>>                                                                                          $buildings    budynki osady (klucz: id wyspy)
+     * @param list<Technology>                                                                                                           $researched   zbadane technologie
+     * @param array{technology: Technology, island: string, progress: int, countedTo: int}|null                                          $research     badanie w toku
      */
     public static function fromSnapshot(
         ProfileId $id,
@@ -1159,6 +1324,8 @@ final class CaptainProfile
         array $ownedIslands = [],
         ?array $counterattacks = null,
         array $buildings = [],
+        array $researched = [],
+        ?array $research = null,
     ): self {
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
@@ -1167,6 +1334,8 @@ final class CaptainProfile
         $self->depositTicks = $depositTicks;
         $self->ownedIslands = $ownedIslands;
         $self->buildings = $buildings;
+        $self->researched = $researched;
+        $self->research = $research;
         $self->unplacedResources = $unplaced ?? (null === $cargo ? new Resources(wood: self::STARTING_WOOD) : null);
         // ładunek ponad pojemność (np. zapisany, zanim tratwa straciła ładownię)
         // nie przepada — czeka na magazyn wyspy

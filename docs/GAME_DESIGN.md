@@ -175,6 +175,10 @@ sektory, odporność na sztormy, jakość map, przejścia oceaniczne) ·
 pod banderą. Drzewko startowe: 4 gałęzie po 2 poziomy, drugi poziom od rangi
 sternik. Technologie działają tylko po stronie gracza.
 
+✅ (#96) Ekonomia: Pojemne ładownie (ładownia statku +50%, w dół) i Dok
+remontowy (remont za pół ceny, w górę) w Kadłubach; Lepsze narzędzia (złoże
++1/tik, tartak i kopalnia podwajają powiększony urobek) w Osadach.
+
 Każdy węzeł ma **dwie ścieżki odblokowania**:
 - **standardową** — surowce + tiki + wymagana uczelnia (wolniej),
 - **questową** — artefakt/wyczyn = natychmiast (Twoje „przyspieszenie").

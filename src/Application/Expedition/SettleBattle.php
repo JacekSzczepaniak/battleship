@@ -65,7 +65,8 @@ final class SettleBattle
         $result = GameStatus::Lost === $game->status() ? 'lost' : 'won';
         $rankBefore = $profile->rank();
         // urobek złóż do bieżącego tiku liczy się przed łupem, który trafia do tego samego magazynu
-        $profile->ensureWorldState($this->worldFactory->worldFor($profile));
+        $world = $this->worldFactory->worldFor($profile);
+        $profile->ensureWorldState($world);
 
         // wariant zatopionego statku (#99) wskazuje, który statek floty poniósł stratę
         $sunk = $this->sunkPlayerShips($game);
@@ -100,7 +101,7 @@ final class SettleBattle
             // wygrana postawiła banderę na wyspie
             'captured' => $outcome['captured'],
             // zdobycie wyspy ze złożem uruchamia wydobycie: urobek na tik (odbita wyspa z tartakiem — podwojony)
-            'depositStarted' => $outcome['captured'] && $island->hasDeposit() ? $profile->depositYield($island)->toArray() : null,
+            'depositStarted' => $outcome['captured'] && $island->hasDeposit() ? $profile->depositYield($island, $world->theme())->toArray() : null,
             // obrona przed kontratakiem: czy bandera została i co przepadło z magazynu
             'defense' => null !== $outcome['defense']
                 ? ['held' => $outcome['defense']['held'], 'stockpileLost' => $outcome['defense']['stockpileLost']->toArray()]

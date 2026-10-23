@@ -19,10 +19,6 @@ final class CaptainProfile
      */
     private const STARTING_WOOD = 20;
 
-    /** Szansa sztormu przy wpłynięciu w NIEZBADANY sektor (w %); z Mapami sztormowymi mniejsza. */
-    private const STORM_CHANCE = 20;
-    private const STORM_CHANCE_CHARTED = 10;
-
     /**
      * Fale zabierają procent ładunku, ale nie mniej niż minimum drewna (o ile
      * jest w ładowni). Konwój bez eskorty traci dwukrotność obu wartości.
@@ -139,18 +135,15 @@ final class CaptainProfile
     /** Seed świata (deterministyczna mapa per kapitan). */
     private int $worldSeed = 0;
 
-    /** @var array{x:int,y:int}|null pozycja na morzu; null = jeszcze nie zainicjalizowana (ensureWorldState) */
-    private ?array $position = null;
-
-    /** @var array<string,bool> odkryte sektory (klucz "x:y") */
-    private array $discovered = [];
+    /** Akwen, w którym stoi flota (Epic I) — flota jest jedna, więc akwen bieżący też. */
+    private string $sea = Sea::START;
 
     /**
-     * @var array<string,bool> sektory, na których kapitan był (klucz "x:y"). Odkrycie
-     *                         sięga sąsiedztwa, odwiedziny — tylko pozycji; sztorm
-     *                         grozi przy pierwszym wpłynięciu na sektor
+     * @var array<string, SeaState> pozycja, odkryte i odwiedzone sektory osobno dla
+     *                              każdego akwenu (klucz: id akwenu); brak pozycji
+     *                              bieżącego akwenu = stan do inicjalizacji (ensureWorldState)
      */
-    private array $visited = [];
+    private array $seaStates = [];
 
     /** Licznik ruchów — wejście do deterministycznych rzutów eventów podróży. */
     private int $moveCount = 0;
@@ -530,15 +523,17 @@ final class CaptainProfile
 
     /**
      * Urobek złoża na tik pod banderą: Lepsze narzędzia dokładają 1 jednostkę
-     * każdego surowca złoża, a budynki stojące na wyspie (tartak, kopalnia)
-     * podwajają już powiększony urobek.
+     * każdego surowca złoża, mnożnik złóż akwenu (Epic I) mnoży ten urobek,
+     * a budynki stojące na wyspie (tartak, kopalnia) podwajają już powiększony
+     * urobek. Domyślny motyw = Morze Rozbitków (×1).
      */
-    public function depositYield(Island $island): Resources
+    public function depositYield(Island $island, SeaTheme $theme = new SeaTheme()): Resources
     {
         $base = $island->depositYield;
         if ($this->hasResearched(Technology::LepszeNarzedzia)) {
             $base = Resources::fromArray(array_map(static fn (int $amount) => $amount > 0 ? $amount + 1 : 0, $base->toArray()));
         }
+        $base = $base->times($theme->depositMultiplier);
         $yield = $base;
         foreach ($this->buildingsOn($island->id) as $building) {
             $yield = $yield->add($building->depositBoost($base));
@@ -564,11 +559,11 @@ final class CaptainProfile
     }
 
     /** Ile urobku może czekać w magazynie wyspy: limit rośnie razem z urobkiem, Spichlerze go podwajają. */
-    public function depositCap(Island $island): Resources
+    public function depositCap(Island $island, SeaTheme $theme = new SeaTheme()): Resources
     {
         $bufferTicks = $this->hasResearched(Technology::Spichlerze) ? Island::DEPOSIT_BUFFER_TICKS_GRANARY : Island::DEPOSIT_BUFFER_TICKS;
 
-        return $this->depositYield($island)->times($bufferTicks);
+        return $this->depositYield($island, $theme)->times($bufferTicks);
     }
 
     // --- Badania: uczelnia i drzewko technologii (Epic G) ---
@@ -682,19 +677,24 @@ final class CaptainProfile
             return;
         }
 
-        foreach ($world?->deposits() ?? [] as $islandId => $island) {
-            if ($this->ownsIsland($islandId) && isset($this->depositTicks[$islandId])) {
-                $this->accrueDeposit($islandId, $island, $doneAt);
+        if (null !== $world) {
+            foreach ($world->deposits() as $islandId => $island) {
+                if ($this->ownsIsland($islandId) && isset($this->depositTicks[$islandId])) {
+                    $this->accrueDeposit($islandId, $island, $doneAt, $world->theme());
+                }
             }
         }
         $this->researched[] = $this->research['technology'];
         $this->research = null;
     }
 
-    /** Szansa sztormu przy pierwszym wpłynięciu na sektor (w %). */
-    public function stormChance(): int
+    /**
+     * Szansa sztormu przy pierwszym wpłynięciu na sektor (w %): z motywu
+     * akwenu, a Mapy sztormowe ją połowią. Domyślny motyw = Morze Rozbitków.
+     */
+    public function stormChance(SeaTheme $theme = new SeaTheme()): int
     {
-        return $this->hasResearched(Technology::MapySztormowe) ? self::STORM_CHANCE_CHARTED : self::STORM_CHANCE;
+        return $this->hasResearched(Technology::MapySztormowe) ? intdiv($theme->stormChance, 2) : $theme->stormChance;
     }
 
     /** Najdalszy sektor osiągalny w jednym rejsie (za 1 tik). */
@@ -710,23 +710,45 @@ final class CaptainProfile
         return $this->worldSeed;
     }
 
-    /** Czy stan morski (pozycja/mgła) został już zainicjalizowany. */
+    /** Akwen, w którym stoi flota. */
+    public function currentSea(): string
+    {
+        return $this->sea;
+    }
+
+    /** @return array<string, SeaState> stan kapitana na każdym akwenie (klucz: id akwenu) */
+    public function seaStates(): array
+    {
+        return $this->seaStates;
+    }
+
+    /** Stan bieżącego akwenu. */
+    private function here(): SeaState
+    {
+        return $this->seaStates[$this->sea] ??= new SeaState();
+    }
+
+    /** Czy stan morski (pozycja/mgła) bieżącego akwenu został już zainicjalizowany. */
     public function hasWorldState(): bool
     {
-        return null !== $this->position;
+        return null !== ($this->seaStates[$this->sea] ?? null)?->position();
     }
 
     /**
-     * Inicjalizuje stan morski (start = sektor pierwszej wyspy + sąsiedztwo),
-     * jeśli profil jeszcze go nie ma (nowy albo sprzed wolnego morza).
+     * Inicjalizuje stan morski bieżącego akwenu (start = sektor pierwszej
+     * wyspy + widoczność akwenu), jeśli profil jeszcze go nie ma (nowy albo
+     * sprzed wolnego morza). Mapa musi być mapą akwenu, w którym stoi flota.
      */
     public function ensureWorldState(WorldMap $world): void
     {
-        if (null === $this->position) {
-            $this->position = $world->startPosition();
-            $this->visited["{$this->position['x']}:{$this->position['y']}"] = true;
-            foreach ($this->neighborhood($this->position['x'], $this->position['y'], $world) as [$x, $y]) {
-                $this->discovered["$x:$y"] = true;
+        if ($world->seaId() !== $this->sea) {
+            throw new \LogicException("Fleet is in sea {$this->sea}, not {$world->seaId()}");
+        }
+        if (!$this->hasWorldState()) {
+            $start = $world->startPosition();
+            $this->here()->moveTo($start['x'], $start['y']);
+            foreach ($this->neighborhood($start['x'], $start['y'], $world) as [$x, $y]) {
+                $this->here()->discover($x, $y);
             }
         }
 
@@ -797,7 +819,7 @@ final class CaptainProfile
             // urobek złoża należy się do tiku uderzenia — potem złoże staje, chyba że fort utrzymał wyspę
             $island = $world?->deposits()[$islandId] ?? null;
             if (null !== $island) {
-                $this->accrueDeposit($islandId, $island, $tick);
+                $this->accrueDeposit($islandId, $island, $tick, $world->theme());
             }
             $stock = $this->stockpile($islandId);
             $lost = new Resources(intdiv($stock->wood, 2), intdiv($stock->steel, 2), intdiv($stock->gold, 2));
@@ -827,20 +849,20 @@ final class CaptainProfile
                 $this->depositTicks[$islandId] = $this->tick;
                 continue;
             }
-            $this->accrueDeposit($islandId, $island, $this->tick);
+            $this->accrueDeposit($islandId, $island, $this->tick, $world->theme());
         }
     }
 
-    /** Urobek złoża jednej wyspy od ostatniego naliczenia do danego tiku. */
-    private function accrueDeposit(string $islandId, Island $island, int $upTo): void
+    /** Urobek złoża jednej wyspy (z akwenu o danym motywie) od ostatniego naliczenia do danego tiku. */
+    private function accrueDeposit(string $islandId, Island $island, int $upTo, SeaTheme $theme): void
     {
         $ticks = $upTo - ($this->depositTicks[$islandId] ?? $upTo);
         if ($ticks <= 0) {
             return;
         }
         $stock = $this->stockpile($islandId)->toArray();
-        $cap = $this->depositCap($island)->toArray();
-        $output = $this->depositYield($island)->times($ticks)->toArray();
+        $cap = $this->depositCap($island, $theme)->toArray();
+        $output = $this->depositYield($island, $theme)->times($ticks)->toArray();
         foreach ($output as $resource => $amount) {
             $output[$resource] = min($amount, max(0, $cap[$resource] - $stock[$resource]));
         }
@@ -862,7 +884,8 @@ final class CaptainProfile
         $legacy = $this->unplacedResources;
         $this->unplacedResources = null;
 
-        $here = $world->islandAt($this->position['x'], $this->position['y']);
+        $position = $this->position();
+        $here = $world->islandAt($position['x'], $position['y']);
         if (null !== $here) {
             $this->stockpiles[$here] = $this->stockpile($here)->add($legacy);
 
@@ -878,36 +901,34 @@ final class CaptainProfile
         }
     }
 
-    /** @return array{x:int,y:int} */
+    /** @return array{x:int,y:int} pozycja floty na bieżącym akwenie */
     public function position(): array
     {
-        if (null === $this->position) {
-            throw new \DomainException('World state not initialized');
-        }
-
-        return $this->position;
+        return $this->here()->position() ?? throw new \DomainException('World state not initialized');
     }
 
+    /** Czy sektor bieżącego akwenu jest odkryty. */
     public function isDiscovered(int $x, int $y): bool
     {
-        return isset($this->discovered["$x:$y"]);
+        return $this->here()->isDiscovered($x, $y);
     }
 
-    /** @return list<string> odkryte sektory jako "x:y" */
+    /** @return list<string> odkryte sektory bieżącego akwenu jako "x:y" */
     public function discoveredSectors(): array
     {
-        return array_keys($this->discovered);
+        return $this->here()->discoveredSectors();
     }
 
+    /** Czy kapitan był na sektorze bieżącego akwenu. */
     public function isVisited(int $x, int $y): bool
     {
-        return isset($this->visited["$x:$y"]);
+        return $this->here()->isVisited($x, $y);
     }
 
-    /** @return list<string> odwiedzone sektory jako "x:y" */
+    /** @return list<string> odwiedzone sektory bieżącego akwenu jako "x:y" */
     public function visitedSectors(): array
     {
-        return array_keys($this->visited);
+        return $this->here()->visitedSectors();
     }
 
     public function moveCount(): int
@@ -926,7 +947,7 @@ final class CaptainProfile
         $this->ensureWorldState($world);
         $pos = $world->islandPosition($islandId);
 
-        return null !== $pos && $pos === $this->position;
+        return null !== $pos && $pos === $this->position();
     }
 
     /**
@@ -951,7 +972,8 @@ final class CaptainProfile
         if (!$world->isInside($x, $y)) {
             throw new \DomainException('Sector out of bounds');
         }
-        $distance = max(abs($x - $this->position['x']), abs($y - $this->position['y']));
+        $position = $this->position();
+        $distance = max(abs($x - $position['x']), abs($y - $position['y']));
         if (0 === $distance || (1 === $this->sailRange() && $distance > 1)) {
             throw new \DomainException('Can only sail to an adjacent sector');
         }
@@ -965,18 +987,16 @@ final class CaptainProfile
         // sztorm łapie w drodze — tylko przy pierwszym wpłynięciu na sektor.
         // Nie „nieodkryty”: cel rejsu jest zawsze odkryty, bo przybycie odkrywa
         // całe sąsiedztwo (#68)
-        $event = $this->isVisited($x, $y) ? null : $this->rollStorm();
+        $event = $this->isVisited($x, $y) ? null : $this->rollStorm($world->theme());
 
-        $this->position = ['x' => $x, 'y' => $y];
-        $this->visited["$x:$y"] = true;
+        $this->here()->moveTo($x, $y);
 
         $discoveredNow = [];
         $cartography = 0;
         foreach ($this->neighborhood($x, $y, $world) as [$nx, $ny]) {
-            if ($this->isDiscovered($nx, $ny)) {
+            if (!$this->here()->discover($nx, $ny)) {
                 continue;
             }
-            $this->discovered["$nx:$ny"] = true;
             $discoveredNow[] = "$nx:$ny";
             $cartography += self::CARTOGRAPHY_SECTOR_REWARD;
             if (null !== $world->islandAt($nx, $ny)) {
@@ -990,9 +1010,9 @@ final class CaptainProfile
     }
 
     /** @return array<string,mixed>|null zdarzenie sztormu (deterministyczne) albo spokojna żegluga */
-    private function rollStorm(): ?array
+    private function rollStorm(SeaTheme $theme): ?array
     {
-        if (crc32("{$this->worldSeed}:{$this->tick}") % 100 >= $this->stormChance()) {
+        if (crc32("{$this->worldSeed}:{$this->tick}") % 100 >= $this->stormChance($theme)) {
             return null;
         }
 
@@ -1029,12 +1049,16 @@ final class CaptainProfile
         return new Resources($wood, $steel, $units - $wood - $steel);
     }
 
-    /** @return list<array{0:int,1:int}> sektor + sąsiedztwo (promień 1) w granicach mapy */
+    /**
+     * @return list<array{0:int,1:int}> sektor + sąsiedztwo w promieniu widoczności
+     *                                  akwenu (1 = jak przed akwenami, 0 = tylko sektor) w granicach mapy
+     */
     private function neighborhood(int $x, int $y, WorldMap $world): array
     {
+        $radius = $world->theme()->visibility;
         $out = [];
-        for ($dx = -1; $dx <= 1; ++$dx) {
-            for ($dy = -1; $dy <= 1; ++$dy) {
+        for ($dx = -$radius; $dx <= $radius; ++$dx) {
+            for ($dy = -$radius; $dy <= $radius; ++$dy) {
                 if ($world->isInside($x + $dx, $y + $dy)) {
                     $out[] = [$x + $dx, $y + $dy];
                 }
@@ -1351,10 +1375,10 @@ final class CaptainProfile
      * @param list<OwnedShip>|null                                                                                                       $fleet        null = profil sprzed ekonomii — dostaje flotę startową
      * @param Resources|null                                                                                                             $cargo        null = profil sprzed ładowni (patrz $unplaced) albo sprzed ekonomii — drewno startowe do magazynu wyspy
      * @param int|null                                                                                                                   $worldSeed    null = seed wyprowadzony z id (stabilny dla starych profili)
-     * @param array{x:int,y:int}|null                                                                                                    $position     null = start ustali ensureWorldState
-     * @param list<string>|null                                                                                                          $discovered   sektory "x:y"
+     * @param array{x:int,y:int}|null                                                                                                    $position     pozycja na akwenie $sea; null = start ustali ensureWorldState
+     * @param list<string>|null                                                                                                          $discovered   sektory "x:y" akwenu $sea
      * @param int|null                                                                                                                   $tick         null = profil sprzed tiku: rejsy + zarejestrowane bitwy
-     * @param list<string>|null                                                                                                          $visited      null = profil sprzed odwiedzin: tylko obecna pozycja
+     * @param list<string>|null                                                                                                          $visited      sektory akwenu $sea; null = profil sprzed odwiedzin: tylko obecna pozycja
      * @param array<string, Resources>                                                                                                   $stockpiles   magazyny wysp
      * @param Resources|null                                                                                                             $unplaced     surowce czekające na magazyn wyspy (też jeden magazyn profilu sprzed ładowni) — rozłożone przy ensureWorldState()
      * @param array<string, int>                                                                                                         $depositTicks tik ostatniego naliczenia urobku złoża (klucz: id wyspy)
@@ -1362,6 +1386,8 @@ final class CaptainProfile
      * @param array<string, list<BuildingType>>                                                                                          $buildings    budynki osady (klucz: id wyspy)
      * @param list<Technology>                                                                                                           $researched   zbadane technologie
      * @param array{technology: Technology, island: string, progress: int, countedTo: int}|null                                          $research     badanie w toku
+     * @param string|null                                                                                                                $sea          akwen floty; null = profil sprzed akwenów: Morze Rozbitków
+     * @param array<string, SeaState>                                                                                                    $seaStates    stan pozostałych akwenów (klucz: id akwenu); stan akwenu $sea dają $position, $discovered i $visited
      */
     public static function fromSnapshot(
         ProfileId $id,
@@ -1384,6 +1410,8 @@ final class CaptainProfile
         array $buildings = [],
         array $researched = [],
         ?array $research = null,
+        ?string $sea = null,
+        array $seaStates = [],
     ): self {
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
@@ -1402,15 +1430,17 @@ final class CaptainProfile
             $self->unplacedResources = ($self->unplacedResources ?? Resources::none())->add($overflow);
         }
         $self->worldSeed = $worldSeed ?? (crc32((string) $id) & 0x7FFFFFFF);
-        $self->position = $position;
-        $self->discovered = null !== $discovered ? array_fill_keys($discovered, true) : [];
+        $self->sea = $sea ?? Sea::START;
+        $self->seaStates = $seaStates;
+        // profil sprzed odwiedzin: znamy tylko obecną pozycję, trasy z przeszłości nie
+        $self->seaStates[$self->sea] = new SeaState(
+            $position,
+            $discovered ?? [],
+            $visited ?? (null !== $position ? ["{$position['x']}:{$position['y']}"] : []),
+        );
         $self->moveCount = max(0, $moveCount);
         // profil sprzed tiku: rejsy + zarejestrowane bitwy, żeby zegar nie cofnął się względem historii
         $self->tick = max(0, $tick ?? $self->moveCount + count($battles));
-        // profil sprzed odwiedzin: znamy tylko obecną pozycję, trasy z przeszłości nie
-        $self->visited = null !== $visited
-            ? array_fill_keys($visited, true)
-            : (null !== $position ? ["{$position['x']}:{$position['y']}" => true] : []);
         $self->counterattack = $counterattacks['pending'] ?? null;
         $self->counterattackCalmFrom = $counterattacks['calmFrom'] ?? max([0, ...array_values($ownedIslands)]);
         $self->counterattackRolledTo = $counterattacks['rolledTo'] ?? $self->tick;

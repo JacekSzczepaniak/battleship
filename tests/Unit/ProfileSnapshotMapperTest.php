@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\Resources;
+use App\Domain\Expedition\Sea;
+use App\Domain\Expedition\SeaState;
 use App\Domain\Expedition\StaticIslandCatalog;
 use App\Domain\Expedition\WorldMap;
 use App\Domain\Shared\GameId;
@@ -69,7 +71,10 @@ it('round-tripuje odwiedzone sektory; stary snapshot zna tylko obecną pozycję'
     expect($sorted($restored->visitedSectors()))->toBe($sorted($profile->visitedSectors()))
         ->and($restored->visitedSectors())->toHaveCount(2);
 
-    unset($state['visited']);
+    // snapshot sprzed odwiedzin jest też sprzed akwenów: płaska pozycja i odkrycia, bez `visited`
+    $state['position'] = $profile->position();
+    $state['discovered'] = $profile->discoveredSectors();
+    unset($state['sea'], $state['seas']);
     $legacy = $m->toDomain((string) $profile->id(), $state);
     $pos = $profile->position();
     expect($legacy->visitedSectors())->toBe(["{$pos['x']}:{$pos['y']}"]);
@@ -90,4 +95,53 @@ it('round-tripuje rozbudowę stoczni; profil sprzed rozbudowy ma stocznię z kat
     expect($restored->buildingsOn('zatoka-rozbitka'))->toBe([BuildingType::RozbudowaStoczni])
         ->and($restored->shipyardLevel($zatoka))->toBe(2)
         ->and($m->toArray($restored)['buildings'])->toBe(['zatoka-rozbitka' => ['rozbudowa-stoczni']]);
+});
+
+it('stary profil sprzed akwenów wczytuje się do Morza Rozbitków z tą samą pozycją, odkryciami i odwiedzinami', function () {
+    $m = new ProfileSnapshotMapper();
+    $profile = CaptainProfile::create('Jacek');
+    $state = $m->toArray($profile);
+    unset($state['sea'], $state['seas']);
+    $state['position'] = ['x' => 4, 'y' => 7];
+    $state['discovered'] = ['3:6', '4:6', '4:7', '5:8'];
+    $state['visited'] = ['4:6', '4:7'];
+
+    $legacy = $m->toDomain((string) $profile->id(), $state);
+
+    expect($legacy->currentSea())->toBe(Sea::START)
+        ->and($legacy->position())->toBe(['x' => 4, 'y' => 7])
+        ->and($legacy->discoveredSectors())->toBe(['3:6', '4:6', '4:7', '5:8'])
+        ->and($legacy->visitedSectors())->toBe(['4:6', '4:7'])
+        ->and(array_keys($legacy->seaStates()))->toBe([Sea::START]);
+
+    // zapis idzie już w kształcie per akwen, bez płaskich pól
+    $saved = $m->toArray($legacy);
+    expect($saved)->not->toHaveKeys(['position', 'discovered', 'visited'])
+        ->and($saved['sea'])->toBe(Sea::START)
+        ->and($saved['seas'][Sea::START])->toBe([
+            'position' => ['x' => 4, 'y' => 7],
+            'discovered' => ['3:6', '4:6', '4:7', '5:8'],
+            'visited' => ['4:6', '4:7'],
+        ]);
+});
+
+it('round-tripuje akwen floty i stan każdego akwenu', function () {
+    $m = new ProfileSnapshotMapper();
+    $id = CaptainProfile::create('Jacek')->id();
+    $profile = CaptainProfile::fromSnapshot(
+        $id, 'Jacek', 0, [], null, Resources::none(), 7, ['x' => 1, 'y' => 1], ['1:1'],
+        visited: ['1:1'],
+        sea: 'ocean-sztormow',
+        seaStates: [Sea::START => new SeaState(['x' => 9, 'y' => 2], ['9:2', '9:3'], ['9:2'])],
+    );
+
+    $restored = $m->toDomain((string) $id, $m->toArray($profile));
+
+    expect($restored->currentSea())->toBe('ocean-sztormow')
+        ->and($restored->position())->toBe(['x' => 1, 'y' => 1])
+        ->and($restored->discoveredSectors())->toBe(['1:1'])
+        ->and($restored->visitedSectors())->toBe(['1:1'])
+        ->and($restored->seaStates()[Sea::START]->position())->toBe(['x' => 9, 'y' => 2])
+        ->and($restored->seaStates()[Sea::START]->discoveredSectors())->toBe(['9:2', '9:3'])
+        ->and($restored->seaStates()[Sea::START]->visitedSectors())->toBe(['9:2']);
 });

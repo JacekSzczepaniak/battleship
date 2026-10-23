@@ -22,7 +22,9 @@ services:
     App\Domain\Expedition\ProfileRepository: '@App\Infrastructure\Persistence\Doctrine\DoctrineProfileRepository'
 
     # Domain ports
-    App\Domain\Expedition\IslandCatalog: '@App\Domain\Expedition\StaticIslandCatalog'
+    # wyspy wszystkich akwenów; katalog każdego akwenu zna graf świata (Epic I)
+    App\Domain\Expedition\IslandCatalog: '@App\Domain\Expedition\WorldIslandCatalog'
+    App\Domain\Expedition\SeaGraph: '@App\Domain\Expedition\StaticSeaGraph'
     App\Domain\Game\FleetGenerator: '@App\Domain\Game\RandomFleetGenerator'
     App\Application\Game\WeaponUseDecider: '@App\Application\Game\RandomWeaponUseDecider'
 

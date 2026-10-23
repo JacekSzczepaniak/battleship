@@ -28,8 +28,9 @@ final class CreateGame
      * @param array<int,list<Loadout>>|null $opponentVariants warianty AI; null = lustro wariantów gracza ([] = same domyślne, strażnik cieśniny)
      * @param int|null                      $fortSeed         bitwa oblężnicza (#119): fort z tego seeda zamiast floty AI;
      *                                                        plansza zawsze FortRules::SIZE, zasady fun (pełny arsenał i energia)
+     * @param bool                          $boarding         abordaż ostatniego statku wroga (#118): bitwy wyprawy; działa tylko z energią (fun), nie w oblężeniu
      */
-    public function handle(?int $w = null, ?int $h = null, string $mode = 'classic', ?array $ships = null, string $firstTurn = 'player', ?array $opponentShips = null, ?array $variants = null, ?int $sonarRadius = null, ?array $opponentVariants = null, ?int $fortSeed = null): Game
+    public function handle(?int $w = null, ?int $h = null, string $mode = 'classic', ?array $ships = null, string $firstTurn = 'player', ?array $opponentShips = null, ?array $variants = null, ?int $sonarRadius = null, ?array $opponentVariants = null, ?int $fortSeed = null, bool $boarding = false): Game
     {
         if (null !== $fortSeed) {
             [$w, $h, $mode] = [FortRules::SIZE, FortRules::SIZE, 'fun'];
@@ -41,6 +42,9 @@ final class CreateGame
 
         $game = Game::create($rules);
         $game->setTurn($firstTurn);
+        if ($boarding) {
+            $game->enableBoarding();
+        }
         if (null !== $fortSeed) {
             $game->placeFort($this->forts->generate($fortSeed));
         }

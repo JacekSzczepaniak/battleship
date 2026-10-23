@@ -63,6 +63,8 @@ export interface BattleReport {
     enemySunk: number[];
     enemyTotal: number;
     playerSunk: number[];
+    /** ostatni statek wroga zdobyty abordażem (#118); brak w raportach sprzed abordażu */
+    boarded?: boolean;
     // bitwa oblężnicza (#119): zniszczone działa zamiast zatopień
     fort?: { destroyed: number; total: number } | null;
     /** null = bitwa treningowa (bez stawki) */

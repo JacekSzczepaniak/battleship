@@ -41,4 +41,10 @@ enum LogEvent: string
 
     /** Flota przepłynęła przez bramę na inny akwen. */
     case GatePassed = 'gate-passed';
+
+    /** Udany abordaż: statek wroga czeka na decyzję kapitana (#118). */
+    case ShipBoarded = 'ship-boarded';
+
+    /** Kapitan zdecydował o zdobytym statku: dołączył go albo rozebrał (#118). */
+    case PrizeDecided = 'prize-decided';
 }

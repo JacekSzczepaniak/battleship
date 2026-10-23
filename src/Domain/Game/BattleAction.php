@@ -5,7 +5,8 @@ namespace App\Domain\Game;
 /**
  * Działanie strony w turze bitwy i jego koszt energii (#59, wariant B).
  * Atak (salwa, torpeda, nalot) kończy turę; działania wspierające (sonar,
- * ruch statku z #60) tylko zużywają energię. Klucze = nazwy w API.
+ * ruch statku z #60) tylko zużywają energię. Abordaż (#118) zabiera całą
+ * pulę i kończy turę. Klucze = nazwy w API.
  */
 enum BattleAction: string
 {
@@ -14,13 +15,14 @@ enum BattleAction: string
     case Torpedo = 'torpedo';
     case AirRaid = 'airRaid';
     case Move = 'move';
+    case Board = 'board';
 
     public function cost(): int
     {
         return match ($this) {
             self::Shot, self::Sonar, self::Move => 1,
             self::Torpedo => 2,
-            self::AirRaid => 3,
+            self::AirRaid, self::Board => 3,
         };
     }
 

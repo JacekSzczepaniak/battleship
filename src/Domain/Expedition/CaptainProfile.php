@@ -167,6 +167,13 @@ final class CaptainProfile
     /** Licznik ruchów — wejście do deterministycznych rzutów eventów podróży. */
     private int $moveCount = 0;
 
+    /**
+     * Statki zdobyte abordażem, czekające na decyzję kapitana (#118); klucz = id zdobyczy.
+     *
+     * @var array<string, Prize>
+     */
+    private array $prizes = [];
+
     /** Tik = akcja morska (rejs, bitwa); zegar świata — GAME_DESIGN.md, filar II. */
     private int $tick = 0;
 
@@ -1287,10 +1294,11 @@ final class CaptainProfile
      * @param int                     $enemyShipsSunk liczba jednostek wroga zatopionych w bitwie (statystyka kapitana)
      * @param array<int, ShipVariant> $sunkVariants   wariant zatopionego statku, klucz = indeks w $sunkLengths;
      *                                                bez wpisu stratę ponosi dowolny statek tej długości
+     * @param ShipType|null           $boardedType    typ statku wroga zdobytego abordażem (#118); po wygranej czeka na decyzję
      *
-     * @return array{xp:int, loot:Resources, lost:list<string>, damaged:list<string>, cargoLost:Resources, captured:bool, defense: array{held:bool, stockpileLost:Resources}|null, gateOpened:bool}
+     * @return array{xp:int, loot:Resources, lost:list<string>, damaged:list<string>, cargoLost:Resources, captured:bool, defense: array{held:bool, stockpileLost:Resources}|null, gateOpened:bool, prize:?Prize}
      */
-    public function settleBattle(GameId $gameId, string $result, int $xpAward, ?Resources $loot = null, array $sunkLengths = [], int $enemyShipsSunk = 0, array $sunkVariants = []): array
+    public function settleBattle(GameId $gameId, string $result, int $xpAward, ?Resources $loot = null, array $sunkLengths = [], int $enemyShipsSunk = 0, array $sunkVariants = [], ?ShipType $boardedType = null, ?ShipVariant $boardedVariant = null): array
     {
         $loot ??= Resources::none();
         if (!in_array($result, ['won', 'lost'], true)) {
@@ -1306,7 +1314,7 @@ final class CaptainProfile
         $key = (string) $gameId;
         $battle = $this->battles[$key] ?? throw new \DomainException('Battle not registered for this profile');
         if ($battle['settled']) {
-            return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => [], 'cargoLost' => Resources::none(), 'captured' => false, 'defense' => null, 'gateOpened' => false];
+            return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => [], 'cargoLost' => Resources::none(), 'captured' => false, 'defense' => null, 'gateOpened' => false, 'prize' => null];
         }
 
         $battle['settled'] = true;
@@ -1349,7 +1357,61 @@ final class CaptainProfile
             $cargoLost = $cargoLost->add($overflow);
         }
 
-        return ['xp' => $xpAward, 'loot' => $loot, 'lost' => $lost, 'damaged' => $damaged, 'cargoLost' => $cargoLost, 'captured' => $captured, 'defense' => $defense, 'gateOpened' => $gateOpened];
+        $prize = null;
+        if ('won' === $result && null !== $boardedType) {
+            $prize = Prize::capture($boardedType, $boardedVariant, $this->tick);
+            $this->prizes[$prize->id] = $prize;
+            $place = BattleKind::Guardian === $kind ? 'gate' : 'island';
+            $this->record($this->tick, LogEvent::ShipBoarded, ['ship' => $boardedType->value, 'variant' => $boardedVariant?->value, $place => $battle['island']]);
+        }
+
+        return ['xp' => $xpAward, 'loot' => $loot, 'lost' => $lost, 'damaged' => $damaged, 'cargoLost' => $cargoLost, 'captured' => $captured, 'defense' => $defense, 'gateOpened' => $gateOpened, 'prize' => $prize];
+    }
+
+    // --- Zdobyte statki (#118) ---
+
+    /** @return list<Prize> statki zdobyte abordażem, czekające na decyzję */
+    public function prizes(): array
+    {
+        return array_values($this->prizes);
+    }
+
+    /**
+     * Decyzja o zdobytym statku, w dowolnym miejscu i czasie. Dołączenie daje
+     * uszkodzony statek bez wymogu rangi (ranga ogranicza tylko budowę);
+     * rozbiórka ładuje połowę kosztu budowy do ładowni, a nadmiar przepada.
+     *
+     * @return array{decision:string, prize:Prize, ship:?OwnedShip, refund:Resources, cargoLost:Resources}
+     */
+    public function decidePrize(string $prizeId, PrizeDecision $decision): array
+    {
+        $prize = $this->prizes[$prizeId] ?? throw new \DomainException('Prize not found');
+        unset($this->prizes[$prizeId]);
+
+        $ship = null;
+        $refund = Resources::none();
+        $cargoLost = Resources::none();
+        switch ($decision) {
+            case PrizeDecision::Join:
+                $ship = OwnedShip::build($prize->type, $prize->variant);
+                $ship->markDamaged();
+                $this->fleet[] = $ship;
+                break;
+            case PrizeDecision::Scrap:
+                [$refund, $cargoLost] = $prize->scrapValue()->fitInto($this->cargoCapacity() - $this->cargo->total());
+                $this->cargo = $this->cargo->add($refund);
+                break;
+        }
+
+        $this->record($this->tick, LogEvent::PrizeDecided, [
+            'ship' => $prize->type->value,
+            'variant' => $prize->variant?->value,
+            'decision' => $decision->value,
+            'refund' => PrizeDecision::Scrap === $decision ? $refund->toArray() : null,
+            'lost' => $cargoLost->isZero() ? null : $cargoLost->toArray(),
+        ]);
+
+        return ['decision' => $decision->value, 'prize' => $prize, 'ship' => $ship, 'refund' => $refund, 'cargoLost' => $cargoLost];
     }
 
     /**
@@ -1578,6 +1640,7 @@ final class CaptainProfile
      * @param array<string, SeaState>                                                                                                    $seaStates    stan pozostałych akwenów (klucz: id akwenu); stan akwenu $sea dają $position, $discovered i $visited
      * @param array<string, int>                                                                                                         $openedGates  bramy otwarte na stałe: id bramy → tik otwarcia
      * @param list<LogEntry>                                                                                                             $log          dziennik kapitana, najstarsze pierwsze; profil sprzed dziennika zaczyna od pustego
+     * @param list<Prize>                                                                                                                $prizes       statki zdobyte abordażem, czekające na decyzję (#118)
      */
     public static function fromSnapshot(
         ProfileId $id,
@@ -1604,6 +1667,7 @@ final class CaptainProfile
         array $seaStates = [],
         array $openedGates = [],
         array $log = [],
+        array $prizes = [],
     ): self {
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
@@ -1625,6 +1689,9 @@ final class CaptainProfile
         $self->sea = $sea ?? Sea::START;
         $self->seaStates = $seaStates;
         $self->openedGates = $openedGates;
+        foreach ($prizes as $prize) {
+            $self->prizes[$prize->id] = $prize;
+        }
         usort($log, static fn (LogEntry $a, LogEntry $b) => $a->tick <=> $b->tick);
         $self->log = array_slice($log, -self::LOG_LIMIT);
         // profil sprzed odwiedzin: znamy tylko obecną pozycję, trasy z przeszłości nie

@@ -6,6 +6,7 @@ use App\Domain\Expedition\BattleKind;
 use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\ProfileRepository;
 use App\Domain\Expedition\SeaGraph;
+use App\Domain\Expedition\ShipType;
 use App\Domain\Expedition\ShipVariant;
 use App\Domain\Game\Game;
 use App\Domain\Game\GameRepository;
@@ -31,7 +32,8 @@ final class SettleBattle
      * wywołanie → zera). Pierwsza wygrana o wyspę stawia banderę; obrona
      * rozstrzyga kontratak (przegrana odbiera wyspę i połowę magazynu, #78).
      * Bitwa ze strażnikiem płaci wg strażnika bramy, a wygrana otwiera bramę;
-     * łup ląduje w ładowni (#107). Zatopione statki: wygrana → do remontu,
+     * łup ląduje w ładowni (#107). Udany abordaż zostawia zdobyty statek do
+     * decyzji kapitana (#118). Zatopione statki: wygrana → do remontu,
      * przegrana → stracone.
      *
      * @return array{result:string, awarded:int, xp:int, rank:string, rankUp:bool,
@@ -40,7 +42,8 @@ final class SettleBattle
      *     cargo:array{wood:int, steel:int, gold:int}, cargoLost:array{wood:int, steel:int, gold:int},
      *     lostShips:list<string>, damagedShips:list<string>, captured:bool,
      *     depositStarted:array{wood:int, steel:int, gold:int}|null,
-     *     defense:array{held:bool, stockpileLost:array{wood:int, steel:int, gold:int}}|null, gateOpened:bool}
+     *     defense:array{held:bool, stockpileLost:array{wood:int, steel:int, gold:int}}|null, gateOpened:bool,
+     *     prize:array{id:string, type:string, variant:?string, tick:int}|null}
      */
     public function handle(string $profileId, string $gameId): array
     {
@@ -85,6 +88,9 @@ final class SettleBattle
             static fn (Ship $ship) => ShipVariant::ofBattleShip($ship->length, $ship->loadout),
             $sunk,
         ));
+        // abordaż (#118): zdobyty statek wroga, typ z długości, wariant z wyposażenia
+        $boarded = $game->boardedShip();
+        $boardedType = null !== $boarded ? ShipType::ofLength($boarded->length) : null;
         $outcome = $profile->settleBattle(
             $game->id(),
             $result,
@@ -93,6 +99,8 @@ final class SettleBattle
             array_map(static fn (Ship $ship) => $ship->length, $sunk),
             $this->sunkEnemyShipCount($game),
             $sunkVariants,
+            $boardedType,
+            null !== $boarded && null !== $boardedType ? ShipVariant::ofBattleShip($boarded->length, $boarded->loadout) : null,
         );
         $this->profiles->save($profile);
 
@@ -119,6 +127,8 @@ final class SettleBattle
                 : null,
             // wygrana ze strażnikiem otworzyła bramę akwenu na stałe
             'gateOpened' => $outcome['gateOpened'],
+            // abordaż (#118): zdobyty statek czeka w profilu na decyzję; null = bitwa bez udanego abordażu
+            'prize' => $outcome['prize']?->toArray(),
         ];
     }
 

@@ -196,8 +196,20 @@ nie działa. Pełne oblężenie fortu z własną planszą to Epic H.
 
 **Zdobywanie wyspy — trzy fazy:** ✅
 1. potyczka morska (obecna bitwa = flota strażnicza),
-2. **abordaż**: ostatni niezatopiony statek wroga można abordażować zamiast
-   dobić → statek jako łup; ryzyko przegranej próby ✅,
+2. **abordaż** ✅ (#118): ostatni niezatopiony statek wroga można abordażować
+   zamiast dobić → statek jako łup; ryzyko przegranej próby:
+   - tylko w bitwach wyprawy z bronią specjalną (zdobycie, obrona, strażnik),
+     nie w treningu; jedna próba na bitwę,
+   - ⚡3, czyli cała tura; próba kończy turę,
+   - rzut k6 z seeda gry i numeru tury, sukces od 5+; próg spada o 1, gdy
+     co najmniej połowa pól statku jest trafiona (nie niżej niż 2+).
+     Modyfikatory to lista — technologie i perki (Epic K) dojdą jako kolejne,
+   - porażka: tura stracona, statek walczy dalej i trzeba go dobić,
+   - sukces: wygrana z XP i łupem jak zwykle, a zdobyty statek czeka w profilu
+     na decyzję: **wyremontuj i dołącz** (do floty jako uszkodzony, typ
+     z długości, bez wymogu rangi) albo **rozbierz** (połowa kosztu budowy do
+     ładowni, nadmiar przepada — decyzja czeka, więc można najpierw rozładować).
+     Trzecia opcja, **zbadaj konstrukcję**, przyjdzie w #121,
 3. **oblężenie fortu** — „battleship w innym smaku": plansza fortu (mury,
    działa nadbrzeżne, **magazyn prochu** = trafienie wywołuje eksplozję
    łańcuchową). Ta sama mechanika obsługuje bramy-cieśniny.
@@ -439,14 +451,16 @@ Akwenu 1 zacznie uwierać.
 - Specjalizacje: konkretne perki i progi; czy bojowa wpływa na samą bitwę, czy tylko na otoczkę (remont, zwiad)?
 - Pobojowisko: procent odzysku, po ilu tikach resztki znikają?
 - Balans z obserwacji: pełna utrata floty przy przegranej, sztormy 20%, koszty statków
-- Abordaż: dokładna mechanika rozstrzygnięcia (rzut? mini-plansza? koszt?)
 - Czy kiedyś dzielimy flotę na zespoły z własną pozycją?
 - Budowa trwająca N tików (filar II): kiedy i czy jednocześnie dla statków i budynków?
 
 ## Poczekalnia (pomysły wciąż aktualne, poza głównym torem)
 
 Eventy losowe w bitwie (mgła, cisza morska, prąd) · frakcje jako skórki
-(technologia/magia/rasa — flavor over mechanics) · miny · replay partii ·
+(technologia/magia/rasa — flavor over mechanics) · miny (#123: stawiacze min —
+gracz przed bitwą rozmieszcza miny, a statek wroga, który na nią trafi, jest
+trafiony; do zbalansowania liczba min, kto je ma i czy wróg też; wrogi stawiacz
+min to kandydat na technologię tylko z abordażu, #121) · replay partii ·
 statystyki/osiągnięcia · daily challenge · PvP (tylko na czystym rulesecie,
 jeśli kiedykolwiek). Perki kapitanów przeniesione do Filaru VIII
 (specjalizacje).

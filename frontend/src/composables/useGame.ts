@@ -1,8 +1,8 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import {
-    getGame, fireShot, fireTorpedo, sonarPing, sendAirRaid, endTurn as apiEndTurn, moveShip as apiMoveShip,
-    type GameViewDTO, type MoveDirection, type ShotResultDTO, type EnergyState, type RulesetName, type WeaponsState,
+    getGame, fireShot, fireTorpedo, sonarPing, sendAirRaid, endTurn as apiEndTurn, moveShip as apiMoveShip, boardShip as apiBoardShip,
+    type BoardingState, type GameViewDTO, type MoveDirection, type ShotResultDTO, type EnergyState, type RulesetName, type WeaponsState,
     type TorpedoDirection, type TurnOutcomeDTO, type SonarCell, type PlayerFleetItem, type CellShotResult, type Loadout, type FortView,
 } from '../api/gameApi.ts';
 import { carriedWeapons, cellLabel, fieldsLabel, shipName } from '../lib/ships';
@@ -61,6 +61,8 @@ export function useGame() {
     const energy = ref<EnergyState | null>(null);
     // ruch statku wykorzystany w tej turze (#60)
     const moveUsed = ref<boolean>(false);
+    // abordaż (#118); null = bitwa bez abordażu
+    const boarding = ref<BoardingState | null>(null);
     const weaponMode = ref<WeaponMode>('shot');
     const torpedoDirection = ref<TorpedoDirection>('E');
     // Wyniki sonaru — tylko po stronie klienta (backend nie zapisuje skanów)
@@ -165,6 +167,7 @@ export function useGame() {
         opponentWeapons.value = dto.opponentWeapons ?? null;
         energy.value = dto.energy ?? null;
         moveUsed.value = dto.moveUsed ?? false;
+        boarding.value = dto.boarding ?? null;
         playerFleet.value = dto.playerFleet ?? [];
         allowedShips.value = dto.allowedShips ?? {};
         opponentShips.value = dto.opponentShips ?? dto.allowedShips ?? {};
@@ -484,6 +487,28 @@ export function useGame() {
         }
     }
 
+    /**
+     * Abordaż ostatniego statku wroga (#118): rzut k6, ⚡3, jedna próba na bitwę.
+     * Sukces kończy bitwę wygraną; porażka oddaje turę wrogowi.
+     */
+    async function boardShip() {
+        if (!canAct() || !boarding.value?.available) return;
+        try {
+            shooting.value = true;
+            const res = await apiBoardShip(gameId.value);
+            const b = res.boarding;
+            pushLog('TY', `Abordaż: k6 = ${b.roll} (próg ${b.threshold}+) — ${b.success ? 'statek wroga zdobyty!' : 'załoga odparta, tura stracona.'}`);
+            showToast(b.success ? '⚓ Abordaż udany — statek jest twój!' : 'Abordaż odparty.', b.success ? 'info' : 'warn', 3000);
+            applyTurnOutcome(res);
+            await refresh();
+        } catch (e: any) {
+            showToast(e?.message ?? 'Abordaż się nie powiódł', 'warn', 2500);
+        } finally {
+            shooting.value = false;
+            weaponMode.value = 'shot';
+        }
+    }
+
     /** Jeden punkt wejścia dla kliknięcia w planszę przeciwnika — wg aktywnego trybu. */
     async function attack(x: number, y: number) {
         switch (weaponMode.value) {
@@ -512,7 +537,7 @@ export function useGame() {
 
     return {
         gameId, size, width, height, playerGrid, playerUnderFireOverlay, enemyFogGrid, turn, status, finished,
-        loading, shooting, error, start, refresh, shot, attack, endTurn, moveShip, moveUsed, disabled,
+        loading, shooting, error, start, refresh, shot, attack, endTurn, moveShip, moveUsed, boardShip, boarding, disabled,
         // tryb fun
         ruleset, energy, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells, aliveCarriers,
         // notatki (saper-style)

@@ -2,6 +2,10 @@
 
 namespace App\Domain\Game;
 
+use App\Domain\Game\Boarding\BoardingAttempt;
+use App\Domain\Game\Boarding\BoardingOdds;
+use App\Domain\Game\Boarding\BoardingRoll;
+use App\Domain\Game\Boarding\BoardingTarget;
 use App\Domain\Game\Siege\Fort;
 use App\Domain\Game\Siege\FortPiece;
 use App\Domain\Game\Weapon\Loadout;
@@ -57,6 +61,15 @@ final class Game
 
     /** Czy gracz przesunął już statek w bieżącej turze (#60: ruch raz na turę). */
     private bool $playerMoved = false;
+
+    /** Numer tury gracza, od 1; rośnie przy każdym powrocie tury do gracza (#118: seed rzutu abordażu). */
+    private int $round = 1;
+
+    /** Czy bitwa dopuszcza abordaż (#118): bitwy wyprawy z bronią specjalną. */
+    private bool $boardingEnabled = false;
+
+    /** Jedyna w bitwie próba abordażu; null = jeszcze nie było. */
+    private ?BoardingAttempt $boarding = null;
 
     /** Fort na planszy wroga w bitwie oblężniczej (#119); null = zwykła bitwa z flotą. */
     private ?Fort $fort = null;
@@ -159,6 +172,7 @@ final class Game
         }
         if ('player' === $turn) {
             $this->playerMoved = false;
+            ++$this->round;
         }
     }
 
@@ -266,6 +280,145 @@ final class Game
     public function setPlayerMovedFromSnapshot(bool $moved): void
     {
         $this->playerMoved = $moved;
+    }
+
+    // --- Abordaż (#118) ---
+
+    public function round(): int
+    {
+        return $this->round;
+    }
+
+    public function setRoundFromSnapshot(int $round): void
+    {
+        $this->round = max(1, $round);
+    }
+
+    /** Włącza abordaż w tej bitwie; robi to start bitwy wyprawy, nie bitwa treningowa. */
+    public function enableBoarding(): void
+    {
+        $this->boardingEnabled = true;
+    }
+
+    public function boardingEnabled(): bool
+    {
+        return $this->boardingEnabled;
+    }
+
+    public function boardingAttempt(): ?BoardingAttempt
+    {
+        return $this->boarding;
+    }
+
+    public function setBoardingAttemptFromSnapshot(?BoardingAttempt $attempt): void
+    {
+        $this->boarding = $attempt;
+    }
+
+    /**
+     * Powód, dla którego abordaż jest teraz niedostępny; null = można próbować.
+     * Turę i koniec gry pilnuje warstwa aplikacji, jak przy innych działaniach.
+     */
+    public function boardingBlocker(): ?string
+    {
+        // w oblężeniu (#119) wróg to konstrukcje fortu, nie statki do przejęcia
+        if (!$this->boardingEnabled || !$this->hasEnergy() || null !== $this->fort) {
+            return 'Boarding not available';
+        }
+        if (null !== $this->boarding) {
+            return 'Boarding already attempted';
+        }
+        if (null === $this->boardingTarget()) {
+            return 'Boarding requires the last enemy ship';
+        }
+        if (!$this->canAfford('player', BattleAction::Board)) {
+            return 'Not enough energy';
+        }
+
+        return null;
+    }
+
+    /**
+     * Próba abordażu ostatniego statku wroga: rzut k6 z seeda gry i numeru tury.
+     * Sukces kończy bitwę wygraną, statek zostaje zdobyczą; porażka nic nie
+     * zmienia na planszy. Energię i koniec tury rozlicza warstwa aplikacji.
+     */
+    public function attemptBoarding(BoardingOdds $odds = new BoardingOdds()): BoardingAttempt
+    {
+        $blocker = $this->boardingBlocker();
+        if (null !== $blocker) {
+            throw new \DomainException($blocker);
+        }
+
+        [$index, $target] = $this->boardingTarget() ?? throw new \LogicException('Boarding target vanished');
+        $this->boarding = new BoardingAttempt(
+            $this->round,
+            BoardingRoll::d6((string) $this->id, $this->round),
+            $odds->threshold($target),
+            $odds->applied($target),
+            $index,
+        );
+        if ($this->boarding->succeeded()) {
+            $this->status = GameStatus::Won;
+        }
+
+        return $this->boarding;
+    }
+
+    /** Statek wroga zdobyty abordażem; null = nie było udanej próby. */
+    public function boardedShip(): ?Ship
+    {
+        if (null === $this->boarding || !$this->boarding->succeeded()) {
+            return null;
+        }
+
+        return $this->opponentSide->fleet()[$this->boarding->shipIndex] ?? null;
+    }
+
+    /**
+     * Stan abordażu do API: dostępność, próg i modyfikatory dla bieżącego celu
+     * (przy kilku statkach wroga — bazowe), wynik próby; null = bitwa bez abordażu (także oblężenie).
+     *
+     * @return array{available:bool, blocker:?string, threshold:int, modifiers:list<array{code:string, value:int}>, cost:int, attempt:array<string,mixed>|null}|null
+     */
+    public function boardingState(BoardingOdds $odds = new BoardingOdds()): ?array
+    {
+        if (!$this->boardingEnabled || !$this->hasEnergy() || null !== $this->fort) {
+            return null;
+        }
+
+        $target = $this->boardingTarget();
+        $blocker = $this->boardingBlocker();
+
+        return [
+            'available' => null === $blocker,
+            'blocker' => match ($blocker) {
+                null => null,
+                'Boarding already attempted' => 'attempted',
+                'Boarding requires the last enemy ship' => 'not-last-ship',
+                'Not enough energy' => 'energy',
+                default => 'not-available',
+            },
+            'threshold' => null !== $target ? $odds->threshold($target[1]) : BoardingOdds::BASE_THRESHOLD,
+            'modifiers' => null !== $target ? $odds->applied($target[1]) : [],
+            'cost' => BattleAction::Board->cost(),
+            'attempt' => $this->boarding?->toArray(),
+        ];
+    }
+
+    /** @return array{0:int, 1:BoardingTarget}|null ostatni niezatopiony statek wroga z indeksem */
+    private function boardingTarget(): ?array
+    {
+        if (!$this->opponentSide->hasFleet()) {
+            return null;
+        }
+        $afloat = $this->opponentSide->unsunkShips();
+        if (1 !== count($afloat)) {
+            return null;
+        }
+        $index = array_key_first($afloat);
+
+        return [$index, new BoardingTarget($afloat[$index]['ship'], $afloat[$index]['hits'])];
     }
 
     /**

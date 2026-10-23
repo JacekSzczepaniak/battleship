@@ -128,6 +128,12 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             'Ship move out of board bounds' => ['SHIP_MOVE_OUT_OF_BOUNDS', 422],
             'Ship cannot move onto a cell already shot' => ['SHIP_MOVE_SHOT_CELL', 422],
             'Ship move would touch another ship' => ['SHIP_MOVE_TOUCH', 422],
+            // abordaż (#118)
+            'Boarding not available' => ['BOARDING_NOT_AVAILABLE', 422],
+            'Boarding requires the last enemy ship' => ['BOARDING_NOT_LAST_SHIP', 422],
+            'Boarding already attempted' => ['BOARDING_ALREADY_ATTEMPTED', 409],
+            // zdobyty statek (#118)
+            'Prize not found' => ['PRIZE_NOT_FOUND', 404],
             'Game already finished' => ['GAME_ALREADY_FINISHED', 409],
             'Profile not found' => ['PROFILE_NOT_FOUND', 404],
             'Island not found' => ['ISLAND_NOT_FOUND', 404],

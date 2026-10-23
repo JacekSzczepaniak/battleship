@@ -82,15 +82,15 @@ function energyScoutGame(): Game
     return $game;
 }
 
-it('koszty działań: salwa 1, sonar 1, torpeda 2, nalot 3', function () {
-    expect(BattleAction::costs())->toBe(['shot' => 1, 'sonar' => 1, 'torpedo' => 2, 'airRaid' => 3]);
+it('koszty działań: salwa 1, sonar 1, torpeda 2, nalot 3, ruch statku 1', function () {
+    expect(BattleAction::costs())->toBe(['shot' => 1, 'sonar' => 1, 'torpedo' => 2, 'airRaid' => 3, 'move' => 1]);
 });
 
 it('tryb z bronią daje 3⚡ na turę, klasyka jest bez energii', function () {
     expect(energyGame()->energyState())->toBe([
         'left' => 3,
         'max' => 3,
-        'costs' => ['shot' => 1, 'sonar' => 1, 'torpedo' => 2, 'airRaid' => 3],
+        'costs' => ['shot' => 1, 'sonar' => 1, 'torpedo' => 2, 'airRaid' => 3, 'move' => 1],
     ])->and(energyGame(false)->energyState())->toBeNull()
         ->and(energyGame(false)->hasEnergy())->toBeFalse();
 });

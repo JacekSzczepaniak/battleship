@@ -105,6 +105,8 @@ final class GameQueryController
             'opponentWeapons' => $game->opponentWeaponsState(),
             // energia gracza w bieżącej turze (#59); null = bitwa bez energii (classic)
             'energy' => $game->energyState(),
+            // ruch statku wykorzystany w tej turze (#60); bez energii ruchu nie ma
+            'moveUsed' => $game->playerMovedThisTurn(),
             'mode' => $game->mode(),
             'opponent' => $game->opponent(),
             'turn' => $turn,

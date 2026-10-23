@@ -119,6 +119,15 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             // energia w bitwie (#59)
             'Not enough energy' => ['NOT_ENOUGH_ENERGY', 409],
             'End turn requires battle energy' => ['END_TURN_NOT_AVAILABLE', 422],
+            // ruch statku w bitwie (#60)
+            'Ship move not available' => ['SHIP_MOVE_NOT_AVAILABLE', 422],
+            'Ship already moved this turn' => ['SHIP_ALREADY_MOVED', 409],
+            'No own ship at this cell' => ['SHIP_MOVE_NO_SHIP', 422],
+            'Damaged ship cannot move' => ['SHIP_MOVE_DAMAGED', 422],
+            'Ship can only move along its axis' => ['SHIP_MOVE_DIRECTION', 422],
+            'Ship move out of board bounds' => ['SHIP_MOVE_OUT_OF_BOUNDS', 422],
+            'Ship cannot move onto a cell already shot' => ['SHIP_MOVE_SHOT_CELL', 422],
+            'Ship move would touch another ship' => ['SHIP_MOVE_TOUCH', 422],
             'Game already finished' => ['GAME_ALREADY_FINISHED', 409],
             'Profile not found' => ['PROFILE_NOT_FOUND', 404],
             'Island not found' => ['ISLAND_NOT_FOUND', 404],

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue';
 import { useRouter } from 'vue-router';
-import { Crosshair, Lock, Plane, Radar, Rocket } from 'lucide-vue-next';
+import { Crosshair, Lock, Move, Plane, Radar, Rocket } from 'lucide-vue-next';
 import SeaGrid from '../components/SeaGrid.vue';
 import { useGame, type WeaponMode } from '../composables/useGame';
 import { getExpedition, settleBattle } from '../api/expeditionApi';
@@ -9,10 +9,10 @@ import { clearCurrentBattle, getCurrentBattle } from '../lib/expeditionSession';
 import { getBattleReport, saveBattleReport, type BattleReport } from '../lib/battleSession';
 import { carriedWeapons, fieldsLabel, shipName } from '../lib/ships';
 import { attackerMissingShip, battleBonusLabel } from '../lib/counterattack';
-import type { BattleActionName, TorpedoDirection } from '../api/gameApi';
+import type { BattleActionName, MoveDirection, PlayerFleetItem, TorpedoDirection } from '../api/gameApi';
 
 const {
-    gameId, status, finished, turn, loading, shooting, error, disabled, attack, endTurn, width, height,
+    gameId, status, finished, turn, loading, shooting, error, disabled, attack, endTurn, moveShip, moveUsed, width, height,
     ruleset, energy, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells, aliveCarriers,
     noteMarks, toggleNote,
     shotsCount, hitsCount, opponentHitsCount, enemySunkLengths, playerSunkLengths, enemyTotal, playerTotal,
@@ -54,7 +54,7 @@ interface WeaponCard {
     locked: string | null;
 }
 
-// --- energia (#59): koszty z backendu, #60 dołoży działanie 'move' ---
+// --- energia (#59): koszty działań (z ruchem statku z #60) z backendu ---
 
 const ACTION_OF: Record<WeaponMode, BattleActionName> = {
     shot: 'shot',
@@ -138,6 +138,7 @@ const weaponCards = computed<WeaponCard[]>(() => [
 function selectWeapon(card: WeaponCard) {
     if (card.locked || gameOver.value) return;
     weaponMode.value = card.key;
+    cancelMove();
 }
 
 // broń wyczerpana / nośnik zatopiony / brak energii w trakcie wyboru — wróć do salwy
@@ -162,6 +163,94 @@ const ROSE: (TorpedoDirection | null)[] = ['NW', 'N', 'NE', 'W', null, 'E', 'SW'
 const ROSE_ARROWS: Record<TorpedoDirection, string> = {
     N: '↑', NE: '↗', E: '→', SE: '↘', S: '↓', SW: '↙', W: '←', NW: '↖',
 };
+
+// --- ruch statku (#60): 1⚡, raz na turę, o 1 pole wzdłuż osi, tylko nietrafiony ---
+
+const MOVE_ROSE: (MoveDirection | null)[] = [null, 'N', null, 'W', null, 'E', null, 'S', null];
+const MOVE_ARROWS: Record<MoveDirection, string> = { N: '↑', E: '→', S: '↓', W: '←' };
+const MOVE_VECTORS: Record<MoveDirection, [number, number]> = { N: [0, -1], E: [1, 0], S: [0, 1], W: [-1, 0] };
+const MOVE_KEYS: Record<string, MoveDirection> = { ArrowUp: 'N', ArrowRight: 'E', ArrowDown: 'S', ArrowLeft: 'W' };
+
+// tryb ruchu włączony przyciskiem „Przesuń flotę”; wybrany statek = indeks we flocie
+const moving = ref(false);
+const movingShip = ref<number | null>(null);
+const moveHoverDir = ref<MoveDirection | null>(null);
+
+function fleetCells(s: PlayerFleetItem): [number, number][] {
+    const horizontal = s.o.toLowerCase() === 'h';
+    return Array.from({ length: s.l }, (_, i) => [s.x + (horizontal ? i : 0), s.y + (horizontal ? 0 : i)]);
+}
+
+// statki bez trafienia — tylko one manewrują
+const movableShips = computed<Set<number>>(() => {
+    const ov = playerUnderFireOverlay.value;
+    const set = new Set<number>();
+    playerFleet.value.forEach((s, i) => {
+        if (fleetCells(s).every(([x, y]) => ov[y]?.[x] !== 'opp-hit')) set.add(i);
+    });
+    return set;
+});
+
+const moveLock = computed<string | null>(() => {
+    if (!energy.value) return 'tylko w trybie z broniami';
+    if (gameOver.value) return 'bitwa rozstrzygnięta';
+    if (moveUsed.value) return 'ruch wykorzystany w tej turze';
+    if (lacksEnergy('move')) return 'brak energii';
+    if (movableShips.value.size === 0) return 'każdy statek trafiony';
+    return null;
+});
+
+/** Pola po ruchu i powód odrzucenia (te same reguły co w domenie; backend i tak waliduje). */
+function moveTarget(index: number, dir: MoveDirection): { cells: [number, number][]; reason: string | null } {
+    const ship = playerFleet.value[index];
+    const horizontal = ship.o.toLowerCase() === 'h';
+    const [dx, dy] = MOVE_VECTORS[dir];
+    const cells = fleetCells(ship).map(([x, y]) => [x + dx, y + dy] as [number, number]);
+    if (ship.l > 1 && horizontal !== (dir === 'E' || dir === 'W')) return { cells: [], reason: 'tylko wzdłuż osi statku' };
+    if (cells.some(([x, y]) => x < 0 || y < 0 || x >= width.value || y >= height.value)) return { cells, reason: 'poza planszą' };
+    const ov = playerUnderFireOverlay.value;
+    if (cells.some(([x, y]) => (ov[y]?.[x] ?? 'none') !== 'none')) return { cells, reason: 'pole ostrzelane przez wroga' };
+    const touches = playerFleet.value.some((other, i) => i !== index && fleetCells(other).some(([ox, oy]) =>
+        cells.some(([x, y]) => Math.abs(x - ox) <= 1 && Math.abs(y - oy) <= 1)));
+    if (touches) return { cells, reason: 'styk z innym statkiem' };
+    return { cells, reason: null };
+}
+
+const moveOptions = computed(() => {
+    const index = movingShip.value;
+    if (index === null || !playerFleet.value[index]) return null;
+    const out = {} as Record<MoveDirection, { cells: [number, number][]; reason: string | null }>;
+    for (const dir of ['N', 'E', 'S', 'W'] as MoveDirection[]) out[dir] = moveTarget(index, dir);
+    return out;
+});
+
+const movingShipName = computed(() => {
+    const ship = movingShip.value !== null ? playerFleet.value[movingShip.value] : null;
+    return ship ? shipName(ship.l, ship.w) : '';
+});
+
+function cancelMove() {
+    moving.value = false;
+    movingShip.value = null;
+    moveHoverDir.value = null;
+}
+
+function toggleMove() {
+    if (moving.value) return cancelMove();
+    if (moveLock.value || disabled.value) return;
+    weaponMode.value = 'shot';
+    moving.value = true;
+}
+
+async function doMove(dir: MoveDirection) {
+    const option = moveOptions.value?.[dir];
+    if (!option || option.reason || movingShip.value === null) return;
+    const ship = playerFleet.value[movingShip.value];
+    if (await moveShip(ship.x, ship.y, dir)) cancelMove();
+}
+
+// ruch wykorzystany, brak energii albo koniec bitwy w trakcie wyboru — zamknij tryb ruchu
+watch(moveLock, lock => { if (lock) cancelMove(); });
 
 // --- podgląd zasięgu pod kursorem ---
 
@@ -214,6 +303,24 @@ const previewCells = computed<Set<string>>(() => {
 
 // --- plansze ---
 
+// nakładki trybu ruchu: statki do wyboru, wybrany statek i pola po ruchu w kierunku pod kursorem
+const moveOverlay = computed<Map<string, string>>(() => {
+    const out = new Map<string, string>();
+    if (!moving.value) return out;
+    playerFleet.value.forEach((s, i) => {
+        if (i === movingShip.value) {
+            fleetCells(s).forEach(([x, y]) => out.set(`${x}:${y}`, ' preview'));
+        } else if (movingShip.value === null && movableShips.value.has(i)) {
+            fleetCells(s).forEach(([x, y]) => out.set(`${x}:${y}`, ' launch'));
+        }
+    });
+    const hovered = moveHoverDir.value && moveOptions.value?.[moveHoverDir.value];
+    if (hovered) {
+        hovered.cells.forEach(([x, y]) => out.set(`${x}:${y}`, hovered.reason ? ' preview-bad' : ' preview-ok'));
+    }
+    return out;
+});
+
 const ownCells = computed<string[][]>(() => {
     const ov = playerUnderFireOverlay.value;
     const sunk = new Set<string>();
@@ -248,6 +355,7 @@ const ownCells = computed<string[][]>(() => {
         else if (o === 'opp-hit') cls += ' hit';
         if (o === 'opp-miss') cls += ' miss';
         if (weaponMode.value === 'torpedo' && launchableCells.value.has(key)) cls += ' launch';
+        if (moving.value) cls += moveOverlay.value.get(key) ?? '';
         return cls;
     }));
 });
@@ -280,6 +388,12 @@ function onEnemyClick(x: number, y: number) {
 }
 
 function onOwnClick(x: number, y: number) {
+    if (moving.value) {
+        if (disabled.value) return;
+        const index = playerFleet.value.findIndex(s => fleetCells(s).some(([cx, cy]) => cx === x && cy === y));
+        if (index >= 0 && movableShips.value.has(index)) movingShip.value = index === movingShip.value ? null : index;
+        return;
+    }
     if (disabled.value || actionLocked.value || weaponMode.value !== 'torpedo') return;
     if (!launchableCells.value.has(`${x}:${y}`)) return;
     attack(x, y);
@@ -306,6 +420,11 @@ const enemyHint = computed(() => {
 });
 
 const ownFooter = computed(() => {
+    if (moving.value) {
+        return movingShip.value === null
+            ? 'Ruch statku: kliknij podświetlony, nietrafiony statek.'
+            : 'Wybierz kierunek w panelu obok albo strzałką na klawiaturze · Esc — anuluj.';
+    }
     const parts = [`wróg zadał ${opponentHitsCount.value} ${opponentHitsCount.value === 1 ? 'trafienie' : 'trafień'}`];
     if (playerSunkLengths.value.length) {
         parts.push(`stracono: ${playerSunkLengths.value.map(l => shipName(l).toLowerCase()).join(', ')}`);
@@ -345,15 +464,19 @@ const aiArsenal = computed(() => {
     ];
 });
 
-// --- klawiatura: 1–4 broń, Esc = salwa ---
+// --- klawiatura: 1–4 broń, strzałki = kierunek ruchu statku, Esc = salwa ---
 
 function onKey(e: KeyboardEvent) {
     const card = weaponCards.value.find(c => c.hotkey === e.key);
-    if (card) {
+    if (moving.value && movingShip.value !== null && MOVE_KEYS[e.key]) {
+        e.preventDefault();
+        doMove(MOVE_KEYS[e.key]);
+    } else if (card) {
         e.preventDefault();
         selectWeapon(card);
     } else if (e.key === 'Escape') {
         weaponMode.value = 'shot';
+        cancelMove();
     }
 }
 
@@ -472,12 +595,21 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
             <div class="waters">
                 <div class="waters-head">
                     <span class="kicker">TWOJE WODY</span>
-                    <!-- #60: tu stanie „Przesuń flotę ⚡1” (koszt z energy.costs.move) -->
+                    <button
+                        v-if="energy"
+                        class="move-btn"
+                        :class="{ on: moving }"
+                        :disabled="!moving && (!!moveLock || disabled)"
+                        :title="moveLock ?? 'Przesuń nietrafiony statek o 1 pole wzdłuż osi — raz na turę, nie kończy tury'"
+                        @click="toggleMove"
+                    >
+                        <Move :size="13" /> {{ moving ? 'Anuluj ruch' : 'Przesuń flotę' }} <span class="w-cost">⚡{{ energyCost('move') }}</span>
+                    </button>
                 </div>
                 <div class="board-box">
                     <SeaGrid
                         :cells="ownCells"
-                        :interactive="weaponMode === 'torpedo' && !disabled"
+                        :interactive="(weaponMode === 'torpedo' || moving) && !disabled"
                         @cell-click="onOwnClick"
                         @cell-hover="onOwnHover"
                         @leave="hoverCell = null"
@@ -524,6 +656,26 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
                     <p v-if="!diagonalAvailable" class="muted small">ukośna zużyta</p>
                 </div>
 
+                <div v-if="moving && moveOptions" class="rose-box">
+                    <div class="kicker">RUCH · {{ movingShipName.toUpperCase() }}</div>
+                    <div class="rose">
+                        <template v-for="(dir, i) in MOVE_ROSE" :key="i">
+                            <button
+                                v-if="dir"
+                                class="rose-cell"
+                                :disabled="!!moveOptions[dir].reason || disabled"
+                                :title="moveOptions[dir].reason ?? `przesuń ${MOVE_ARROWS[dir]}`"
+                                @mouseenter="moveHoverDir = dir"
+                                @mouseleave="moveHoverDir = null"
+                                @click="doMove(dir)"
+                            >{{ MOVE_ARROWS[dir] }}</button>
+                            <span v-else-if="i === 4" class="rose-center"><Move :size="16" /></span>
+                            <span v-else></span>
+                        </template>
+                    </div>
+                    <p class="muted small">⚡{{ energyCost('move') }} · raz na turę · nie kończy tury</p>
+                </div>
+
                 <div class="kicker">DZIENNIK</div>
                 <ol class="entries">
                     <li v-for="(entry, i) in log" :key="entry.id" :class="{ latest: i === 0 }">
@@ -535,8 +687,8 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
                 <p v-if="error" class="err small">{{ error }}</p>
                 <div v-if="energy" class="note">
                     Masz {{ energy.max }}⚡ na turę. Salwa, torpeda i nalot kosztują energię i kończą turę;
-                    sonar tylko zużywa energię. „Zakończ turę” oddaje ruch bez ataku, a po ruchu wroga
-                    energia wraca.
+                    sonar i ruch statku (raz na turę) tylko zużywają energię. „Zakończ turę” oddaje ruch
+                    bez ataku, a po ruchu wroga energia wraca.
                 </div>
                 <div v-else class="note">
                     Każda salwa oddaje ruch wrogowi — trafienie nie daje dodatkowego strzału.
@@ -643,6 +795,14 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
 .rose-cell.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .rose-cell:disabled { opacity: .3; cursor: not-allowed; }
 .rose-center { display: flex; align-items: center; justify-content: center; color: var(--accent); }
+.move-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 12px; border-radius: 8px;
+    border: 1px solid var(--line-btn); background: var(--bg-card-off); color: var(--text-2);
+    font: 600 11px var(--font-mono); letter-spacing: .02em; cursor: pointer;
+}
+.move-btn.on { border-color: var(--accent); color: var(--accent); }
+.move-btn:disabled { opacity: .45; cursor: not-allowed; }
 
 .weapons { display: flex; gap: 14px; padding: 18px 28px; border-top: 1px solid var(--line); }
 .weapon {

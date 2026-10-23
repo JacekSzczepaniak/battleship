@@ -53,6 +53,9 @@ final class Game
      */
     private array $energySpent = ['player' => 0, 'opponent' => 0];
 
+    /** Czy gracz przesunął już statek w bieżącej turze (#60: ruch raz na turę). */
+    private bool $playerMoved = false;
+
     public function __construct(
         private GameId $id,
         private Ruleset $ruleset,
@@ -145,6 +148,9 @@ final class Game
         if ('player' === $turn || 'opponent' === $turn) {
             $this->energySpent[$turn] = 0;
         }
+        if ('player' === $turn) {
+            $this->playerMoved = false;
+        }
     }
 
     /** Czy w tej bitwie działania kosztują energię (tryb z bronią specjalną). */
@@ -216,6 +222,41 @@ final class Game
     public function fleet(): ?array
     {
         return $this->playerSide->fleet();
+    }
+
+    /**
+     * Ruch statku gracza o 1 pole (#60). Tylko w bitwie z energią i najwyżej
+     * raz na turę; reguły ruchu (oś, trafienia, ostrzelane pola, granice, styk)
+     * sprawdza strona gracza. Energię i turę pilnuje warstwa aplikacji, jak
+     * przy sonarze. AI się nie rusza i nie dostaje informacji o ruchu.
+     */
+    public function moveShip(Coordinate $cell, Direction $direction): Ship
+    {
+        if (!$this->hasEnergy()) {
+            throw new \DomainException('Ship move not available');
+        }
+        if (!$this->playerSide->hasFleet()) {
+            throw new \DomainException('Fleet not placed');
+        }
+        if ($this->playerMoved) {
+            throw new \DomainException('Ship already moved this turn');
+        }
+
+        $moved = $this->playerSide->moveShip($cell, $direction);
+        $this->playerMoved = true;
+
+        return $moved;
+    }
+
+    /** Czy gracz wykorzystał ruch statku w tej turze (do API i snapshotu). */
+    public function playerMovedThisTurn(): bool
+    {
+        return $this->playerMoved;
+    }
+
+    public function setPlayerMovedFromSnapshot(bool $moved): void
+    {
+        $this->playerMoved = $moved;
     }
 
     /**

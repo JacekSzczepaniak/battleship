@@ -3,6 +3,7 @@
 namespace App\Infrastructure\Http\Controller;
 
 use App\Domain\Game\FleetComposition;
+use App\Domain\Game\Game;
 use App\Domain\Game\GameRepository;
 use App\Domain\Shared\GameId;
 use App\Infrastructure\Http\Error\ApiException;
@@ -123,6 +124,42 @@ final class GameQueryController
             ],
             'shotsCount' => count($shots),
             'finished' => $finished,
+            // bitwa oblężnicza (#119); null = zwykła bitwa z flotą
+            'fort' => $this->fortView($game, $hits),
         ]);
+    }
+
+    /**
+     * Fort we mgle: licznik dział, rodzaj konstrukcji tylko na trafionych
+     * polach (trafienie odsłania mur) i pola eksplozji, gdy magazyn wybuchł.
+     *
+     * @param list<array{0:int,1:int}> $hits
+     *
+     * @return array{seed:int, guns:array{left:int,total:int}, revealed:list<array{x:int,y:int,kind:string}>, explosion:list<array{0:int,1:int}>|null}|null
+     */
+    private function fortView(Game $game, array $hits): ?array
+    {
+        $fort = $game->fort();
+        if (null === $fort) {
+            return null;
+        }
+
+        $revealed = [];
+        foreach ($hits as [$x, $y]) {
+            $piece = $fort->pieceAt($x, $y);
+            if (null !== $piece) {
+                $revealed[] = ['x' => $x, 'y' => $y, 'kind' => $piece->value];
+            }
+        }
+        $size = $game->ruleset()->boardSize();
+
+        return [
+            'seed' => $fort->seed,
+            'guns' => ['left' => $game->fortGunsLeft(), 'total' => count($fort->guns)],
+            'revealed' => $revealed,
+            'explosion' => $game->fortExploded()
+                ? array_map(static fn ($c) => [$c->x, $c->y], $fort->blastCells($size->width, $size->height))
+                : null,
+        ];
     }
 }

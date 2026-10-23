@@ -7,7 +7,8 @@ final class Board
     /** @var Ship[] */
     private array $ships = [];
 
-    public function __construct(public BoardSize $size)
+    /** @param bool $contactAllowed konstrukcje fortu (#119) mogą się stykać, statki nie */
+    public function __construct(public BoardSize $size, private bool $contactAllowed = false)
     {
     }
 
@@ -21,7 +22,7 @@ final class Board
         }
         // 2) no collisions or contact (including diagonals)
         foreach ($this->ships as $other) {
-            if ($this->touchOrOverlap($ship, $other)) {
+            if ($this->contactAllowed ? $this->overlap($ship, $other) : $this->touchOrOverlap($ship, $other)) {
                 throw new \DomainException('Ships overlap or touch');
             }
         }
@@ -45,6 +46,21 @@ final class Board
     private function isInside(Coordinate $c): bool
     {
         return $c->x >= 0 && $c->y >= 0 && $c->x < $this->size->width && $c->y < $this->size->height;
+    }
+
+    private function overlap(Ship $a, Ship $b): bool
+    {
+        $bSet = [];
+        foreach ($b->cells() as $c) {
+            $bSet["{$c->x},{$c->y}"] = true;
+        }
+        foreach ($a->cells() as $c) {
+            if (isset($bSet["{$c->x},{$c->y}"])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function touchOrOverlap(Ship $a, Ship $b): bool

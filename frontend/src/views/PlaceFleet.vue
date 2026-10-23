@@ -37,6 +37,7 @@
             <div class="board-head">
                 <div class="kicker">TWOJE WODY · {{ width }}×{{ height }}</div>
                 <div v-if="training" class="pills">
+                    <template v-if="!siege">
                     <button
                         v-for="s in TRAINING_SIZES"
                         :key="s"
@@ -46,8 +47,10 @@
                         @click="switchTraining({ size: s })"
                     >{{ s }}²</button>
                     <span class="pill-gap"></span>
-                    <button class="pill" :class="{ on: ruleset === 'classic' }" :disabled="busy" @click="switchTraining({ ruleset: 'classic' })">KLASYCZNE</button>
-                    <button class="pill" :class="{ on: ruleset === 'fun' }" :disabled="busy" @click="switchTraining({ ruleset: 'fun' })">BRONIE</button>
+                    </template>
+                    <button class="pill" :class="{ on: !siege && ruleset === 'classic' }" :disabled="busy" @click="switchTraining({ ruleset: 'classic', siege: false })">KLASYCZNE</button>
+                    <button class="pill" :class="{ on: !siege && ruleset === 'fun' }" :disabled="busy" @click="switchTraining({ ruleset: 'fun', siege: false })">BRONIE</button>
+                    <button class="pill" :class="{ on: siege }" :disabled="busy" title="oblężenie fortu 10×10: zniszcz działa, mury pochłaniają strzały, magazyn prochu wybucha" @click="switchTraining({ siege: true })">OBLĘŻENIE</button>
                 </div>
                 <div v-else-if="battle" class="kicker island">BITWA · {{ battle.islandName.toUpperCase() }}</div>
             </div>
@@ -119,6 +122,8 @@ const id = computed(() => String(route.params.id ?? ''));
 const width = ref(10);
 const height = ref(10);
 const ruleset = ref<RulesetName>('classic');
+// bitwa oblężnicza (#119): fort zamiast floty wroga, plansza 10×10 i zasady fun
+const siege = ref(false);
 const ships = ref<SetupShip[]>([]);
 const selectedId = ref<number | null>(null);
 const orientation = ref<Orientation>('h');
@@ -160,6 +165,7 @@ async function load() {
         width.value = g.board.w;
         height.value = g.board.h;
         ruleset.value = g.ruleset;
+        siege.value = !!g.fort;
         ships.value = buildShips(g.allowedShips && Object.keys(g.allowedShips).length ? g.allowedShips : CLASSIC_INVENTORY, g.variants);
         selectNext();
     } catch (e: any) {
@@ -361,17 +367,20 @@ function shuffle() {
 
 // --- zmiana ustawień treningu: nowa gra (rozmiar/zasady są częścią gry) ---
 
-async function switchTraining(change: { size?: number; ruleset?: RulesetName }) {
+async function switchTraining(change: { size?: number; ruleset?: RulesetName; siege?: boolean }) {
     const prefs = getTrainingPrefs();
     const next = {
-        size: change.size ?? width.value,
-        ruleset: change.ruleset ?? ruleset.value,
+        // wyjście z oblężenia wraca do zapamiętanego rozmiaru (fort narzuca 10×10)
+        size: change.size ?? (siege.value ? prefs.size : width.value),
+        ruleset: change.ruleset ?? (siege.value ? prefs.ruleset : ruleset.value),
+        siege: change.siege ?? siege.value,
     };
-    if (next.size === width.value && next.size === height.value && next.ruleset === ruleset.value) return;
+    if (next.siege === siege.value && (next.siege
+        || (next.size === width.value && next.size === height.value && next.ruleset === ruleset.value))) return;
     busy.value = true;
     error.value = '';
     try {
-        const g = await createGame(next.ruleset, next.size);
+        const g = await createGame(next.ruleset, next.size, next.siege);
         setTrainingPrefs({ ...prefs, ...next });
         shuffleCount = 0;
         await router.replace({ name: 'place-fleet', params: { id: g.id } });

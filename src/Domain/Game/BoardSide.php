@@ -17,8 +17,17 @@ final class BoardSide
     /** @var array<string,bool> celne strzały (podzbiór shotsTaken) */
     private array $hits = [];
 
+    /** Konstrukcje fortu (#119) stoją na styk; flota zawsze z odstępem. */
+    private bool $contactAllowed = false;
+
     public function __construct(private readonly BoardSize $size)
     {
+    }
+
+    /** Strona fortu: konstrukcje mogą się stykać (eksplozja magazynu ma co trafić). */
+    public function allowContact(): void
+    {
+        $this->contactAllowed = true;
     }
 
     public function hasFleet(): bool
@@ -44,7 +53,7 @@ final class BoardSide
             throw new \DomainException('Fleet already placed');
         }
 
-        $board = new Board($this->size);
+        $board = new Board($this->size, $this->contactAllowed);
         $board->placeMany($ships);
         $this->board = $board;
     }
@@ -56,7 +65,7 @@ final class BoardSide
      */
     public function setFleetFromSnapshot(array $ships): void
     {
-        $board = new Board($this->size);
+        $board = new Board($this->size, $this->contactAllowed);
         $board->placeMany($ships);
         $this->board = $board;
     }
@@ -115,7 +124,7 @@ final class BoardSide
         }
 
         $ships[$index] = $moved;
-        $board = new Board($this->size);
+        $board = new Board($this->size, $this->contactAllowed);
         try {
             $board->placeMany($ships);
         } catch (\DomainException) {

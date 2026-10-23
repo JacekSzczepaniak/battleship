@@ -45,7 +45,10 @@ final class PlaceFleet
         $game->placeFleet($ships);
 
         // Po rozstawieniu floty gracza – wygeneruj flotę przeciwnika
-        $game->placeOpponentFleet($this->opponentFleetGenerator->generate($game->ruleset()));
+        // (w bitwie oblężniczej fort stoi na planszy wroga od utworzenia gry, #119)
+        if (null === $game->fort()) {
+            $game->placeOpponentFleet($this->opponentFleetGenerator->generate($game->ruleset()));
+        }
 
         // gra zaczynana turą przeciwnika (obrona wyspy, #78): napastnik strzela
         // pierwszy, zanim gracz zobaczy planszę bitwy

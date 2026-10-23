@@ -87,7 +87,8 @@ final class OpponentTurn
     {
         $view = $game->opponentShotsView();
         $huntMode = [] === ($game->aiState()['targets'] ?? []);
-        $weapons = 'fun' === $game->ruleset()->name() ? $game->opponentWeaponsState() : [];
+        // fort (#119) strzela tylko zwykłą salwą: bez broni specjalnych
+        $weapons = 'fun' === $game->ruleset()->name() && null === $game->fort() ? $game->opponentWeaponsState() : [];
 
         // 1) Zwiad: sonar w trybie hunt (nie zużywa akcji ofensywnej);
         //    broń wymaga żywego nośnika sonaru we flocie AI

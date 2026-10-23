@@ -2,6 +2,7 @@
 
 namespace App\Application\Game;
 
+use App\Domain\Game\BattleAction;
 use App\Domain\Game\Coordinate;
 use App\Domain\Game\GameRepository;
 use App\Domain\Shared\GameId;
@@ -39,7 +40,8 @@ final class FireShot
             throw new \DomainException('Not player turn');
         }
 
-        // Gracz wykonuje ruch – oznacz turę przeciwnika, dopóki nie skończymy sekwencji
+        // salwa kosztuje energię (#59) i, jak każdy atak, kończy turę gracza
+        $game->spendEnergy('player', BattleAction::Shot);
         $game->setTurn('opponent');
 
         $out = $game->fireShot(new Coordinate($x, $y));

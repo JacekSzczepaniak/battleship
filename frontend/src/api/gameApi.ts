@@ -27,6 +27,16 @@ export interface WeaponsState {
     torpedoDiagonal?: WeaponState;
 }
 
+// działania w turze i ich koszt energii (#59; ruch statku dojdzie w #60)
+export type BattleActionName = 'shot' | 'sonar' | 'torpedo' | 'airRaid';
+
+// energia gracza w bieżącej turze; null = bitwa bez energii (classic)
+export interface EnergyState {
+    left: number;
+    max: number;
+    costs: Partial<Record<BattleActionName, number>> & Record<string, number>;
+}
+
 export interface GameViewDTO {
     id: string;
     status: 'pending' | 'in_progress' | 'won' | 'lost';
@@ -41,6 +51,7 @@ export interface GameViewDTO {
     opponentVariants?: Record<string, Loadout[]> | [];
     weapons: WeaponsState;
     opponentWeapons?: WeaponsState;
+    energy?: EnergyState | null;
     mode: 'standard' | 'nonstandard' | string;
     opponent: 'mock' | 'ai' | 'pvp' | string;
     turn: 'player' | 'opponent' | 'none';
@@ -97,6 +108,8 @@ export interface TurnOutcomeDTO {
     opponentMoves: CellShotResult[];
     // torpeda AI zdradza wyrzutnię — pozycja statku przeciwnika
     opponentTorpedoLaunch?: { x: number; y: number } | null;
+    // energia gracza na nową turę (#59)
+    energy?: EnergyState | null;
 }
 
 export interface WeaponShotsResponse extends TurnOutcomeDTO {
@@ -108,6 +121,7 @@ export interface SonarResponse {
     results: SonarCell[];
     shape: string;
     radius: number;
+    energy?: EnergyState | null;
 }
 
 export async function fireTorpedo(id: string, x: number, y: number, direction: TorpedoDirection): Promise<WeaponShotsResponse> {
@@ -121,4 +135,9 @@ export async function sonarPing(id: string, x: number, y: number): Promise<Sonar
 export async function sendAirRaid(id: string, x: number, y: number): Promise<WeaponShotsResponse> {
     // pół-zasięgi 1×1 → obszar 3×3 (maksimum dozwolone przez FunRuleset)
     return http.post<WeaponShotsResponse>(`/games/${id}/air-raid`, { x, y, width: 1, height: 1 });
+}
+
+// „Zakończ turę” (#59): tura przechodzi do AI bez ataku; tylko w trybie z energią
+export async function endTurn(id: string): Promise<TurnOutcomeDTO> {
+    return http.post<TurnOutcomeDTO>(`/games/${id}/end-turn`, {});
 }

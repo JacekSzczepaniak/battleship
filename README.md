@@ -138,14 +138,17 @@ bitwy siedzi za portami `Domain\Game\FleetGenerator` (flota AI) i `Application\G
 
 ```
 FireShotController
-  → Application\Game\FireShot          tura gracza → oznacz turę przeciwnika
+  → Application\Game\FireShot          tura gracza → koszt energii (fun) → oznacz turę przeciwnika
       → Game::fireShot()               wynik: miss | hit | sunk | duplicate
       → OpponentTurn::respond()        ruch AI: HuntTargetAI (stan w aiState gry) + WeaponUseDecider
   → GameRepository::save()             snapshot JSON gry
   ← { result, finished, win, loss, turn, opponentMoves, opponentTorpedoLaunch }
 ```
 
-Każda salwa, torpeda i nalot oddaje ruch AI; sonar turę zostawia. Po zakończonej bitwie o wyspę
+Każda salwa, torpeda i nalot oddaje ruch AI; sonar turę zostawia. W trybie `fun` działania kosztują
+energię (#59): 3⚡ na turę, salwa 1, sonar 1, torpeda 2, nalot 3; pula wraca po ruchu AI, a
+`POST /games/{id}/end-turn` oddaje turę bez ataku. Bez energii akcja kończy się `409 NOT_ENOUGH_ENERGY`.
+Tryb `classic` jest bez energii (`energy: null`). Po zakończonej bitwie o wyspę
 `POST /api/profiles/{id}/battles/{gameId}/settle` rozlicza XP, materiały i straty floty ze stanu
 gry — idempotentnie (drugie wywołanie zwraca zera). Pierwsza wygrana o wyspę stawia na niej banderę
 kapitana; złoże pracuje tylko na wyspie pod banderą. Wyspa pod banderą nie przyjmuje kolejnych bitew
@@ -164,13 +167,14 @@ Wszystkie ścieżki pod `/api`, JSON. Pełna lista: `docker compose exec app php
 | metoda | ścieżka | co robi |
 |---|---|---|
 | `POST` | `/games` | nowa gra: `mode` (`classic`/`fun`), `width`, `height`, opcjonalnie `ships` i `variants` (`{"3": [{"sonar": 2}]}`) |
-| `GET` | `/games/{id}` | projekcja gry: plansze, mgła wroga, bronie (`used`/`limit`, sonar też `radius`), warianty obu stron (`variants`/`opponentVariants`), tura |
+| `GET` | `/games/{id}` | projekcja gry: plansze, mgła wroga, bronie (`used`/`limit`, sonar też `radius`), warianty obu stron (`variants`/`opponentVariants`), tura, energia gracza (`energy`: `left`/`max`/`costs`, `null` w classic) |
 | `POST` | `/games/{id}/fleet` | rozstawienie floty gracza; statek z wariantem niesie `w` (`{"sonar": 2}`) |
 | `POST` | `/games/{id}/shots` | salwa w pole `x`, `y` |
 | `GET` | `/games/{id}/shots` | strzały gracza z wynikami |
 | `POST` | `/games/{id}/torpedo` | torpeda z własnego niszczyciela (`x`, `y`, `direction`) |
-| `POST` | `/games/{id}/sonar` | skan sonarem (krzyż o promieniu 3, gracz 4 po Sonarze dalekiego zasięgu), nie kończy tury |
+| `POST` | `/games/{id}/sonar` | skan sonarem (krzyż o promieniu 3, gracz 4 po Sonarze dalekiego zasięgu), 1⚡, nie kończy tury |
 | `POST` | `/games/{id}/air-raid` | nalot na obszar |
+| `POST` | `/games/{id}/end-turn` | „Zakończ turę” bez ataku (tylko `fun`; w classic `422 END_TURN_NOT_AVAILABLE`) |
 | `POST` | `/profiles` | nowy profil kapitana |
 | `GET` | `/profiles/{id}/expedition` | profil, flota, typy statków i budynków, wyspy bieżącego akwenu (bandera, budynki), świat (akwen i jego motyw, bramy z powodem blokady i strażnikiem), kontratak, drzewko badań, dziennik kapitana (50 ostatnich zdarzeń, od najnowszego) |
 | `POST` | `/profiles/{id}/sail` | rejs za 1 tik: o jeden sektor, z Żeglugą dwusektorową także o dwa |

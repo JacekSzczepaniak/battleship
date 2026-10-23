@@ -45,6 +45,14 @@ final class Game
      */
     private array $weaponUses = ['player' => [], 'opponent' => []];
 
+    /**
+     * Energia zużyta przez stronę w jej bieżącej turze (#59). Trzymamy zużycie,
+     * nie stan puli: brak wpisu (także w starym snapshotcie) = pełna pula.
+     *
+     * @var array{player: int, opponent: int}
+     */
+    private array $energySpent = ['player' => 0, 'opponent' => 0];
+
     public function __construct(
         private GameId $id,
         private Ruleset $ruleset,
@@ -125,6 +133,83 @@ final class Game
             throw new \InvalidArgumentException('Invalid turn value');
         }
         $this->turn = $turn;
+    }
+
+    /**
+     * Oddaje turę stronie i odnawia jej energię: pula wraca po ruchu
+     * przeciwnika (#59). 'none' = koniec bitwy, bez odnawiania.
+     */
+    public function passTurnTo(string $turn): void
+    {
+        $this->setTurn($turn);
+        if ('player' === $turn || 'opponent' === $turn) {
+            $this->energySpent[$turn] = 0;
+        }
+    }
+
+    /** Czy w tej bitwie działania kosztują energię (tryb z bronią specjalną). */
+    public function hasEnergy(): bool
+    {
+        return $this->ruleset->energyPerTurn() > 0;
+    }
+
+    /** Energia strony ('player'|'opponent') pozostała w jej bieżącej turze. */
+    public function energyLeft(string $side): int
+    {
+        return max(0, $this->ruleset->energyPerTurn() - $this->energySpent[$side]);
+    }
+
+    /** Czy stronę stać na działanie w tej turze (bez energii — zawsze). */
+    public function canAfford(string $side, BattleAction $action): bool
+    {
+        return !$this->hasEnergy() || $this->energyLeft($side) >= $action->cost();
+    }
+
+    /**
+     * Pobiera koszt działania z puli strony; bez energii w bitwie nic nie robi.
+     * Limity użyć broni na bitwę sprawdza samo działanie — energia działa obok nich.
+     */
+    public function spendEnergy(string $side, BattleAction $action): void
+    {
+        if (!$this->hasEnergy()) {
+            return;
+        }
+        if (!$this->canAfford($side, $action)) {
+            throw new \DomainException('Not enough energy');
+        }
+        $this->energySpent[$side] += $action->cost();
+    }
+
+    /**
+     * Energia gracza do API: pozostała, pula i koszty działań; null bez energii.
+     *
+     * @return array{left:int, max:int, costs:array<string,int>}|null
+     */
+    public function energyState(): ?array
+    {
+        if (!$this->hasEnergy()) {
+            return null;
+        }
+
+        return [
+            'left' => $this->energyLeft('player'),
+            'max' => $this->ruleset->energyPerTurn(),
+            'costs' => BattleAction::costs(),
+        ];
+    }
+
+    /** @return array{player: int, opponent: int} zużycie w bieżącej turze (do snapshotu) */
+    public function energySpent(): array
+    {
+        return $this->energySpent;
+    }
+
+    /** @param array<string,mixed> $spent zużycie ze snapshotu; brak strony = pełna pula */
+    public function setEnergySpentFromSnapshot(array $spent): void
+    {
+        foreach (['player', 'opponent'] as $side) {
+            $this->energySpent[$side] = max(0, (int) ($spent[$side] ?? 0));
+        }
     }
 
     /** @return Ship[]|null */

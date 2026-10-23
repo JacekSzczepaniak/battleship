@@ -21,7 +21,7 @@ wyspa:  wydobycie → transport → stocznia/osada → technologia
 
 Bitwa (classic/fun, bronie specjalne z nośników: sonar=kuter, torpeda=
 niszczyciel, nalot=lotniskowiec, wyposażenie per statek; zatopiony nośnik
-odbiera broń) · profil
+odbiera broń; w trybie fun energia 3⚡ na turę i „Zakończ turę”, #59) · profil
 kapitana (XP nigdy nie maleje, 9 rang od rozbitka do admirała — progi
 w Filarze VIII; licznik zatopionych jednostek wroga) · flota jako majątek
 (budowa/remont, stocznie, wygrana→remont / przegrana→strata; uszkodzony
@@ -39,9 +39,31 @@ statku) · trzy akweny połączone strzeżoną cieśniną i otwartym oceanem
 bitwy: port → rozstawianie → bitwa → wynik oraz ekran Rejs z mapą zawsze
 widoczną, panelem z zakładkami i dziennikiem kapitana (#111)
 (projekt: `docs/design/ui-flow/`). Elementy projektu UI bez pokrycia
-w silniku czekają w zadaniach: energia i „Zakończ turę” (#59), ruch statku
-w bitwie (#60), trzy surowce w UI (#49), abordaż (#55), mapa akwenu jako
+w silniku czekają w zadaniach: ruch statku w bitwie (#60), trzy surowce w UI (#49), abordaż (#55), mapa akwenu jako
 łup (#56). Szczegóły: git log + testy, uruchomienie: `README.md`.
+
+## Rdzeń — bitwa: energia i tura ✅
+
+Tryb z bronią specjalną (fun: trening z bronią i każda bitwa wyprawy —
+wyspa, obrona, strażnik cieśniny) ma **energię w turze** (#59, wariant B:
+jeden atak na turę, energia na działania wspierające). Tryb klasyczny jest
+bez energii: jedna salwa, potem ruch AI.
+
+- **Pula:** 3⚡ na turę, ta sama dla obu stron, odnawiana, gdy strona
+  dostaje turę (energia gracza wraca po ruchu przeciwnika). Pula jest
+  stała; wzrost z rangą albo technologią odłożony do Epica K (#58).
+- **Koszty:** salwa 1, sonar 1, torpeda 2, nalot 3, od #60 ruch statku 1.
+  Koszt widać na karcie broni, a bez energii działanie jest odrzucane.
+- **Atak kończy turę:** salwa, torpeda i nalot oddają turę. Sonar (od #60
+  także ruch) tylko zużywa energię, więc można skanować kilka razy w turze,
+  póki starcza energii i limitu użyć. Przykładowe tury: sonar + sonar +
+  salwa, sonar + torpeda, sam nalot.
+- **„Zakończ turę”** oddaje turę bez ataku, np. po samych skanach.
+- **Limity użyć na bitwę zostają** (liczba nośników we flocie); energia jest
+  limitem na turę i działa obok nich.
+- **AI płaci tą samą energią:** najpierw sonar, gdy ma sens, potem jeden
+  atak, na który go jeszcze stać. Po sonarze zostają 2⚡, więc nalot AI
+  wypada tylko w turze bez skanu.
 
 ## Filar I — Świat: łańcuch akwenów ✅
 

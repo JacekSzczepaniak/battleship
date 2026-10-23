@@ -9,11 +9,11 @@ import { clearCurrentBattle, getCurrentBattle } from '../lib/expeditionSession';
 import { getBattleReport, saveBattleReport, type BattleReport } from '../lib/battleSession';
 import { carriedWeapons, fieldsLabel, shipName } from '../lib/ships';
 import { attackerMissingShip, battleBonusLabel } from '../lib/counterattack';
-import type { TorpedoDirection } from '../api/gameApi';
+import type { BattleActionName, TorpedoDirection } from '../api/gameApi';
 
 const {
-    gameId, status, finished, turn, loading, shooting, error, disabled, attack, width, height,
-    ruleset, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells, aliveCarriers,
+    gameId, status, finished, turn, loading, shooting, error, disabled, attack, endTurn, width, height,
+    ruleset, energy, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells, aliveCarriers,
     noteMarks, toggleNote,
     shotsCount, hitsCount, opponentHitsCount, enemySunkLengths, playerSunkLengths, enemyTotal, playerTotal,
     allowedShips, opponentShips, opponentVariants, playerFleet,
@@ -49,8 +49,34 @@ interface WeaponCard {
     area: string;
     source: string;
     charges: string;
+    // koszt energii (#59); null = bitwa bez energii
+    cost: number | null;
     locked: string | null;
 }
+
+// --- energia (#59): koszty z backendu, #60 dołoży działanie 'move' ---
+
+const ACTION_OF: Record<WeaponMode, BattleActionName> = {
+    shot: 'shot',
+    sonar: 'sonar',
+    torpedo: 'torpedo',
+    airraid: 'airRaid',
+};
+
+function energyCost(action: BattleActionName): number | null {
+    return energy.value?.costs[action] ?? null;
+}
+
+function lacksEnergy(action: BattleActionName): boolean {
+    const cost = energyCost(action);
+    return energy.value !== null && cost !== null && energy.value.left < cost;
+}
+
+// segmenty paska energii w HUD: true = pełny
+const energySegments = computed(() => {
+    const e = energy.value;
+    return e ? Array.from({ length: e.max }, (_, i) => i < e.left) : [];
+});
 
 const CARRIER_NAME: Record<Exclude<WeaponMode, 'shot'>, string> = {
     sonar: 'kuter',
@@ -89,6 +115,7 @@ function lockReason(mode: Exclude<WeaponMode, 'shot'>): string | null {
         return names.length > 1 ? 'nośniki zatopione' : `${names[0]} zatopiony`;
     }
     if (state.used >= state.limit) return 'wyczerpane';
+    if (lacksEnergy(ACTION_OF[mode])) return 'brak energii';
     return null;
 }
 
@@ -102,10 +129,10 @@ function charges(mode: Exclude<WeaponMode, 'shot'>): string {
 const sonarRadius = computed(() => weapons.value?.sonar.radius ?? 3);
 
 const weaponCards = computed<WeaponCard[]>(() => [
-    { key: 'shot', hotkey: '1', name: 'Salwa', icon: Crosshair, area: 'jedno pole', source: 'każdy okręt', charges: '∞', locked: null },
-    { key: 'sonar', hotkey: '2', name: 'Sonar', icon: Radar, area: `krzyż · promień ${sonarRadius.value}`, source: `${carrierSource('sonar')} · nie kończy tury`, charges: charges('sonar'), locked: lockReason('sonar') },
-    { key: 'torpedo', hotkey: '3', name: 'Torpeda', icon: Rocket, area: 'linia do krawędzi', source: carrierSource('torpedo'), charges: charges('torpedo'), locked: lockReason('torpedo') },
-    { key: 'airraid', hotkey: '4', name: 'Nalot', icon: Plane, area: 'obszar 3×3', source: carrierSource('airraid'), charges: charges('airraid'), locked: lockReason('airraid') },
+    { key: 'shot', hotkey: '1', name: 'Salwa', icon: Crosshair, area: 'jedno pole', source: 'każdy okręt', charges: '∞', cost: energyCost('shot'), locked: lacksEnergy('shot') ? 'brak energii' : null },
+    { key: 'sonar', hotkey: '2', name: 'Sonar', icon: Radar, area: `krzyż · promień ${sonarRadius.value}`, source: `${carrierSource('sonar')} · nie kończy tury`, charges: charges('sonar'), cost: energyCost('sonar'), locked: lockReason('sonar') },
+    { key: 'torpedo', hotkey: '3', name: 'Torpeda', icon: Rocket, area: 'linia do krawędzi', source: carrierSource('torpedo'), charges: charges('torpedo'), cost: energyCost('torpedo'), locked: lockReason('torpedo') },
+    { key: 'airraid', hotkey: '4', name: 'Nalot', icon: Plane, area: 'obszar 3×3', source: carrierSource('airraid'), charges: charges('airraid'), cost: energyCost('airRaid'), locked: lockReason('airraid') },
 ]);
 
 function selectWeapon(card: WeaponCard) {
@@ -113,10 +140,12 @@ function selectWeapon(card: WeaponCard) {
     weaponMode.value = card.key;
 }
 
-// broń wyczerpana / nośnik zatopiony w trakcie wyboru — wróć do salwy
+// broń wyczerpana / nośnik zatopiony / brak energii w trakcie wyboru — wróć do salwy
 watch(weaponCards, cards => {
     if (cards.find(c => c.key === weaponMode.value)?.locked) weaponMode.value = 'shot';
 });
+// po wyczerpaniu energii zostaje tylko „Zakończ turę” — nawet salwa jest zablokowana
+const actionLocked = computed(() => !!weaponCards.value.find(c => c.key === weaponMode.value)?.locked);
 
 // Torpeda ukośna: osobny limit (zwiad — nie trafi jednego statku dwa razy)
 const diagonalAvailable = computed(() => {
@@ -141,7 +170,7 @@ const hoverCell = ref<{ x: number; y: number } | null>(null);
 const previewCells = computed<Set<string>>(() => {
     const set = new Set<string>();
     const hc = hoverCell.value;
-    if (!hc || disabled.value) return set;
+    if (!hc || disabled.value || actionLocked.value) return set;
     const w = width.value;
     const h = height.value;
     const add = (x: number, y: number) => {
@@ -246,12 +275,12 @@ const enemyCells = computed<string[][]>(() => {
 });
 
 function onEnemyClick(x: number, y: number) {
-    if (disabled.value || weaponMode.value === 'torpedo') return;
+    if (disabled.value || actionLocked.value || weaponMode.value === 'torpedo') return;
     attack(x, y);
 }
 
 function onOwnClick(x: number, y: number) {
-    if (disabled.value || weaponMode.value !== 'torpedo') return;
+    if (disabled.value || actionLocked.value || weaponMode.value !== 'torpedo') return;
     if (!launchableCells.value.has(`${x}:${y}`)) return;
     attack(x, y);
 }
@@ -267,6 +296,7 @@ function onOwnHover(x: number, y: number) {
 const enemyHint = computed(() => {
     if (gameOver.value) return 'Bitwa rozstrzygnięta.';
     if (turn.value !== 'player') return 'Wróg mierzy…';
+    if (energy.value?.left === 0) return 'Energia wyczerpana — zakończ turę.';
     switch (weaponMode.value) {
         case 'torpedo': return 'Torpeda: kliknij podświetlony niszczyciel na SWOICH wodach — popłynie w wybranym kierunku.';
         case 'sonar': return `Sonar: kliknij środek skanu (krzyż o promieniu ${sonarRadius.value}).`;
@@ -415,6 +445,16 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
                 <div class="kicker">STRATY</div>
                 <div class="hud-val">{{ playerSunkLengths.length }} / {{ playerTotal }}</div>
             </div>
+            <template v-if="energy">
+                <span class="sep"></span>
+                <div class="hud-block" :title="`energia na turę: ${energy.left} z ${energy.max}, odnawia się po ruchu wroga`">
+                    <div class="kicker">ENERGIA</div>
+                    <div class="energy-bar">
+                        <span v-for="(full, i) in energySegments" :key="i" class="energy-seg" :class="{ full }"></span>
+                        <span class="energy-num">{{ energy.left }}/{{ energy.max }}</span>
+                    </div>
+                </div>
+            </template>
             <div v-if="aiArsenal.length" class="hud-right">
                 <span class="kicker">ARSENAŁ WROGA</span>
                 <span v-for="a in aiArsenal" :key="a.label" class="ai-pill" :class="{ empty: a.left === 0 }" :title="a.label">
@@ -432,6 +472,7 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
             <div class="waters">
                 <div class="waters-head">
                     <span class="kicker">TWOJE WODY</span>
+                    <!-- #60: tu stanie „Przesuń flotę ⚡1” (koszt z energy.costs.move) -->
                 </div>
                 <div class="board-box">
                     <SeaGrid
@@ -492,9 +533,13 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
                 </ol>
                 <p v-if="toast" class="toast" :class="toastType">{{ toast }}</p>
                 <p v-if="error" class="err small">{{ error }}</p>
-                <div class="note">
-                    Każda salwa, torpeda i nalot oddaje ruch wrogowi — trafienie nie daje dodatkowego
-                    strzału. Wyjątkiem jest sonar: skan nie kończy tury.
+                <div v-if="energy" class="note">
+                    Masz {{ energy.max }}⚡ na turę. Salwa, torpeda i nalot kosztują energię i kończą turę;
+                    sonar tylko zużywa energię. „Zakończ turę” oddaje ruch bez ataku, a po ruchu wroga
+                    energia wraca.
+                </div>
+                <div v-else class="note">
+                    Każda salwa oddaje ruch wrogowi — trafienie nie daje dodatkowego strzału.
                 </div>
             </aside>
         </div>
@@ -517,12 +562,24 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
                 <div class="w-bottom">
                     <span v-if="card.locked" class="w-lock"><Lock :size="11" /> {{ card.locked }}</span>
                     <span v-else class="w-src">{{ card.source }}</span>
-                    <span class="w-charges">{{ card.charges }}</span>
+                    <span class="w-costs">
+                        <span class="w-charges">{{ card.charges }}</span>
+                        <span v-if="card.cost !== null" class="w-cost" :title="`koszt: ${card.cost} energii`">⚡{{ card.cost }}</span>
+                    </span>
                 </div>
             </button>
 
             <button v-if="gameOver" class="btn btn-primary end" :disabled="finalizing" @click="goToResult">
                 {{ finalizing ? 'Rozliczanie…' : 'Wynik bitwy →' }}
+            </button>
+            <button
+                v-else-if="energy"
+                class="btn btn-primary end"
+                :disabled="disabled"
+                :title="turn === 'player' ? 'Oddaj turę bez ataku — energia wróci po ruchu wroga' : ''"
+                @click="endTurn"
+            >
+                {{ turn === 'player' && !shooting ? 'Zakończ turę' : turnLabel }}
             </button>
             <div v-else class="turn-box" :class="{ mine: turn === 'player' }">
                 <span class="kicker">TURA</span>
@@ -548,6 +605,10 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
 .turn-line .mine { color: var(--accent); }
 .sep { width: 1px; height: 38px; background: var(--line); }
 .hud-val { font: 700 18px var(--font-head); margin-top: 4px; }
+.energy-bar { display: flex; align-items: center; gap: 5px; margin-top: 8px; }
+.energy-seg { width: 22px; height: 11px; border-radius: 3px; background: var(--bg-card); border: 1px solid var(--line-btn); }
+.energy-seg.full { background: var(--info); border-color: var(--info); box-shadow: 0 0 8px #3fb6c477; }
+.energy-num { margin-left: 6px; font: 600 11px var(--font-mono); color: var(--text-muted); }
 .bonus-strip { margin: 0; padding: 8px 32px; border-bottom: 1px solid var(--line); font: 600 12px var(--font-mono); color: var(--info); }
 .hud-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .ai-pill { display: inline-flex; align-items: center; gap: 6px; padding: 9px 13px; border-radius: 9px; background: var(--bg-card); border: 1px solid var(--line-card); font: 600 12px var(--font-mono); color: var(--text-2); }
@@ -613,7 +674,10 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
 .w-area { font: 500 12px var(--font-body); color: var(--text-2); }
 .w-bottom { display: flex; justify-content: space-between; align-items: center; font: 500 10px var(--font-mono); color: var(--text-muted); }
 .w-lock { color: var(--danger); display: inline-flex; align-items: center; gap: 4px; }
+.w-costs { display: inline-flex; align-items: center; gap: 8px; }
 .w-charges { font: 700 13px var(--font-head); color: var(--info); }
+.w-cost { font: 700 12px var(--font-mono); color: var(--accent); }
+.weapon.locked .w-cost { color: var(--text-dim); }
 .weapon.locked .w-charges { color: var(--text-dim); }
 .end { padding: 0 30px; }
 .turn-box { min-width: 170px; display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 22px; border-radius: 14px; border: 1px solid var(--line-card); background: var(--bg-card-off); }

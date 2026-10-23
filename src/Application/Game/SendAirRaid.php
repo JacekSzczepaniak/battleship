@@ -3,6 +3,7 @@
 namespace App\Application\Game;
 
 use App\Domain\Game\Area;
+use App\Domain\Game\BattleAction;
 use App\Domain\Game\Coordinate;
 use App\Domain\Game\GameRepository;
 use App\Domain\Shared\GameId;
@@ -40,6 +41,7 @@ final class SendAirRaid
             throw new \DomainException('Not player turn');
         }
 
+        $game->spendEnergy('player', BattleAction::AirRaid);
         $game->setTurn('opponent');
 
         $centralPoint = new Coordinate($x, $y);

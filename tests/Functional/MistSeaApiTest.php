@@ -41,7 +41,7 @@ final class MistSeaApiTest extends WebTestCase
 
         $lieutenant = $this->scholar($client, xp: 599, researched: [Technology::MapySztormowe, Technology::ZeglugaDwusektorowa]);
         $node = array_column($this->expedition($client, $lieutenant)['research']['technologies'], null, 'id')['nawigacja-oceaniczna'];
-        self::assertSame(['id' => 'nawigacja-oceaniczna', 'branch' => 'nawigacja', 'level' => 3, 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'rank'], $node);
+        self::assertSame(['id' => 'nawigacja-oceaniczna', 'branch' => 'nawigacja', 'level' => 3, 'unlock' => 'academy', 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'rank'], $node);
         $refused = $this->post($client, "/api/profiles/$lieutenant/islands/zatoka-rozbitka/research", ['technology' => 'nawigacja-oceaniczna']);
         self::assertResponseStatusCodeSame(403);
         self::assertSame('TECHNOLOGY_LOCKED', $refused['error']['code']);

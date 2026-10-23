@@ -46,6 +46,7 @@ export function logText(e: LogEntryDTO, tick?: number): string {
             return `Abordaż udany: ${prizeLabel(e)} zdobyty (${e.gateName ?? island}) — czeka na decyzję.`;
         case 'prize-decided': {
             if (e.decision === 'join') return `Zdobyty ${prizeLabel(e).toLowerCase()} dołączył do floty — czeka na remont.`;
+            if (e.decision === 'study') return `Konstrukcja zbadana: ${prizeLabel(e).toLowerCase()} — stocznia buduje ten wariant, statek poszedł na części.`;
             const lost = e.lost ? `, za burtę: ${formatResources(e.lost)}` : '';
             return `Zdobyty ${prizeLabel(e).toLowerCase()} rozebrany — do ładowni: ${formatResources(e.refund ?? { wood: 0, steel: 0, gold: 0 }, 'nic')}${lost}.`;
         }

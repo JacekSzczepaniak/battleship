@@ -99,6 +99,30 @@ final class FleetComposition
     }
 
     /**
+     * Dokłada warianty do wolnych miejsc w składzie (wróg z wariantami ze
+     * zdobyczy, #121): wariant zajmuje statek z wyposażeniem domyślnym danej
+     * długości, a bez wolnego miejsca odpada. Warianty już nadane zostają.
+     *
+     * @param array<int,list<Loadout>> $variants
+     * @param array<int,int>           $ships
+     * @param array<int,list<Loadout>> $extra
+     *
+     * @return array<int,list<Loadout>>
+     */
+    public static function addVariants(array $variants, array $ships, array $extra): array
+    {
+        foreach ($extra as $length => $loadouts) {
+            foreach ($loadouts as $loadout) {
+                if (count($variants[$length] ?? []) < ($ships[$length] ?? 0)) {
+                    $variants[$length][] = $loadout;
+                }
+            }
+        }
+
+        return $variants;
+    }
+
+    /**
      * Nadaje wygenerowanej flocie wyposażenie z wariantów: pierwsze statki
      * danej długości dostają warianty, reszta zostaje z domyślnym.
      *

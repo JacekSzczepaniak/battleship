@@ -25,7 +25,7 @@ final class CreateGame
      * @param array<int,int>|null           $opponentShips    skład floty AI; null = lustrzany (inny przy bonusie pełnej bandery, #79)
      * @param array<int,list<Loadout>>|null $variants         warianty wyposażenia (#95); AI dostaje je lustrzanie
      * @param int|null                      $sonarRadius      promień sonaru gracza w trybie fun (null = bazowy); AI zostaje przy bazowym
-     * @param array<int,list<Loadout>>|null $opponentVariants warianty AI; null = lustro wariantów gracza ([] = same domyślne, strażnik cieśniny)
+     * @param array<int,list<Loadout>>|null $opponentVariants warianty AI; null = lustro wariantów gracza (strażnik cieśniny: jego własne, wyspa: lustro + wariant ze zdobyczy, #121)
      * @param int|null                      $fortSeed         bitwa oblężnicza (#119): fort z tego seeda zamiast floty AI;
      *                                                        plansza zawsze FortRules::SIZE, zasady fun (pełny arsenał i energia)
      * @param bool                          $boarding         abordaż ostatniego statku wroga (#118): bitwy wyprawy; działa tylko z energią (fun), nie w oblężeniu

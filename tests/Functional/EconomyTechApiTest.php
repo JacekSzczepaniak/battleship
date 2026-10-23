@@ -47,7 +47,7 @@ final class EconomyTechApiTest extends WebTestCase
         // sternik ze Spichlerzami zaczyna Lepsze narzędzia: koszt i czas poziomu 2
         $helmsman = $this->captainAt($client, 'mielizny', owned: ['mielizny'], buildings: $academy, xp: 250, researched: [Technology::Spichlerze]);
         self::assertSame(
-            ['id' => 'lepsze-narzedzia', 'branch' => 'osady', 'level' => 2, 'state' => 'available', 'ticksLeft' => null, 'blocker' => null],
+            ['id' => 'lepsze-narzedzia', 'branch' => 'osady', 'level' => 2, 'unlock' => 'academy', 'state' => 'available', 'ticksLeft' => null, 'blocker' => null],
             $this->technology($this->expedition($client, $helmsman), 'lepsze-narzedzia'),
         );
         $started = $this->post($client, "/api/profiles/$helmsman/islands/mielizny/research", ['technology' => 'lepsze-narzedzia']);

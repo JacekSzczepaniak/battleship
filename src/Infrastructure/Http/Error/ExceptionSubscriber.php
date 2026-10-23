@@ -134,6 +134,9 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             'Boarding already attempted' => ['BOARDING_ALREADY_ATTEMPTED', 409],
             // zdobyty statek (#118)
             'Prize not found' => ['PRIZE_NOT_FOUND', 404],
+            // zbadanie konstrukcji (#121)
+            'Prize cannot be studied' => ['PRIZE_NOT_STUDIABLE', 409],
+            'Technology available only from boarded ships' => ['TECHNOLOGY_BOARDING_ONLY', 409],
             'Game already finished' => ['GAME_ALREADY_FINISHED', 409],
             'Profile not found' => ['PROFILE_NOT_FOUND', 404],
             'Island not found' => ['ISLAND_NOT_FOUND', 404],

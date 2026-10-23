@@ -12,15 +12,32 @@ final class Sea
     /** Akwen 1 — start wyprawy i dom profili sprzed akwenów. */
     public const START = 'morze-rozbitkow';
 
+    /**
+     * @param list<ShipVariant> $enemyVariants warianty ze zdobyczy, które wróg ma w składzie na wyspach akwenu (#121)
+     */
     public function __construct(
         public readonly string $id,
         public readonly string $name,
         public readonly SeaTheme $theme,
         public readonly IslandCatalog $islands,
+        public readonly array $enemyVariants = [],
     ) {
         if ('' === $id || [] === $islands->all()) {
             throw new \InvalidArgumentException('Sea needs an id and islands');
         }
+    }
+
+    /**
+     * Wariant ze zdobyczy w składzie wroga na wyspie (#121): jeden z wariantów
+     * akwenu, stały dla wyspy w danym świecie; null = akwen bez takich wariantów.
+     */
+    public function enemyVariantFor(int $worldSeed, string $islandId): ?ShipVariant
+    {
+        if ([] === $this->enemyVariants) {
+            return null;
+        }
+
+        return $this->enemyVariants[(crc32("{$worldSeed}:{$islandId}:enemy-variant") & 0x7FFFFFFF) % count($this->enemyVariants)];
     }
 
     /**

@@ -177,7 +177,7 @@ final class ExpeditionController
         return new JsonResponse($this->shipView($ship));
     }
 
-    /** Decyzja o statku zdobytym abordażem (#118): {decision: join|scrap}. */
+    /** Decyzja o statku zdobytym abordażem (#118): {decision: join|scrap|study}; study = zbadaj konstrukcję (#121). */
     #[Route('/{id}/prizes/{prizeId}', name: 'api_profiles_decide_prize', methods: ['POST'])]
     public function decidePrize(string $id, string $prizeId, Request $request): JsonResponse
     {
@@ -195,6 +195,7 @@ final class ExpeditionController
             'refund' => $outcome['refund']->toArray(),
             'cargoLost' => $outcome['cargoLost']->toArray(),
             'cargo' => $outcome['cargo']->toArray(),
+            'technology' => $outcome['technology']?->value,
         ]);
     }
 

@@ -6,6 +6,8 @@ namespace App\Domain\Expedition;
  * Technologia drzewka (Epic G). Katalog zawiera tylko technologie, które
  * działają; efekt każdej liczy profil kapitana tam, gdzie zmienia regułę.
  * Działa wyłącznie po stronie gracza — lustrzany skład wroga jej nie dostaje.
+ * Technologie ze zdobyczy (#121) są poza poziomami drzewka: odblokowuje je
+ * tylko zbadanie konstrukcji zdobytego statku (TechUnlock::Boarding).
  */
 enum Technology: string
 {
@@ -36,22 +38,46 @@ enum Technology: string
     /** Otwiera bramę oceaniczną między Oceanem Sztormów a Morzem Mgieł, w obie strony (#108). */
     case NawigacjaOceaniczna = 'nawigacja-oceaniczna';
 
+    /** Stocznia buduje kuter torpedowy: torpeda zamiast sonaru. Tylko z abordażu (#121). */
+    case KuterTorpedowy = 'kuter-torpedowy';
+
+    /** Stocznia buduje ciężki niszczyciel: 2 torpedy. Tylko z abordażu (#121). */
+    case CiezkiNiszczyciel = 'ciezki-niszczyciel';
+
+    /** Stocznia buduje lotniskowiec eskortowy: nalot i sonar. Tylko z abordażu (#121). */
+    case LotniskowiecEskortowy = 'lotniskowiec-eskortowy';
+
     public function branch(): TechBranch
     {
         return match ($this) {
             self::Spichlerze, self::LepszeNarzedzia => TechBranch::Osady,
             self::PojemneLadownie, self::DokRemontowy => TechBranch::Kadluby,
             self::MapySztormowe, self::ZeglugaDwusektorowa, self::NawigacjaOceaniczna => TechBranch::Nawigacja,
-            self::SonarDalekiegoZasiegu, self::NiszczycielZwiadowczy => TechBranch::Uzbrojenie,
+            self::SonarDalekiegoZasiegu, self::NiszczycielZwiadowczy,
+            self::KuterTorpedowy, self::CiezkiNiszczyciel, self::LotniskowiecEskortowy => TechBranch::Uzbrojenie,
         };
     }
 
-    public function level(): TechLevel
+    /** Poziom drzewka; null = technologia spoza drzewka, ze zdobyczy (TechUnlock::Boarding). */
+    public function level(): ?TechLevel
     {
         return match ($this) {
             self::Spichlerze, self::MapySztormowe, self::SonarDalekiegoZasiegu, self::PojemneLadownie => TechLevel::First,
             self::ZeglugaDwusektorowa, self::LepszeNarzedzia, self::DokRemontowy, self::NiszczycielZwiadowczy => TechLevel::Second,
             self::NawigacjaOceaniczna => TechLevel::Third,
+            self::KuterTorpedowy, self::CiezkiNiszczyciel, self::LotniskowiecEskortowy => null,
         };
+    }
+
+    /** Ścieżka odblokowania (#121): badanie na uczelni albo zbadanie konstrukcji zdobytego statku. */
+    public function unlock(): TechUnlock
+    {
+        return null === $this->level() ? TechUnlock::Boarding : TechUnlock::Academy;
+    }
+
+    /** Poziom technologii z uczelni (badanie w toku, koszt, tiki); technologia ze zdobyczy go nie ma. */
+    public function academyLevel(): TechLevel
+    {
+        return $this->level() ?? throw new \LogicException('Technology is not researched at academy');
     }
 }

@@ -25,7 +25,7 @@ final class StartGuardianBattle
      * leżeć na akwenie floty, flota stoi na jej sektorze, ranga sięga progu
      * strażnika, a brama jest jeszcze zamknięta. Skład gracza jak przy wyspie
      * (limit 20% pól planszy strażnika); wróg płynie stałą flotą strażnika
-     * z domyślnym wyposażeniem — bez lustra składu i wariantów gracza.
+     * z jego wariantami ze zdobyczy (#121) — bez lustra składu i wariantów gracza.
      *
      * @param list<string>|null $shipIds skład bitewny; null = dobór domyślny
      */
@@ -68,7 +68,7 @@ final class StartGuardianBattle
             $guardian->composition(),
             $variants ?: null,
             $sonarRadius,
-            opponentVariants: [],
+            opponentVariants: $guardian->loadouts(),
             boarding: true,
         );
         $profile->startGuardianBattle($gateId, $game->id(), array_map(static fn ($s) => $s->id, $squad));

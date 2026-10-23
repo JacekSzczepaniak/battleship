@@ -36,9 +36,9 @@ function scoutCaptain(array $researched = [], array $fleet = [], ?Resources $sto
     );
 }
 
-it('niszczyciel ma warianty torpedowy i zwiadowczy, pozostałe typy żadnych', function () {
-    expect(ShipVariant::forType(ShipType::Niszczyciel))->toBe([ShipVariant::Torpedowy, ShipVariant::Zwiadowczy]);
-    foreach ([ShipType::Tratwa, ShipType::Kuter, ShipType::Lotniskowiec, ShipType::Transportowiec] as $type) {
+it('niszczyciel ma warianty torpedowy i zwiadowczy (oraz ciężki ze zdobyczy), tratwa i transportowiec żadnych', function () {
+    expect(ShipVariant::forType(ShipType::Niszczyciel))->toBe([ShipVariant::Torpedowy, ShipVariant::Zwiadowczy, ShipVariant::CiezkiNiszczyciel]);
+    foreach ([ShipType::Tratwa, ShipType::Transportowiec] as $type) {
         expect(ShipVariant::forType($type))->toBe([])
             ->and(ShipVariant::defaultFor($type))->toBeNull();
     }

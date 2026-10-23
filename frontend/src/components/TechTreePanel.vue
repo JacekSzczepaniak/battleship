@@ -3,7 +3,8 @@
     w każdym węzły gałęzi w stanach zablokowany / dostępny / w toku / ukończony.
     Start badania w uczelni wyspy, przy której stoi kapitan. Reguły (jedno
     badanie naraz, poprzedni poziom, ranga, uczelnia pod banderą, koszt) liczy
-    backend — tu tylko opisujemy jego kod blokady.
+    backend — tu tylko opisujemy jego kod blokady. Technologie ze zdobyczy (#121)
+    są poza poziomami: osobna sekcja „Tylko z abordażu”, bez przycisku badania.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -36,6 +37,9 @@ const EFFECTS: Record<TechnologyName, string> = {
     'lepsze-narzedzia': 'Złoże +1 na tik swojego surowca, przed mnożnikiem akwenu (na Oceanie Sztormów +2); tartak i kopalnia podwajają powiększony urobek.',
     'niszczyciel-zwiadowczy': 'Stocznia buduje niszczyciel zwiadowczy: 2 sonary zamiast torpedy.',
     'nawigacja-oceaniczna': 'Otwiera otwarty ocean na wschodniej krawędzi Oceanu Sztormów: przejście na Morze Mgieł i z powrotem za 1 tik, bez bitwy.',
+    'kuter-torpedowy': 'Stocznia buduje kuter torpedowy: torpeda zamiast sonaru. Pływa u wroga na Oceanie Sztormów.',
+    'ciezki-niszczyciel': 'Stocznia buduje ciężki niszczyciel: 2 torpedy. Pływa u wroga na Oceanie Sztormów.',
+    'lotniskowiec-eskortowy': 'Stocznia buduje lotniskowiec eskortowy: nalot i sonar. Pływa u wroga na Morzu Mgieł.',
 };
 
 const current = computed(() => props.research.current);
@@ -44,8 +48,11 @@ const complete = computed(() => props.research.technologies.length > 0 && done.v
 
 const levels = computed(() => props.research.levels.map(l => ({
     level: l,
-    nodes: props.research.technologies.filter(t => t.level === l.level),
+    nodes: props.research.technologies.filter(t => t.unlock === 'academy' && t.level === l.level),
 })));
+
+// technologie ze zdobyczy (#121): odblokowuje je „Zbadaj konstrukcję” po abordażu, nie uczelnia
+const boarding = computed(() => props.research.technologies.filter(t => t.unlock === 'boarding'));
 
 function levelLabel(l: TechLevelDTO): string {
     const rank = l.requiredRank ? ` · od rangi ${RANK_LABELS[l.requiredRank]}` : '';
@@ -53,16 +60,17 @@ function levelLabel(l: TechLevelDTO): string {
 }
 
 function blockLabel(t: TechnologyDTO): string | null {
-    const level = props.research.levels.find(l => l.level === t.level)!;
+    const level = props.research.levels.find(l => l.level === t.level);
     switch (t.blocker) {
         case null: return null;
         case 'researched': return 'zbadana';
+        case 'boarding-only': return 'zdobądź abordażem i zbadaj konstrukcję';
         case 'busy': return 'trwa inne badanie';
         case 'prerequisite': return 'najpierw poziom 1 tej gałęzi';
-        case 'rank': return `wymaga rangi ${level.requiredRank ? RANK_LABELS[level.requiredRank] : ''}`;
+        case 'rank': return `wymaga rangi ${level?.requiredRank ? RANK_LABELS[level.requiredRank] : ''}`;
         case 'no-academy': return 'na tej wyspie nie ma czynnej uczelni';
         case 'not-present': return 'dopłyń na wyspę z uczelnią';
-        case 'resources': return props.available ? missing(props.available, level.cost) : 'brakuje surowców';
+        case 'resources': return props.available && level ? missing(props.available, level.cost) : 'brakuje surowców';
     }
 }
 
@@ -133,6 +141,26 @@ function percent(progress: number, ticks: number): number {
                 </div>
             </div>
         </section>
+
+        <section v-if="boarding.length" class="level">
+            <div class="level-head">
+                <span class="level-name">Tylko z abordażu</span>
+                <span class="level-cost">bez kosztu i tików · zdobyty statek przepada</span>
+            </div>
+            <div class="nodes">
+                <div v-for="t in boarding" :key="t.id" class="node boarding" :class="t.state">
+                    <div class="node-head">
+                        <div>
+                            <div class="branch">Wariant wroga</div>
+                            <div class="node-name">{{ TECH_LABELS[t.id] }}</div>
+                        </div>
+                        <span v-if="t.state === 'researched'" class="check" title="zbadana — wariant w stoczni">✓</span>
+                    </div>
+                    <div class="desc">{{ EFFECTS[t.id] }}</div>
+                    <span v-if="t.state !== 'researched'" class="hint">{{ blockLabel(t) }}</span>
+                </div>
+            </div>
+        </section>
     </div>
 </template>
 
@@ -155,6 +183,7 @@ function percent(progress: number, ticks: number): number {
 .node.available { border-color: var(--line-btn); }
 .node.in-progress { border-color: var(--info); }
 .node.locked { opacity: .5; }
+.node.boarding { border-style: dashed; }
 .node-head { display: flex; justify-content: space-between; gap: 8px; align-items: start; }
 .branch { font: 600 9px var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text-label); }
 .node-name { font: 600 14px var(--font-head); }

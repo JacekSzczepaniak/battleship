@@ -635,6 +635,7 @@ final class CaptainProfile
     /**
      * Dlaczego badania nie da się teraz zacząć na wyspie (null = kapitan na
      * morzu); null = można badać. Kolejność: zbadana, trwa inne badanie,
+     * technologia ze zdobyczy (nie bada się jej na uczelni, #121),
      * reguła drzewka (poprzedni poziom, ranga), czynna uczelnia, obecność
      * kapitana, koszt (magazyn wyspy i ładownia).
      */
@@ -643,10 +644,13 @@ final class CaptainProfile
         if ($this->hasResearched($technology)) {
             return ResearchBlock::Researched;
         }
+        if (TechUnlock::Boarding === $technology->unlock()) {
+            return ResearchBlock::BoardingOnly;
+        }
         if (null !== $this->research) {
             return ResearchBlock::Busy;
         }
-        $level = $technology->level();
+        $level = $technology->academyLevel();
         $tree = $level->treeBlocker($technology->branch(), $this->researched, $this->rank());
         if (null !== $tree) {
             return $tree;
@@ -675,7 +679,7 @@ final class CaptainProfile
             throw new \DomainException($blocker->message($technology));
         }
 
-        $this->pay($island->id, $technology->level()->researchCost());
+        $this->pay($island->id, $technology->academyLevel()->researchCost());
         $this->research = ['technology' => $technology, 'island' => $island->id, 'progress' => 0, 'countedTo' => $this->tick];
     }
 
@@ -686,7 +690,7 @@ final class CaptainProfile
             return null;
         }
 
-        return $this->research['technology']->level()->researchTicks() - $this->research['progress'];
+        return $this->research['technology']->academyLevel()->researchTicks() - $this->research['progress'];
     }
 
     /**
@@ -1447,15 +1451,35 @@ final class CaptainProfile
     }
 
     /**
+     * Technologia, którą da się odblokować, badając konstrukcję zdobyczy
+     * (#121): wariant ze zdobyczy, którego kapitan jeszcze nie zna; null = nie
+     * ma czego badać (statek bez wariantu, wariant z uczelni albo już znany).
+     */
+    public function studyableTechnology(Prize $prize): ?Technology
+    {
+        $technology = $prize->variant?->requiredTechnology();
+
+        return null !== $technology && TechUnlock::Boarding === $technology->unlock() && !$this->hasResearched($technology)
+            ? $technology
+            : null;
+    }
+
+    /**
      * Decyzja o zdobytym statku, w dowolnym miejscu i czasie. Dołączenie daje
      * uszkodzony statek bez wymogu rangi (ranga ogranicza tylko budowę);
-     * rozbiórka ładuje połowę kosztu budowy do ładowni, a nadmiar przepada.
+     * rozbiórka ładuje połowę kosztu budowy do ładowni, a nadmiar przepada;
+     * zbadanie konstrukcji (#121) odblokowuje wariant w stoczni od razu,
+     * bez kosztu i tików, a statek przepada.
      *
-     * @return array{decision:string, prize:Prize, ship:?OwnedShip, refund:Resources, cargoLost:Resources}
+     * @return array{decision:string, prize:Prize, ship:?OwnedShip, refund:Resources, cargoLost:Resources, technology:?Technology}
      */
     public function decidePrize(string $prizeId, PrizeDecision $decision): array
     {
         $prize = $this->prizes[$prizeId] ?? throw new \DomainException('Prize not found');
+        $technology = PrizeDecision::Study === $decision ? $this->studyableTechnology($prize) : null;
+        if (PrizeDecision::Study === $decision && null === $technology) {
+            throw new \DomainException('Prize cannot be studied');
+        }
         unset($this->prizes[$prizeId]);
 
         $ship = null;
@@ -1471,6 +1495,9 @@ final class CaptainProfile
                 [$refund, $cargoLost] = $prize->scrapValue()->fitInto($this->cargoCapacity() - $this->cargo->total());
                 $this->cargo = $this->cargo->add($refund);
                 break;
+            case PrizeDecision::Study:
+                $this->researched[] = $technology;
+                break;
         }
 
         $this->record($this->tick, LogEvent::PrizeDecided, [
@@ -1479,9 +1506,10 @@ final class CaptainProfile
             'decision' => $decision->value,
             'refund' => PrizeDecision::Scrap === $decision ? $refund->toArray() : null,
             'lost' => $cargoLost->isZero() ? null : $cargoLost->toArray(),
+            'technology' => $technology?->value,
         ]);
 
-        return ['decision' => $decision->value, 'prize' => $prize, 'ship' => $ship, 'refund' => $refund, 'cargoLost' => $cargoLost];
+        return ['decision' => $decision->value, 'prize' => $prize, 'ship' => $ship, 'refund' => $refund, 'cargoLost' => $cargoLost, 'technology' => $technology];
     }
 
     /**

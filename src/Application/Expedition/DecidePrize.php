@@ -6,6 +6,7 @@ use App\Domain\Expedition\OwnedShip;
 use App\Domain\Expedition\PrizeDecision;
 use App\Domain\Expedition\ProfileRepository;
 use App\Domain\Expedition\Resources;
+use App\Domain\Expedition\Technology;
 use App\Domain\Shared\ProfileId;
 
 final class DecidePrize
@@ -15,10 +16,10 @@ final class DecidePrize
     }
 
     /**
-     * Decyzja o statku zdobytym abordażem (#118): dołącz albo rozbierz.
-     * Nie wymaga obecności przy wyspie i nie kosztuje tiku.
+     * Decyzja o statku zdobytym abordażem (#118): dołącz, rozbierz albo
+     * zbadaj konstrukcję (#121). Nie wymaga obecności przy wyspie i nie kosztuje tiku.
      *
-     * @return array{decision:string, ship:?OwnedShip, refund:Resources, cargoLost:Resources, cargo:Resources}
+     * @return array{decision:string, ship:?OwnedShip, refund:Resources, cargoLost:Resources, cargo:Resources, technology:?Technology}
      */
     public function handle(string $profileId, string $prizeId, PrizeDecision $decision): array
     {
@@ -36,6 +37,7 @@ final class DecidePrize
             'refund' => $outcome['refund'],
             'cargoLost' => $outcome['cargoLost'],
             'cargo' => $profile->cargo(),
+            'technology' => $outcome['technology'],
         ];
     }
 }

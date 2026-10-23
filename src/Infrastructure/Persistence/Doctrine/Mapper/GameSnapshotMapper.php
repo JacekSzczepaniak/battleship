@@ -2,6 +2,7 @@
 
 namespace App\Infrastructure\Persistence\Doctrine\Mapper;
 
+use App\Domain\Game\Boarding\BoardingAttempt;
 use App\Domain\Game\BoardSize;
 use App\Domain\Game\ClassicRuleset;
 use App\Domain\Game\Coordinate;
@@ -70,6 +71,10 @@ final class GameSnapshotMapper
             'energySpent' => [] !== array_filter($game->energySpent()) ? $game->energySpent() : null,
             // ruch statku wykorzystany w bieżącej turze (#60) — tylko, gdy był
             'moved' => $game->playerMovedThisTurn() ? true : null,
+            // numer tury gracza (#118, seed rzutu abordażu) — od drugiej tury
+            'round' => $game->round() > 1 ? $game->round() : null,
+            // abordaż (#118) — tylko w bitwie, która go dopuszcza; attempt = jedyna próba
+            'boarding' => $game->boardingEnabled() ? ['attempt' => $game->boardingAttempt()?->toArray()] : null,
             // Iteration 1 meta
             'mode' => $game->mode(),
             'opponent' => $game->opponent(),
@@ -175,6 +180,19 @@ final class GameSnapshotMapper
         // ruch statku w turze (#60); brak = ruch dostępny
         if (true === ($state['moved'] ?? null)) {
             $game->setPlayerMovedFromSnapshot(true);
+        }
+
+        // numer tury (#118); brak = pierwsza tura albo snapshot sprzed abordażu
+        if (isset($state['round'])) {
+            $game->setRoundFromSnapshot((int) $state['round']);
+        }
+
+        // abordaż (#118); brak klucza = bitwa bez abordażu
+        if (isset($state['boarding']) && is_array($state['boarding'])) {
+            $game->enableBoarding();
+            if (isset($state['boarding']['attempt']) && is_array($state['boarding']['attempt'])) {
+                $game->setBoardingAttemptFromSnapshot(BoardingAttempt::fromArray($state['boarding']['attempt']));
+            }
         }
 
         return $game;

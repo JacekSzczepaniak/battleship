@@ -107,6 +107,8 @@ final class GameQueryController
             'energy' => $game->energyState(),
             // ruch statku wykorzystany w tej turze (#60); bez energii ruchu nie ma
             'moveUsed' => $game->playerMovedThisTurn(),
+            // abordaż (#118): dostępność, próg k6, modyfikatory, wynik próby; null = bitwa bez abordażu
+            'boarding' => $game->boardingState(),
             'mode' => $game->mode(),
             'opponent' => $game->opponent(),
             'turn' => $turn,

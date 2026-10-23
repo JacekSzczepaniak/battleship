@@ -38,7 +38,18 @@ export function logText(e: LogEntryDTO, tick?: number): string {
             return `Strażnik pokonany — brama otwarta na stałe: ${e.gateName ?? e.gate}.`;
         case 'gate-passed':
             return `${e.gateName ?? e.gate} za rufą — witaj na akwenie ${e.toName ?? e.to}.`;
+        case 'ship-boarded':
+            return `Abordaż udany: ${prizeLabel(e)} zdobyty (${e.gateName ?? island}) — czeka na decyzję.`;
+        case 'prize-decided': {
+            if (e.decision === 'join') return `Zdobyty ${prizeLabel(e).toLowerCase()} dołączył do floty — czeka na remont.`;
+            const lost = e.lost ? `, za burtę: ${formatResources(e.lost)}` : '';
+            return `Zdobyty ${prizeLabel(e).toLowerCase()} rozebrany — do ładowni: ${formatResources(e.refund ?? { wood: 0, steel: 0, gold: 0 }, 'nic')}${lost}.`;
+        }
     }
+}
+
+function prizeLabel(e: LogEntryDTO): string {
+    return e.ship ? fleetShipLabel({ type: e.ship, variant: e.variant ?? null }) : 'Statek';
 }
 
 /** Ton wpisu: kolor kropki w banerze i dzienniku. */

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue';
 import { useRouter } from 'vue-router';
-import { Crosshair, Lock, Move, Plane, Radar, Rocket } from 'lucide-vue-next';
+import { Anchor, Crosshair, Lock, Move, Plane, Radar, Rocket } from 'lucide-vue-next';
 import SeaGrid from '../components/SeaGrid.vue';
 import { useGame, type WeaponMode } from '../composables/useGame';
 import { getExpedition, settleBattle } from '../api/expeditionApi';
@@ -12,7 +12,7 @@ import { attackerMissingShip, battleBonusLabel } from '../lib/counterattack';
 import type { BattleActionName, MoveDirection, PlayerFleetItem, TorpedoDirection } from '../api/gameApi';
 
 const {
-    gameId, status, finished, turn, loading, shooting, error, disabled, attack, endTurn, moveShip, moveUsed, width, height,
+    gameId, status, finished, turn, loading, shooting, error, disabled, attack, endTurn, moveShip, moveUsed, boardShip, boarding, width, height,
     ruleset, energy, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells, aliveCarriers,
     noteMarks, toggleNote,
     shotsCount, hitsCount, opponentHitsCount, enemySunkLengths, playerSunkLengths, enemyTotal, playerTotal,
@@ -145,6 +145,41 @@ function selectWeapon(card: WeaponCard) {
 watch(weaponCards, cards => {
     if (cards.find(c => c.key === weaponMode.value)?.locked) weaponMode.value = 'shot';
 });
+// --- abordaż (#118): ostatni statek wroga, rzut k6, ⚡3, jedna próba na bitwę ---
+
+const BOARDING_BLOCKERS: Record<string, string> = {
+    'not-last-ship': 'tylko ostatni statek wroga',
+    attempted: 'próba wykorzystana',
+    energy: 'brak energii · cała tura',
+    'not-available': 'niedostępny',
+};
+
+const BOARDING_MODIFIERS: Record<string, string> = {
+    'half-hull': 'połowa kadłuba trafiona',
+};
+
+const boardingCard = computed(() => {
+    const b = boarding.value;
+    if (!b) return null;
+    const mods = b.modifiers.map(m => `${BOARDING_MODIFIERS[m.code] ?? m.code} ${m.value < 0 ? '−' : '+'}${Math.abs(m.value)}`).join(', ');
+    const attempt = b.attempt;
+    return {
+        area: `k6 · sukces ${b.threshold}+${mods ? ` (${mods})` : ''}`,
+        source: 'ostatni statek wroga · kończy turę',
+        charges: attempt ? '0/1' : '1/1',
+        cost: b.cost,
+        locked: attempt
+            ? `k6 = ${attempt.roll} · ${attempt.success ? 'zdobyty' : 'odparty'}`
+            : (b.blocker ? BOARDING_BLOCKERS[b.blocker] ?? b.blocker : null),
+    };
+});
+
+function board() {
+    if (!boarding.value?.available || gameOver.value) return;
+    cancelMove();
+    boardShip();
+}
+
 // po wyczerpaniu energii zostaje tylko „Zakończ turę” — nawet salwa jest zablokowana
 const actionLocked = computed(() => !!weaponCards.value.find(c => c.key === weaponMode.value)?.locked);
 
@@ -504,6 +539,7 @@ async function finalize() {
         enemySunk: [...enemySunkLengths.value],
         enemyTotal: enemyTotal.value,
         playerSunk: [...playerSunkLengths.value],
+        boarded: boarding.value?.attempt?.success ?? false,
         expedition: null,
     };
 
@@ -721,6 +757,29 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
                 </div>
             </button>
 
+            <button
+                v-if="boardingCard"
+                class="weapon boarding"
+                :class="{ locked: !!boardingCard.locked }"
+                :disabled="!!boardingCard.locked || disabled || gameOver"
+                :title="boardingCard.locked ? '' : 'Rzut k6 z progiem z karty. Porażka: tura stracona, druga próba w tej bitwie się nie należy.'"
+                @click="board"
+            >
+                <div class="w-top">
+                    <span class="w-name"><Anchor :size="16" /> Abordaż</span>
+                    <span class="w-key">k6</span>
+                </div>
+                <div class="w-area">{{ boardingCard.area }}</div>
+                <div class="w-bottom">
+                    <span v-if="boardingCard.locked" class="w-lock"><Lock :size="11" /> {{ boardingCard.locked }}</span>
+                    <span v-else class="w-src">{{ boardingCard.source }}</span>
+                    <span class="w-costs">
+                        <span class="w-charges">{{ boardingCard.charges }}</span>
+                        <span class="w-cost" :title="`koszt: ${boardingCard.cost} energii`">⚡{{ boardingCard.cost }}</span>
+                    </span>
+                </div>
+            </button>
+
             <button v-if="gameOver" class="btn btn-primary end" :disabled="finalizing" @click="goToResult">
                 {{ finalizing ? 'Rozliczanie…' : 'Wynik bitwy →' }}
             </button>
@@ -839,6 +898,7 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
 .w-cost { font: 700 12px var(--font-mono); color: var(--accent); }
 .weapon.locked .w-cost { color: var(--text-dim); }
 .weapon.locked .w-charges { color: var(--text-dim); }
+.weapon.boarding:not(.locked) { border-color: var(--accent); }
 .end { padding: 0 30px; }
 .turn-box { min-width: 170px; display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 22px; border-radius: 14px; border: 1px solid var(--line-card); background: var(--bg-card-off); }
 .turn-box b { font: 700 17px var(--font-head); color: var(--text-dim); }

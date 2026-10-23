@@ -7,6 +7,7 @@ use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\LogEntry;
 use App\Domain\Expedition\LogEvent;
 use App\Domain\Expedition\OwnedShip;
+use App\Domain\Expedition\Prize;
 use App\Domain\Expedition\Resources;
 use App\Domain\Expedition\SeaState;
 use App\Domain\Expedition\ShipType;
@@ -65,6 +66,8 @@ final class ProfileSnapshotMapper
                 'event' => $entry->event->value,
                 'data' => $entry->data,
             ], $profile->log()),
+            // statki zdobyte abordażem, czekające na decyzję (#118)
+            'prizes' => array_map(static fn (Prize $prize) => $prize->toArray(), $profile->prizes()),
         ];
     }
 
@@ -153,7 +156,31 @@ final class ProfileSnapshotMapper
             openedGates: array_map('intval', (array) ($state['gates'] ?? [])),
             // brak klucza = profil sprzed dziennika, dziennik zaczyna się pusty
             log: $this->logFrom($state),
+            // brak klucza = profil sprzed abordażu, bez zdobyczy
+            prizes: $this->prizesFrom($state),
         );
+    }
+
+    /**
+     * Zdobyte statki (#118); wpis z nieznanym typem jest pomijany, wariant obcego typu — zerowany.
+     *
+     * @param array<string,mixed> $state
+     *
+     * @return list<Prize>
+     */
+    private function prizesFrom(array $state): array
+    {
+        $out = [];
+        foreach ((array) ($state['prizes'] ?? []) as $prize) {
+            $type = is_array($prize) ? ShipType::tryFrom((string) ($prize['type'] ?? '')) : null;
+            if (null === $type || !isset($prize['id'])) {
+                continue;
+            }
+            $variant = ShipVariant::tryFrom((string) ($prize['variant'] ?? ''));
+            $out[] = new Prize((string) $prize['id'], $type, $variant?->type() === $type ? $variant : null, (int) ($prize['tick'] ?? 0));
+        }
+
+        return $out;
     }
 
     /**

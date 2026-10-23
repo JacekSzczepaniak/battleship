@@ -375,7 +375,8 @@ export interface ResearchDTO {
 // dziennik kapitana (#111): rodzaj zdarzenia (Domain/Expedition/LogEvent) z danymi; treść składa lib/eventLog
 export type LogEventName =
     | 'storm' | 'island-captured' | 'island-lost' | 'island-defended' | 'island-plundered' | 'counterattack-announced'
-    | 'research-completed' | 'ship-built' | 'building-built' | 'gate-opened' | 'gate-passed';
+    | 'research-completed' | 'ship-built' | 'building-built' | 'gate-opened' | 'gate-passed'
+    | 'ship-boarded' | 'prize-decided';
 
 export interface LogEntryDTO {
     tick: number;
@@ -400,11 +401,44 @@ export interface LogEntryDTO {
     strikeAt?: number;
     technology?: TechnologyName;
     building?: BuildingTypeName;
+    // decyzja o zdobyczy (#118): rozbiórka podaje zwrot i to, co nie zmieściło się w ładowni
+    decision?: PrizeDecisionName;
+    refund?: ResourcesDTO;
+    lost?: ResourcesDTO;
+}
+
+// decyzja o statku zdobytym abordażem (#118); #121 dopisze 'study'
+export type PrizeDecisionName = 'join' | 'scrap';
+
+// statek zdobyty abordażem, czekający na decyzję kapitana (#118)
+export interface PrizeDTO {
+    id: string;
+    type: ShipTypeName;
+    variant: ShipVariantName | null;
+    length: number;
+    tick: number;
+    // zwrot z rozbiórki: połowa kosztu budowy
+    scrapValue: ResourcesDTO;
+}
+
+export interface DecidePrizeDTO {
+    decision: PrizeDecisionName;
+    // dołączony statek (uszkodzony); null przy rozbiórce
+    ship: Omit<FleetShipDTO, 'repairCost'> | null;
+    refund: ResourcesDTO;
+    cargoLost: ResourcesDTO;
+    cargo: ResourcesDTO;
+}
+
+export async function decidePrize(profileId: string, prizeId: string, decision: PrizeDecisionName): Promise<DecidePrizeDTO> {
+    return http.post<DecidePrizeDTO>(`/profiles/${profileId}/prizes/${prizeId}`, { decision });
 }
 
 export interface ExpeditionDTO {
     profile: ExpeditionProfileDTO;
     fleet: FleetShipDTO[];
+    // statki zdobyte abordażem, czekające na decyzję (#118)
+    prizes: PrizeDTO[];
     shipTypes: ShipTypeDTO[];
     buildingTypes: BuildingTypeDTO[];
     islands: IslandDTO[];
@@ -436,6 +470,8 @@ export interface SettleResultDTO {
     defense: { held: boolean; stockpileLost: ResourcesDTO } | null;
     // wygrana ze strażnikiem otworzyła bramę akwenu (#107)
     gateOpened: boolean;
+    // abordaż (#118): zdobyty statek czeka na decyzję na ekranie Rejs; null = bez udanego abordażu
+    prize: Omit<PrizeDTO, 'length' | 'scrapValue'> | null;
 }
 
 export async function createProfile(name: string): Promise<ProfileDTO> {

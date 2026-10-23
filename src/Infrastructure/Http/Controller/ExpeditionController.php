@@ -5,6 +5,7 @@ namespace App\Infrastructure\Http\Controller;
 use App\Application\Expedition\BuildBuilding;
 use App\Application\Expedition\BuildShip;
 use App\Application\Expedition\CreateProfile;
+use App\Application\Expedition\DecidePrize;
 use App\Application\Expedition\GetExpedition;
 use App\Application\Expedition\PassGate;
 use App\Application\Expedition\RepairShip;
@@ -16,6 +17,7 @@ use App\Application\Expedition\StartResearch;
 use App\Application\Expedition\TransferCargo;
 use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\OwnedShip;
+use App\Domain\Expedition\PrizeDecision;
 use App\Domain\Expedition\Resources;
 use App\Domain\Expedition\ShipType;
 use App\Domain\Expedition\ShipVariant;
@@ -37,6 +39,7 @@ final class ExpeditionController
         private SettleBattle $settleBattle,
         private BuildShip $buildShip,
         private RepairShip $repairShip,
+        private DecidePrize $decidePrize,
         private Sail $sail,
         private TransferCargo $transferCargo,
         private BuildBuilding $buildBuilding,
@@ -162,6 +165,27 @@ final class ExpeditionController
         $ship = $this->repairShip->handle($id, $islandId, $shipId);
 
         return new JsonResponse($this->shipView($ship));
+    }
+
+    /** Decyzja o statku zdobytym abordażem (#118): {decision: join|scrap}. */
+    #[Route('/{id}/prizes/{prizeId}', name: 'api_profiles_decide_prize', methods: ['POST'])]
+    public function decidePrize(string $id, string $prizeId, Request $request): JsonResponse
+    {
+        $this->assertUuid($id, 'profile');
+        $decision = PrizeDecision::tryFrom((string) ($this->jsonPayload($request)['decision'] ?? ''));
+        if (null === $decision) {
+            throw new ApiException(sprintf('Missing or invalid field: decision:%s', implode('|', array_column(PrizeDecision::cases(), 'value'))), 'VALIDATION_ERROR', 400);
+        }
+
+        $outcome = $this->decidePrize->handle($id, $prizeId, $decision);
+
+        return new JsonResponse([
+            'decision' => $outcome['decision'],
+            'ship' => null !== $outcome['ship'] ? $this->shipView($outcome['ship']) : null,
+            'refund' => $outcome['refund']->toArray(),
+            'cargoLost' => $outcome['cargoLost']->toArray(),
+            'cargo' => $outcome['cargo']->toArray(),
+        ]);
     }
 
     #[Route('/{id}/islands/{islandId}/buildings', name: 'api_profiles_build_building', methods: ['POST'])]

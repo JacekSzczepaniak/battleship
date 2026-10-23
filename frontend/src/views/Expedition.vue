@@ -87,6 +87,24 @@
                 </router-link>
             </section>
 
+            <!-- Zdobycz z abordażu (#118): stan do decyzji, jak kontratak — na wierzchu, w dowolnym miejscu mapy -->
+            <section v-for="prize in expedition.prizes" :key="prize.id" class="alert prize">
+                <strong>⚓ Zdobyty abordażem: {{ fleetShipLabel(prize) }}</strong>
+                <span class="muted">Co z nim robisz?</span>
+                <span class="prize-actions">
+                    <button
+                        v-for="option in prizeOptions(prize)"
+                        :key="option.decision"
+                        class="btn btn-small"
+                        :class="option.primary ? 'btn-primary' : 'btn-secondary'"
+                        :disabled="busy"
+                        :title="option.hint"
+                        @click="onDecidePrize(prize, option.decision)"
+                    >{{ option.label }}</button>
+                </span>
+                <span v-if="prizeOverflow(prize)" class="prize-warn">⚠️ Ładownia pomieści {{ cargoFree }} — przy rozbiórce {{ prizeOverflow(prize) }} pójdzie za burtę. Rozładuj ją najpierw w porcie, decyzja poczeka.</span>
+            </section>
+
             <div class="main">
                 <SeaMap :expedition="expedition" :busy="busy" :note="seaMsg" :gate-status="gateStatus" @sail="onSail" />
 
@@ -405,11 +423,11 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
-    buildBuilding, buildShip, createProfile, getExpedition, passGate, repairShip, sail, settleBattle, startGuardianBattle, startIslandBattle,
+    buildBuilding, buildShip, createProfile, decidePrize, getExpedition, passGate, repairShip, sail, settleBattle, startGuardianBattle, startIslandBattle,
     startResearch, transferCargo,
     RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, SHIP_VARIANT_LABELS, TECH_LABELS, fleetShipLabel,
     type BuildingTypeName, type TechnologyName, type ExpeditionDTO, type FleetShipDTO, type GateDTO, type GuardianDTO, type IslandDTO,
-    type RankName, type ResourcesDTO, type SailResultDTO, type SeaThemeDTO, type ShipTypeDTO, type ShipVariantDTO, type ShipVariantName,
+    type PrizeDTO, type PrizeDecisionName, type RankName, type ResourcesDTO, type SailResultDTO, type SeaThemeDTO, type ShipTypeDTO, type ShipVariantDTO, type ShipVariantName,
 } from '../api/expeditionApi';
 import { ApiError } from '../api/http';
 import {
@@ -735,6 +753,38 @@ function onTransfer(direction: 'load' | 'unload', amount: ResourcesDTO) {
     return inPort((profileId, island) => transferCargo(profileId, island.id, direction, amount), 'Przeładunek nie powiódł się');
 }
 
+// --- zdobycz z abordażu (#118): opcje decyzji; #121 dopisze „zbadaj konstrukcję” ---
+
+interface PrizeOption { decision: PrizeDecisionName; label: string; hint: string; primary: boolean }
+
+function prizeOptions(prize: PrizeDTO): PrizeOption[] {
+    return [
+        { decision: 'join', label: 'Wyremontuj i dołącz', hint: 'Statek dołącza do floty uszkodzony — remont w stoczni. Ranga nie ogranicza zdobyczy.', primary: true },
+        { decision: 'scrap', label: `Rozbierz · +${formatResources(prize.scrapValue)}`, hint: 'Połowa kosztu budowy trafia do ładowni; to, co się nie zmieści, przepada.', primary: false },
+    ];
+}
+
+/** Część zwrotu z rozbiórki, która nie zmieści się w ładowni; '' = zmieści się cała. */
+function prizeOverflow(prize: PrizeDTO): string {
+    const over = totalResources(prize.scrapValue) - cargoFree.value;
+    return over > 0 ? `${over} szt.` : '';
+}
+
+async function onDecidePrize(prize: PrizeDTO, decision: PrizeDecisionName) {
+    const profileId = getProfileId();
+    if (!profileId) return;
+    busy.value = true;
+    error.value = '';
+    try {
+        await decidePrize(profileId, prize.id, decision);
+        expedition.value = await getExpedition(profileId);
+    } catch (e: any) {
+        error.value = e?.message ?? 'Decyzja o zdobyczy nie powiodła się';
+    } finally {
+        busy.value = false;
+    }
+}
+
 function onRepair(ship: FleetShipDTO) {
     return inPort((profileId, island) => repairShip(profileId, island.id, ship.id), 'Remont nie powiódł się');
 }
@@ -929,6 +979,9 @@ h2, h3 { font-family: var(--font-head); }
 .flags-by-sea { list-style: none; margin: 0 0 4px; padding: 0; font: 500 12px var(--font-mono); }
 .flags-by-sea .full { color: var(--info); }
 .pending { border-color: var(--accent); }
+.prize { border-color: var(--accent); }
+.prize-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.prize-warn { flex-basis: 100%; font: 500 12px var(--font-mono); color: var(--warn); }
 
 /* mapa + panel */
 .main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }

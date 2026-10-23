@@ -231,6 +231,30 @@ final class BoardSide
         return $out;
     }
 
+    /**
+     * Niezatopione statki tej strony z liczbą trafionych pól (abordaż, #118);
+     * klucz = indeks statku we flocie.
+     *
+     * @return array<int, array{ship: Ship, hits: int}>
+     */
+    public function unsunkShips(): array
+    {
+        if (!$this->hasFleet()) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($this->board->ships() as $index => $ship) {
+            if ($this->isSunk($ship)) {
+                continue;
+            }
+            $hits = count(array_filter($this->cellKeys($ship), fn (string $key) => isset($this->hits[$key])));
+            $out[$index] = ['ship' => $ship, 'hits' => $hits];
+        }
+
+        return $out;
+    }
+
     /** @return list<array{x:int,y:int}> */
     public function shotsTaken(): array
     {

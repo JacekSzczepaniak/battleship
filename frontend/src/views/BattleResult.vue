@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Anchor, Wrench } from 'lucide-vue-next';
 import { createGame, getGame } from '../api/gameApi';
-import { RANK_LABELS, SHIP_LABELS, startGuardianBattle, startIslandBattle, type RankName } from '../api/expeditionApi';
+import { RANK_LABELS, SHIP_LABELS, fleetShipLabel, startGuardianBattle, startIslandBattle, type RankName } from '../api/expeditionApi';
 import { setCurrentBattle } from '../lib/expeditionSession';
 import { getBattleReport, type BattleReport } from '../lib/battleSession';
 import { shipName } from '../lib/ships';
@@ -75,6 +75,13 @@ const accuracy = computed(() => {
 });
 
 const enemyChips = computed(() => (report.value?.enemySunk ?? []).map((l, i) => ({ key: i, label: shipName(l) })));
+
+// abordaż (#118): ostatni statek wroga zdobyty, nie zatopiony
+const prize = computed(() => exp.value?.settle.prize ?? null);
+const boardedChip = computed(() => {
+    if (!report.value?.boarded) return null;
+    return `⚓ abordaż${prize.value ? ` · ${fleetShipLabel(prize.value).toLowerCase()}` : ''}`;
+});
 
 interface FleetRow { key: string; name: string; state: 'ok' | 'damaged' | 'lost'; note: string }
 
@@ -216,7 +223,8 @@ onMounted(load);
                     <div class="kicker">ZATOPIONE · {{ report.enemySunk.length }} / {{ report.enemyTotal }}</div>
                     <div class="chips">
                         <span v-for="chip in enemyChips" :key="chip.key" class="chip">{{ chip.label }}</span>
-                        <span v-if="!enemyChips.length" class="chip empty">żadna jednostka wroga</span>
+                        <span v-if="boardedChip" class="chip boarded">{{ boardedChip }}</span>
+                        <span v-if="!enemyChips.length && !boardedChip" class="chip empty">żadna jednostka wroga</span>
                     </div>
                 </div>
 
@@ -246,6 +254,7 @@ onMounted(load);
                     <p v-if="exp.kind === 'guardian'" class="muted loot-note">Łup strażnika trafił do ładowni — przy cieśninie nie ma magazynu, więc to, co się nie mieści, idzie za burtę.</p>
                     <p v-else class="muted loot-note">Łup czeka w magazynie wyspy {{ exp.islandName }} — załadujesz go w porcie (1 tik).</p>
                     <p v-if="exp.settle.gateOpened" class="captured">🌀 Cieśnina otwarta na stałe, w obie strony — przepłyniesz ją z sektora bramy za 1 tik.</p>
+                    <p v-if="prize" class="captured">⚓ Zdobyty statek: {{ fleetShipLabel(prize) }} — czeka na Twoją decyzję na ekranie Rejs: wyremontuj i dołącz albo rozbierz.</p>
                     <p v-if="exp.settle.captured" class="captured">🚩 {{ exp.islandName }} pod Twoją banderą.</p>
                     <p v-if="exp.settle.defense?.held" class="captured">🛡️ Wyspa obroniona: {{ exp.islandName }} — bandera zostaje, następny kontratak najwcześniej po 8 tikach spokoju.</p>
                     <p v-if="exp.settle.defense && !exp.settle.defense.held" class="island-lost">
@@ -325,6 +334,7 @@ h1 { font: 700 84px var(--font-head); line-height: .95; letter-spacing: -.02em; 
 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .chip { padding: 9px 14px; border-radius: 9px; background: var(--bg-card); border: 1px solid var(--line-card); font: 600 13px var(--font-head); color: var(--text-2); }
+.chip.boarded { border-color: var(--accent); color: var(--accent); }
 .chip.empty { color: var(--text-dim); font-weight: 500; }
 
 .actions { display: flex; gap: 14px; margin-top: auto; }

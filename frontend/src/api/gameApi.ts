@@ -27,8 +27,32 @@ export interface WeaponsState {
     torpedoDiagonal?: WeaponState;
 }
 
-// działania w turze i ich koszt energii (#59; ruch statku z #60)
-export type BattleActionName = 'shot' | 'sonar' | 'torpedo' | 'airRaid' | 'move';
+// działania w turze i ich koszt energii (#59; ruch statku z #60, abordaż z #118)
+export type BattleActionName = 'shot' | 'sonar' | 'torpedo' | 'airRaid' | 'move' | 'board';
+
+// modyfikator progu k6 abordażu (#118); value < 0 = próg niższy
+export interface BoardingModifier { code: 'half-hull' | string; value: number }
+
+export interface BoardingAttemptDTO {
+    round: number;
+    roll: number;
+    threshold: number;
+    modifiers: BoardingModifier[];
+    // indeks statku we flocie wroga
+    ship: number;
+    success: boolean;
+}
+
+// stan abordażu (#118); null w GameViewDTO = bitwa bez abordażu (trening, classic)
+export interface BoardingState {
+    available: boolean;
+    blocker: 'not-available' | 'attempted' | 'not-last-ship' | 'energy' | null;
+    // próg k6 dla ostatniego statku wroga (przy kilku statkach — bazowy)
+    threshold: number;
+    modifiers: BoardingModifier[];
+    cost: number;
+    attempt: BoardingAttemptDTO | null;
+}
 
 // energia gracza w bieżącej turze; null = bitwa bez energii (classic)
 export interface EnergyState {
@@ -54,6 +78,8 @@ export interface GameViewDTO {
     energy?: EnergyState | null;
     // ruch statku wykorzystany w tej turze (#60)
     moveUsed?: boolean;
+    // abordaż ostatniego statku wroga (#118)
+    boarding?: BoardingState | null;
     mode: 'standard' | 'nonstandard' | string;
     opponent: 'mock' | 'ai' | 'pvp' | string;
     turn: 'player' | 'opponent' | 'none';
@@ -157,4 +183,14 @@ export interface MoveShipResponse {
 // (x, y) = dowolne pole własnego statku
 export async function moveShip(id: string, x: number, y: number, direction: MoveDirection): Promise<MoveShipResponse> {
     return http.post<MoveShipResponse>(`/games/${id}/move`, { x, y, direction });
+}
+
+// --- abordaż (#118): ⚡3, jedna próba na bitwę, kończy turę ---
+
+export interface BoardShipResponse extends TurnOutcomeDTO {
+    boarding: BoardingAttemptDTO;
+}
+
+export async function boardShip(id: string): Promise<BoardShipResponse> {
+    return http.post<BoardShipResponse>(`/games/${id}/board`, {});
 }

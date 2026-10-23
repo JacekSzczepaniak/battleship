@@ -69,6 +69,7 @@ final class StartGuardianBattle
             $variants ?: null,
             $sonarRadius,
             opponentVariants: [],
+            boarding: true,
         );
         $profile->startGuardianBattle($gateId, $game->id(), array_map(static fn ($s) => $s->id, $squad));
         $this->profiles->save($profile);

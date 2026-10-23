@@ -29,6 +29,18 @@ enum ShipType: string
         };
     }
 
+    /** Typ statku o danej długości na planszy (zdobycz z abordażu, #118); null = brak takiego typu. */
+    public static function ofLength(int $length): ?self
+    {
+        foreach (self::cases() as $type) {
+            if ($type->length() === $length) {
+                return $type;
+            }
+        }
+
+        return null;
+    }
+
     /**
      * Nośnik broni w bitwie (kuter: sonar, niszczyciel: torpeda, lotniskowiec:
      * nalot) — tylko taki statek eskortuje konwój.

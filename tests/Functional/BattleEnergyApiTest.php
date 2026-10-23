@@ -23,7 +23,7 @@ final class BattleEnergyApiTest extends WebTestCase
         self::assertSame([
             'left' => 3,
             'max' => 3,
-            'costs' => ['shot' => 1, 'sonar' => 1, 'torpedo' => 2, 'airRaid' => 3, 'move' => 1],
+            'costs' => ['shot' => 1, 'sonar' => 1, 'torpedo' => 2, 'airRaid' => 3, 'move' => 1, 'board' => 3],
         ], $view['energy']);
 
         // sonar: -1⚡, tura zostaje u gracza

@@ -6,6 +6,7 @@ use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\LogEntry;
+use App\Domain\Expedition\Prize;
 use App\Domain\Expedition\ProfileRepository;
 use App\Domain\Expedition\Sea;
 use App\Domain\Expedition\SeaGraph;
@@ -155,6 +156,11 @@ final class GetExpedition
                 )),
             ],
             'fleet' => $fleet,
+            // statki zdobyte abordażem, czekające na decyzję (#118); scrapValue = zwrot z rozbiórki
+            'prizes' => array_map(static fn (Prize $prize) => $prize->toArray() + [
+                'length' => $prize->type->length(),
+                'scrapValue' => $prize->scrapValue()->toArray(),
+            ], $profile->prizes()),
             'shipTypes' => $shipTypes,
             'buildingTypes' => $buildingTypes,
             'islands' => $islands,

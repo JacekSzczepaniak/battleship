@@ -61,6 +61,8 @@ export interface BattleReport {
     enemySunk: number[];
     enemyTotal: number;
     playerSunk: number[];
+    /** ostatni statek wroga zdobyty abordażem (#118); brak w raportach sprzed abordażu */
+    boarded?: boolean;
     /** null = bitwa treningowa (bez stawki) */
     expedition: ExpeditionOutcome | null;
 }

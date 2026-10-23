@@ -4,6 +4,7 @@ namespace App\Application\Game;
 
 use App\Domain\Game\AI\HuntTargetAI;
 use App\Domain\Game\Area;
+use App\Domain\Game\BattleAction;
 use App\Domain\Game\BoardReadModel;
 use App\Domain\Game\Coordinate;
 use App\Domain\Game\Direction;
@@ -22,6 +23,9 @@ use App\Domain\Game\Weapon\WeaponKind;
  * - nalot: w najgęstszy nieostrzelany obszar (rozmiar maksymalny z rulesetu).
  * Bronie tylko w trybie hunt (przy dobijaniu zwykły strzał jest skuteczniejszy),
  * z losową częstością — AI nie może być przewidywalne.
+ *
+ * Energia (#59): AI płaci z tej samej puli co gracz — najpierw sonar, gdy ma
+ * sens, potem jeden atak, na który jeszcze go stać (po sonarze nalot odpada).
  */
 final class OpponentTurn
 {
@@ -40,7 +44,7 @@ final class OpponentTurn
     }
 
     /**
-     * @return array{finished:bool, win:bool, loss:bool, turn:string, opponentMoves:list<array{x:int,y:int,result:string}>, opponentTorpedoLaunch: array{x:int,y:int}|null}
+     * @return array{finished:bool, win:bool, loss:bool, turn:string, opponentMoves:list<array{x:int,y:int,result:string}>, opponentTorpedoLaunch: array{x:int,y:int}|null, energy: array{left:int,max:int,costs:array<string,int>}|null}
      */
     public function respond(Game $game): array
     {
@@ -49,6 +53,8 @@ final class OpponentTurn
         $torpedoLaunch = null;
 
         if (!$finished) {
+            // tura AI: odnowiona pula energii przeciwnika
+            $game->passTurnTo('opponent');
             $ai = HuntTargetAI::fromSnapshot($game->aiState());
             ['moves' => $opponentMoves, 'torpedoLaunch' => $torpedoLaunch] = $this->act($game, $ai);
             $game->setAiState($ai->toSnapshot());
@@ -57,8 +63,9 @@ final class OpponentTurn
         }
 
         // Po ruchu przeciwnika tura wraca do gracza (o ile gra nie skończona)
+        // razem z odnowioną energią gracza
         $turn = $finished ? 'none' : 'player';
-        $game->setTurn($turn);
+        $game->passTurnTo($turn);
 
         return [
             'finished' => $finished,
@@ -70,6 +77,8 @@ final class OpponentTurn
             'opponentTorpedoLaunch' => null !== $torpedoLaunch
                 ? ['x' => $torpedoLaunch->x, 'y' => $torpedoLaunch->y]
                 : null,
+            // energia gracza na nową turę (#59); null = bitwa bez energii
+            'energy' => $game->energyState(),
         ];
     }
 
@@ -82,10 +91,11 @@ final class OpponentTurn
 
         // 1) Zwiad: sonar w trybie hunt (nie zużywa akcji ofensywnej);
         //    broń wymaga żywego nośnika sonaru we flocie AI
-        if ($huntMode && $this->hasUses($weapons, 'sonar')
+        if ($huntMode && $this->hasUses($weapons, 'sonar') && $game->canAfford('opponent', BattleAction::Sonar)
             && $game->opponentHasWeaponCarrier(WeaponKind::Sonar) && $this->decide(self::SONAR_CHANCE)) {
             $center = $this->bestSonarCenter($view, $game->ruleset()->opponentWeapons()->sonar->radius);
             if (null !== $center) {
+                $game->spendEnergy('opponent', BattleAction::Sonar);
                 $detected = [];
                 foreach ($game->opponentSonarPing($center) as $cell) {
                     $c = new Coordinate($cell['x'], $cell['y']);
@@ -99,10 +109,12 @@ final class OpponentTurn
         }
 
         // 2) Akcja ofensywna: torpeda / nalot (tylko hunt) albo zwykły strzał
-        if ($huntMode && $this->hasUses($weapons, 'torpedo') && $this->decide(self::TORPEDO_CHANCE)) {
+        if ($huntMode && $this->hasUses($weapons, 'torpedo') && $game->canAfford('opponent', BattleAction::Torpedo)
+            && $this->decide(self::TORPEDO_CHANCE)) {
             $run = $this->bestTorpedoRun($game, $view, $this->hasUses($weapons, 'torpedoDiagonal'));
             if (null !== $run) {
                 [$start, $direction] = $run;
+                $game->spendEnergy('opponent', BattleAction::Torpedo);
                 $results = $game->fireOpponentTorpedo($start, $direction);
                 $this->notifyAll($ai, $results);
 
@@ -111,11 +123,12 @@ final class OpponentTurn
             }
         }
 
-        if ($huntMode && $this->hasUses($weapons, 'airRaid')
+        if ($huntMode && $this->hasUses($weapons, 'airRaid') && $game->canAfford('opponent', BattleAction::AirRaid)
             && $game->opponentHasWeaponCarrier(WeaponKind::AirRaid) && $this->decide(self::AIR_RAID_CHANCE)) {
             [$halfX, $halfY] = $this->airRaidHalfExtents($game);
             $center = $this->bestAirRaidCenter($view, $halfX, $halfY);
             if (null !== $center) {
+                $game->spendEnergy('opponent', BattleAction::AirRaid);
                 $results = $game->sendOpponentAirRaid($center, new Area($halfX, $halfY));
                 $this->notifyAll($ai, $results);
 
@@ -124,6 +137,7 @@ final class OpponentTurn
         }
 
         $target = $ai->nextShot($view);
+        $game->spendEnergy('opponent', BattleAction::Shot);
         $result = $game->fireOpponentShot($target);
         $ai->notify($target, $result);
 

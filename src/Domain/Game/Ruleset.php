@@ -48,4 +48,10 @@ interface Ruleset
 
     /** Parametry broni przeciwnika: jak weapons(), ale liczone z jego składu i wyposażenia. */
     public function opponentWeapons(): WeaponSpecs;
+
+    /**
+     * Pula energii strony na turę (#59), ta sama dla obu stron;
+     * 0 = bitwa bez energii (jeden strzał na turę, jak w classic).
+     */
+    public function energyPerTurn(): int;
 }

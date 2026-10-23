@@ -103,6 +103,8 @@ final class GameQueryController
             'opponentVariants' => FleetComposition::variantsToArray($game->ruleset()->opponentVariants()),
             'weapons' => $game->weaponsState(),
             'opponentWeapons' => $game->opponentWeaponsState(),
+            // energia gracza w bieżącej turze (#59); null = bitwa bez energii (classic)
+            'energy' => $game->energyState(),
             'mode' => $game->mode(),
             'opponent' => $game->opponent(),
             'turn' => $turn,

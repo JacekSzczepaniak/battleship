@@ -66,6 +66,8 @@ final class GameSnapshotMapper
             'ai' => [] !== $game->aiState() ? $game->aiState() : null,
             // Użycia broni specjalnych per strona (limity trzyma Ruleset)
             'weapons' => $this->weaponUsesOrNull($game),
+            // Energia zużyta w bieżącej turze (#59) — tylko, gdy coś zużyto
+            'energySpent' => [] !== array_filter($game->energySpent()) ? $game->energySpent() : null,
             // Iteration 1 meta
             'mode' => $game->mode(),
             'opponent' => $game->opponent(),
@@ -161,6 +163,11 @@ final class GameSnapshotMapper
         // weapon uses from snapshot (optional)
         if (!empty($state['weapons']) && is_array($state['weapons'])) {
             $game->setWeaponUsesFromSnapshot($state['weapons']);
+        }
+
+        // energia zużyta w turze (#59); brak = pełna pula (snapshoty sprzed energii)
+        if (!empty($state['energySpent']) && is_array($state['energySpent'])) {
+            $game->setEnergySpentFromSnapshot($state['energySpent']);
         }
 
         return $game;

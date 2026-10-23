@@ -1,8 +1,8 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import {
-    getGame, fireShot, fireTorpedo, sonarPing, sendAirRaid,
-    type GameViewDTO, type ShotResultDTO, type RulesetName, type WeaponsState,
+    getGame, fireShot, fireTorpedo, sonarPing, sendAirRaid, endTurn as apiEndTurn,
+    type GameViewDTO, type ShotResultDTO, type EnergyState, type RulesetName, type WeaponsState,
     type TorpedoDirection, type TurnOutcomeDTO, type SonarCell, type PlayerFleetItem, type CellShotResult, type Loadout,
 } from '../api/gameApi.ts';
 import { carriedWeapons, cellLabel, fieldsLabel, shipName } from '../lib/ships';
@@ -46,6 +46,8 @@ export function useGame() {
     const ruleset = ref<RulesetName>('classic');
     const weapons = ref<WeaponsState | null>(null);
     const opponentWeapons = ref<WeaponsState | null>(null);
+    // energia w turze (#59); null = bitwa bez energii
+    const energy = ref<EnergyState | null>(null);
     const weaponMode = ref<WeaponMode>('shot');
     const torpedoDirection = ref<TorpedoDirection>('E');
     // Wyniki sonaru — tylko po stronie klienta (backend nie zapisuje skanów)
@@ -146,6 +148,7 @@ export function useGame() {
         ruleset.value = dto.ruleset ?? 'classic';
         weapons.value = dto.weapons ?? null;
         opponentWeapons.value = dto.opponentWeapons ?? null;
+        energy.value = dto.energy ?? null;
         playerFleet.value = dto.playerFleet ?? [];
         allowedShips.value = dto.allowedShips ?? {};
         opponentShips.value = dto.opponentShips ?? dto.allowedShips ?? {};
@@ -215,6 +218,7 @@ export function useGame() {
 
     function applyTurnOutcome(o: TurnOutcomeDTO) {
         turn.value = o.turn;
+        if (o.energy !== undefined) energy.value = o.energy;
         logOpponentMoves(o);
         if (o.finished) {
             status.value = o.win ? 'won' : (o.loss ? 'lost' : status.value);
@@ -367,6 +371,7 @@ export function useGame() {
                 merged.set(`${c.x}:${c.y}`, c);
                 sonarMarks.value = [...merged.values()];
             }
+            if (res.energy !== undefined) energy.value = res.energy;
             const found = res.results.filter(c => c.occupied).length;
             pushLog('SONAR', found > 0
                 ? `Skan wokół ${cellLabel(x, y)}: echo kadłuba na ${found} ${found === 1 ? 'polu' : 'polach'}. Sonar nie kończy tury.`
@@ -391,6 +396,23 @@ export function useGame() {
             await refresh();
         } catch (e: any) {
             showToast(e?.message ?? 'Nalot się nie powiódł', 'warn', 2500);
+        } finally {
+            shooting.value = false;
+            weaponMode.value = 'shot';
+        }
+    }
+
+    /** „Zakończ turę” (#59): oddaj turę bez ataku — AI odpowiada, energia wraca. */
+    async function endTurn() {
+        if (!canAct() || !energy.value) return;
+        try {
+            shooting.value = true;
+            const res = await apiEndTurn(gameId.value);
+            pushLog('TY', 'Koniec tury bez ataku.');
+            applyTurnOutcome(res);
+            await refresh();
+        } catch (e: any) {
+            showToast(e?.message ?? 'Nie udało się zakończyć tury', 'warn', 2500);
         } finally {
             shooting.value = false;
             weaponMode.value = 'shot';
@@ -425,9 +447,9 @@ export function useGame() {
 
     return {
         gameId, size, width, height, playerGrid, playerUnderFireOverlay, enemyFogGrid, turn, status, finished,
-        loading, shooting, error, start, refresh, shot, attack, disabled,
+        loading, shooting, error, start, refresh, shot, attack, endTurn, disabled,
         // tryb fun
-        ruleset, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells, aliveCarriers,
+        ruleset, energy, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells, aliveCarriers,
         // notatki (saper-style)
         noteMarks, toggleNote,
         // stats

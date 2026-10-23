@@ -11,6 +11,9 @@ use App\Domain\Game\Weapon\WeaponSpecs;
 
 final class FunRuleset implements Ruleset
 {
+    /** Energia na turę (#59): pula stała, wzrost z rangą/technologią to Epic K (#58). */
+    public const ENERGY_PER_TURN = 3;
+
     /**
      * @param array<int,int>|null           $ships            skład floty: długość => liczba sztuk (null = flota klasyczna)
      * @param array<int,int>|null           $opponentShips    skład floty przeciwnika (null = lustrzany)
@@ -81,6 +84,11 @@ final class FunRuleset implements Ruleset
     public function opponentWeapons(): WeaponSpecs
     {
         return self::weaponsFor($this->opponentShips(), $this->opponentVariants(), SonarSpec::RADIUS);
+    }
+
+    public function energyPerTurn(): int
+    {
+        return self::ENERGY_PER_TURN;
     }
 
     /** Promień sonaru gracza — ustalony przy starcie gry i zapisany w jej snapshotcie. */

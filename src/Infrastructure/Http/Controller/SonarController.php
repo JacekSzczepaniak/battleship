@@ -44,6 +44,8 @@ final class SonarController
             'results' => $out['cells'], // list of {x,y,occupied}
             'shape' => 'cross',
             'radius' => $out['radius'],
+            // energia po skanie (#59): sonar nie kończy tury, tylko ją zużywa
+            'energy' => $out['energy'],
         ]);
     }
 }

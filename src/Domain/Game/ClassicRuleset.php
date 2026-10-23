@@ -65,4 +65,10 @@ final class ClassicRuleset implements Ruleset
     {
         return WeaponSpecs::none();
     }
+
+    /** Klasyka bez energii: jeden strzał na turę (#59). */
+    public function energyPerTurn(): int
+    {
+        return 0;
+    }
 }

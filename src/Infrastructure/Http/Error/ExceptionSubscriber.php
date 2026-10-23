@@ -116,6 +116,9 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             'Invalid fleet composition' => ['VALIDATION_ERROR', 400],
             'Fleet already placed' => ['VALIDATION_ERROR', 409],
             'Not player turn' => ['NOT_PLAYER_TURN', 409],
+            // energia w bitwie (#59)
+            'Not enough energy' => ['NOT_ENOUGH_ENERGY', 409],
+            'End turn requires battle energy' => ['END_TURN_NOT_AVAILABLE', 422],
             'Game already finished' => ['GAME_ALREADY_FINISHED', 409],
             'Profile not found' => ['PROFILE_NOT_FOUND', 404],
             'Island not found' => ['ISLAND_NOT_FOUND', 404],

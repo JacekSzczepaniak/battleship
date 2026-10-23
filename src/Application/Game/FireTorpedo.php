@@ -3,6 +3,7 @@
 namespace App\Application\Game;
 
 use App\Domain\Game\AI\HuntTargetAI;
+use App\Domain\Game\BattleAction;
 use App\Domain\Game\Coordinate;
 use App\Domain\Game\Direction;
 use App\Domain\Game\GameRepository;
@@ -41,6 +42,7 @@ final class FireTorpedo
             throw new \DomainException('Not player turn');
         }
 
+        $game->spendEnergy('player', BattleAction::Torpedo);
         $game->setTurn('opponent');
 
         $launch = new Coordinate($x, $y);

@@ -8,7 +8,6 @@ use App\Domain\Expedition\ProfileRepository;
 use App\Domain\Expedition\Technology;
 use App\Domain\Game\FleetComposition;
 use App\Domain\Game\Game;
-use App\Domain\Game\Weapon\Loadout;
 use App\Domain\Game\Weapon\SonarSpec;
 use App\Domain\Shared\ProfileId;
 
@@ -69,16 +68,7 @@ final class StartIslandBattle
 
         // warianty statków (#99) idą do bitwy jako wyposażenie odbiegające od
         // domyślnego; lustro wroga dostaje je razem ze składem (#54, D6)
-        $composition = [];
-        $variants = [];
-        foreach ($squad as $ship) {
-            $length = $ship->type->length();
-            $composition[$length] = ($composition[$length] ?? 0) + 1;
-            $loadout = $ship->variant?->loadout();
-            if (null !== $loadout && !$loadout->equals(Loadout::defaultFor($length))) {
-                $variants[$length][] = $loadout;
-            }
-        }
+        [$composition, $variants] = SquadComposition::of($squad);
 
         // pełna bandera (#79): obrońca strzela pierwszy, napastnik płynie bez
         // największego statku (flota jednostatkowa — tylko pierwszy strzał)

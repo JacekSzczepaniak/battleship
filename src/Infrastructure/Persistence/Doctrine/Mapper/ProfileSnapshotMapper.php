@@ -38,6 +38,8 @@ final class ProfileSnapshotMapper
                 'discovered' => $state->discoveredSectors(),
                 'visited' => $state->visitedSectors(),
             ], $profile->seaStates()),
+            // bramy otwarte na stałe: id bramy → tik otwarcia (#107)
+            'gates' => $profile->openedGates(),
             'moveCount' => $profile->moveCount(),
             'tick' => $profile->tick(),
             // surowce czekające na magazyn wyspy — rozłoży je ensureWorldState()
@@ -139,6 +141,8 @@ final class ProfileSnapshotMapper
             ...$this->researchFrom($state),
             sea: $sea,
             seaStates: $seaStates,
+            // brak klucza = profil sprzed bram, żadna nie jest otwarta
+            openedGates: array_map('intval', (array) ($state['gates'] ?? [])),
         );
     }
 

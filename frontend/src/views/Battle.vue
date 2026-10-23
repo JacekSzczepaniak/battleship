@@ -367,6 +367,8 @@ async function finalize() {
                 profileId: battle.profileId,
                 islandId: battle.islandId,
                 islandName: battle.islandName,
+                kind: battle.kind,
+                seaName: after.world.sea.name,
                 settle,
                 xpBefore: before.profile.xp,
                 rankBefore: before.profile.rank,

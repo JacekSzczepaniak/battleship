@@ -40,6 +40,8 @@ final class Sail
             'cargo' => $profile->cargo()->toArray(),
             'cargoCapacity' => $profile->cargoCapacity(),
             'atIsland' => $world->islandAt($position['x'], $position['y']),
+            // sektor bramy akwenu (#107): stąd bitwa ze strażnikiem i przejście
+            'atGate' => $world->gateAt($position['x'], $position['y']),
         ];
     }
 }

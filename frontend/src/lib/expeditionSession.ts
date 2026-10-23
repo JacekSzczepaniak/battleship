@@ -7,8 +7,10 @@ const BATTLE_KEY = 'expedition.currentBattle';
 export interface CurrentBattle {
     profileId: string;
     gameId: string;
+    // bitwa ze strażnikiem (#107): islandId = id bramy, islandName = nazwa strażnika
     islandId: string;
     islandName: string;
+    kind?: 'guardian';
 }
 
 export function getProfileId(): string | null {

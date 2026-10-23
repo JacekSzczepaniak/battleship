@@ -8,8 +8,9 @@ namespace App\Domain\Expedition;
  *
  * Drabina 9 stopni (GAME_DESIGN.md, filar VIII): zysk XP do kolejnej rangi
  * rośnie (30 → 400), więc jedna wygrana nie daje dwóch awansów naraz.
- * Rangi bez bramki (majtek, bosman, sternik, porucznik, komandor, admirał)
- * czekają na treść kolejnych akwenów.
+ * Rangi bez bramki (majtek, bosman, sternik, komandor, admirał) czekają na
+ * treść kolejnych akwenów; porucznik bramkuje strażnika cieśniny i wyspy
+ * Oceanu Sztormów (#107).
  */
 enum Rank: string
 {

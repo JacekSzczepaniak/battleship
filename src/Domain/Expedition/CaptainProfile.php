@@ -145,6 +145,14 @@ final class CaptainProfile
      */
     private array $seaStates = [];
 
+    /**
+     * Bramy otwarte na stałe (Epic I): strzeżoną cieśninę otwiera pierwsza
+     * wygrana ze strażnikiem — w obie strony, bo obie krawędzie mają wspólne id.
+     *
+     * @var array<string, int> klucz: id bramy, wartość: tik otwarcia
+     */
+    private array $openedGates = [];
+
     /** Licznik ruchów — wejście do deterministycznych rzutów eventów podróży. */
     private int $moveCount = 0;
 
@@ -777,9 +785,11 @@ final class CaptainProfile
             if ($t - $this->counterattackCalmFrom <= self::COUNTERATTACK_CALM_TICKS) {
                 continue;
             }
+            // cele z bieżącego akwenu: przystań innego akwenu nie jest na tej mapie
+            // bezpieczna (kontrataki na wielu akwenach — #109)
             $targets = array_values(array_filter(
                 array_keys($this->ownedIslands),
-                static fn (string $id) => !$world->isSafeHarbor($id),
+                static fn (string $id) => null !== $world->islandPosition($id) && !$world->isSafeHarbor($id),
             ));
             if ([] === $targets || crc32("{$this->worldSeed}:{$t}:counterattack") % 100 >= self::COUNTERATTACK_CHANCE) {
                 continue;
@@ -984,6 +994,17 @@ final class CaptainProfile
         ++$this->moveCount;
         ++$this->tick;
 
+        return $this->arrive($x, $y, $world);
+    }
+
+    /**
+     * Wpłynięcie floty na sektor bieżącego akwenu po rejsie albo przejściu
+     * przez bramę: sztorm z motywu akwenu, odkrycie sąsiedztwa i kartografia.
+     *
+     * @return array{discoveredNow: list<string>, cartography: int, cartographyLost: int, event: array<string,mixed>|null}
+     */
+    private function arrive(int $x, int $y, WorldMap $world): array
+    {
         // sztorm łapie w drodze — tylko przy pierwszym wpłynięciu na sektor.
         // Nie „nieodkryty”: cel rejsu jest zawsze odkryty, bo przybycie odkrywa
         // całe sąsiedztwo (#68)
@@ -1068,6 +1089,67 @@ final class CaptainProfile
         return $out;
     }
 
+    // --- Bramy akwenów (Epic I) ---
+
+    public function isGateOpen(string $gateId): bool
+    {
+        return isset($this->openedGates[$gateId]);
+    }
+
+    /** @return array<string, int> bramy otwarte na stałe: id bramy → tik otwarcia */
+    public function openedGates(): array
+    {
+        return $this->openedGates;
+    }
+
+    /** Dlaczego przejście jest zamknięte dla kapitana; null = można przepłynąć. */
+    public function gateBlocker(SeaPassage $passage): ?GateBlock
+    {
+        return $passage->gate->condition->blocker($this, $passage->gate->id);
+    }
+
+    /** Czy flota stoi na sektorze bramy bieżącego akwenu. */
+    public function isAtGate(WorldMap $world, string $gateId): bool
+    {
+        $this->ensureWorldState($world);
+        $pos = $world->gatePosition($gateId);
+
+        return null !== $pos && $pos === $this->position();
+    }
+
+    /**
+     * Przejście przez otwartą bramę z sektora bramy: 1 tik, flota ląduje na
+     * sektorze tej samej bramy w akwenie docelowym. Wpłynięcie liczy się jak
+     * rejs: sztorm z motywu akwenu docelowego przy pierwszym wpłynięciu na
+     * sektor (konwój bez eskorty traci podwójnie), odkrycie sąsiedztwa
+     * i kartografia. Stan akwenu, który flota opuszcza, czeka na powrót.
+     *
+     * @return array{discoveredNow: list<string>, cartography: int, cartographyLost: int, event: array<string,mixed>|null}
+     */
+    public function passGate(SeaPassage $passage, WorldMap $from, WorldMap $to): array
+    {
+        if ($passage->from !== $from->seaId() || $passage->to !== $to->seaId()) {
+            throw new \LogicException('Sea maps do not match the passage');
+        }
+        if (!$this->isAtGate($from, $passage->gate->id)) {
+            throw new \DomainException('Not at gate');
+        }
+        $blocker = $this->gateBlocker($passage);
+        if (null !== $blocker) {
+            throw new \DomainException($blocker->message());
+        }
+        $arrival = $to->gatePosition($passage->gate->id) ?? throw new \LogicException('Gate has no sector on the target sea');
+
+        ++$this->moveCount;
+        ++$this->tick;
+        $this->sea = $passage->to;
+        $outcome = $this->arrive($arrival['x'], $arrival['y'], $to);
+        // urobek, badanie i kontrataki akwenu docelowego do bieżącego tiku
+        $this->ensureWorldState($to);
+
+        return $outcome;
+    }
+
     // --- Bitwy ---
 
     /**
@@ -1099,6 +1181,20 @@ final class CaptainProfile
         $this->counterattack['defense'] = (string) $gameId;
     }
 
+    /**
+     * Rejestruje bitwę ze strażnikiem bramy. W rejestrze zamiast wyspy stoi
+     * id bramy; strażnik pilnuje bramy tylko do pierwszej przegranej.
+     *
+     * @param list<string> $shipIds statki, które wypłynęły (do rozliczenia strat)
+     */
+    public function startGuardianBattle(string $gateId, GameId $gameId, array $shipIds = []): void
+    {
+        if ($this->isGateOpen($gateId)) {
+            throw new \DomainException('Gate already open');
+        }
+        $this->registerBattle($gateId, $gameId, BattleKind::Guardian, $shipIds);
+    }
+
     /** Rzuca błąd domenowy, gdy na wyspie nie da się teraz przyjąć bitwy obronnej. */
     public function assertCanDefend(string $islandId): void
     {
@@ -1123,10 +1219,18 @@ final class CaptainProfile
         ++$this->tick;
     }
 
-    /** Wyspa, o którą toczy się dana gra; null gdy gra nie należy do profilu. */
+    /** Wyspa (przy bitwie strażnika: brama), o którą toczy się dana gra; null gdy gra nie należy do profilu. */
     public function islandFor(GameId $gameId): ?string
     {
         return $this->battles[(string) $gameId]['island'] ?? null;
+    }
+
+    /** Rodzaj zarejestrowanej bitwy; null gdy gra nie należy do profilu. */
+    public function battleKindFor(GameId $gameId): ?BattleKind
+    {
+        $battle = $this->battles[(string) $gameId] ?? null;
+
+        return null !== $battle ? self::battleKind($battle) : null;
     }
 
     /**
@@ -1134,7 +1238,9 @@ final class CaptainProfile
      * łup trafia do magazynu wyspy, o którą była bitwa. Wygrane zdobycie wyspy
      * bez bandery stawia banderę i uruchamia złoże. Obrona rozstrzyga kontratak:
      * wygrana zostawia banderę, przegrana odbiera wyspę i połowę magazynu
-     * (przed łupem za porażkę). Straty dotykają floty —
+     * (przed łupem za porażkę). Wygrana ze strażnikiem otwiera bramę na stałe;
+     * jego łup trafia do ładowni, bo przy bramie nie ma magazynu — nadmiar
+     * przepada. Straty dotykają floty —
      * zatopione statki po wygranej wymagają remontu, po przegranej są stracone;
      * ładunek ponad nową pojemność przepada. Idempotentne: druga próba zwraca zera.
      *
@@ -1143,7 +1249,7 @@ final class CaptainProfile
      * @param array<int, ShipVariant> $sunkVariants   wariant zatopionego statku, klucz = indeks w $sunkLengths;
      *                                                bez wpisu stratę ponosi dowolny statek tej długości
      *
-     * @return array{xp:int, loot:Resources, lost:list<string>, damaged:list<string>, cargoLost:Resources, captured:bool, defense: array{held:bool, stockpileLost:Resources}|null}
+     * @return array{xp:int, loot:Resources, lost:list<string>, damaged:list<string>, cargoLost:Resources, captured:bool, defense: array{held:bool, stockpileLost:Resources}|null, gateOpened:bool}
      */
     public function settleBattle(GameId $gameId, string $result, int $xpAward, ?Resources $loot = null, array $sunkLengths = [], int $enemyShipsSunk = 0, array $sunkVariants = []): array
     {
@@ -1161,7 +1267,7 @@ final class CaptainProfile
         $key = (string) $gameId;
         $battle = $this->battles[$key] ?? throw new \DomainException('Battle not registered for this profile');
         if ($battle['settled']) {
-            return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => [], 'cargoLost' => Resources::none(), 'captured' => false, 'defense' => null];
+            return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => [], 'cargoLost' => Resources::none(), 'captured' => false, 'defense' => null, 'gateOpened' => false];
         }
 
         $battle['settled'] = true;
@@ -1170,11 +1276,17 @@ final class CaptainProfile
         $this->battles[$key] = $battle;
 
         $this->xp += $xpAward;
-        // każdy rodzaj bitwy rozstrzyga, co jego wynik robi z banderą
-        [$captured, $defense] = match (self::battleKind($battle)) {
+        // każdy rodzaj bitwy rozstrzyga, co jego wynik robi z banderą (i z bramą)
+        $kind = self::battleKind($battle);
+        [$captured, $defense] = match ($kind) {
             BattleKind::Capture => ['won' === $result && !$this->ownsIsland($battle['island']), null],
             BattleKind::Defense => [false, $this->settleDefense($key, 'won' === $result)],
+            BattleKind::Guardian => [false, null],
         };
+        $gateOpened = BattleKind::Guardian === $kind && 'won' === $result && !$this->isGateOpen($battle['island']);
+        if ($gateOpened) {
+            $this->openedGates[$battle['island']] = $this->tick;
+        }
         if ($captured) {
             // odbita wyspa wznawia badanie swojej uczelni od tiku zdobycia
             $this->accrueResearch($this->tick, null);
@@ -1183,12 +1295,20 @@ final class CaptainProfile
             $this->depositTicks[$battle['island']] = $this->tick;
             $this->counterattackCalmFrom = $this->tick;
         }
-        $this->stockpiles[$battle['island']] = $this->stockpile($battle['island'])->add($loot);
+        if (BattleKind::Guardian !== $kind) {
+            $this->stockpiles[$battle['island']] = $this->stockpile($battle['island'])->add($loot);
+        }
 
         [$lost, $damaged] = $this->applyLosses($battle['ships'] ?? [], $result, $sunkLengths, $sunkVariants);
         $cargoLost = $this->trimCargo();
+        if (BattleKind::Guardian === $kind) {
+            // łup strażnika ładuje flota, która przetrwała bitwę
+            [$fit, $overflow] = $loot->fitInto($this->cargoCapacity() - $this->cargo->total());
+            $this->cargo = $this->cargo->add($fit);
+            $cargoLost = $cargoLost->add($overflow);
+        }
 
-        return ['xp' => $xpAward, 'loot' => $loot, 'lost' => $lost, 'damaged' => $damaged, 'cargoLost' => $cargoLost, 'captured' => $captured, 'defense' => $defense];
+        return ['xp' => $xpAward, 'loot' => $loot, 'lost' => $lost, 'damaged' => $damaged, 'cargoLost' => $cargoLost, 'captured' => $captured, 'defense' => $defense, 'gateOpened' => $gateOpened];
     }
 
     /**
@@ -1388,6 +1508,7 @@ final class CaptainProfile
      * @param array{technology: Technology, island: string, progress: int, countedTo: int}|null                                          $research     badanie w toku
      * @param string|null                                                                                                                $sea          akwen floty; null = profil sprzed akwenów: Morze Rozbitków
      * @param array<string, SeaState>                                                                                                    $seaStates    stan pozostałych akwenów (klucz: id akwenu); stan akwenu $sea dają $position, $discovered i $visited
+     * @param array<string, int>                                                                                                         $openedGates  bramy otwarte na stałe: id bramy → tik otwarcia
      */
     public static function fromSnapshot(
         ProfileId $id,
@@ -1412,6 +1533,7 @@ final class CaptainProfile
         ?array $research = null,
         ?string $sea = null,
         array $seaStates = [],
+        array $openedGates = [],
     ): self {
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
@@ -1432,6 +1554,7 @@ final class CaptainProfile
         $self->worldSeed = $worldSeed ?? (crc32((string) $id) & 0x7FFFFFFF);
         $self->sea = $sea ?? Sea::START;
         $self->seaStates = $seaStates;
+        $self->openedGates = $openedGates;
         // profil sprzed odwiedzin: znamy tylko obecną pozycję, trasy z przeszłości nie
         $self->seaStates[$self->sea] = new SeaState(
             $position,

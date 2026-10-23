@@ -36,8 +36,12 @@ export function setTrainingPrefs(prefs: TrainingPrefs): void {
 
 export interface ExpeditionOutcome {
     profileId: string;
+    // bitwa ze strażnikiem (#107): islandId = id bramy, islandName = nazwa strażnika
     islandId: string;
     islandName: string;
+    kind?: 'guardian';
+    /** akwen, na którym stoi flota po bitwie */
+    seaName?: string;
     settle: SettleResultDTO;
     xpBefore: number;
     rankBefore: RankName;

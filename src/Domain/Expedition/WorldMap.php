@@ -8,7 +8,8 @@ namespace App\Domain\Expedition;
  * testy i replay). Wyspy trasy lądują w pionowych pasmach coraz dalej od
  * startu — progresja przestrzenna odpowiada progresji rang. Startem wyprawy
  * jest sektor pierwszej wyspy (Zatoka Rozbitka). Każdy akwen ma własną mapę
- * (Sea::map()), która zna id i motyw swojego akwenu (Epic I).
+ * (Sea::map()), która zna id i motyw swojego akwenu oraz sektory jego bram
+ * na krawędziach mapy (Epic I).
  */
 final class WorldMap
 {
@@ -19,6 +20,7 @@ final class WorldMap
      * @param array<string, array{x:int,y:int}> $islands
      * @param array<string, Island>             $deposits    wyspy ze złożem (klucz: id)
      * @param array<string, bool>               $safeHarbors bezpieczne przystanie (klucz: id) — kontrataki ich nie dotyczą
+     * @param array<string, array{x:int,y:int}> $gates       sektory bram akwenu (klucz: id bramy)
      */
     private function __construct(
         private array $islands,
@@ -26,15 +28,17 @@ final class WorldMap
         private array $safeHarbors,
         private SeaTheme $theme,
         private string $seaId,
+        private array $gates,
     ) {
     }
 
     /**
-     * @param list<string> $islandIds wyspy w kolejności trasy
-     * @param list<Island> $deposits  definicje wysp: złoża i bezpieczne przystanie — nie zmieniają rozkładu wysp
-     * @param SeaTheme     $theme     motyw akwenu; domyślny = Morze Rozbitków
+     * @param list<string>           $islandIds wyspy w kolejności trasy
+     * @param list<Island>           $deposits  definicje wysp: złoża i bezpieczne przystanie — nie zmieniają rozkładu wysp
+     * @param SeaTheme               $theme     motyw akwenu; domyślny = Morze Rozbitków
+     * @param array<string, SeaEdge> $gates     bramy akwenu (klucz: id bramy) i krawędź, na której leżą
      */
-    public static function generate(int $seed, array $islandIds, array $deposits = [], SeaTheme $theme = new SeaTheme(), string $seaId = Sea::START): self
+    public static function generate(int $seed, array $islandIds, array $deposits = [], SeaTheme $theme = new SeaTheme(), string $seaId = Sea::START, array $gates = []): self
     {
         $state = $seed & 0x7FFFFFFF;
         $next = static function (int $mod) use (&$state): int {
@@ -65,7 +69,44 @@ final class WorldMap
             }
         }
 
-        return new self($islands, $withDeposit, $safeHarbors, $theme, $seaId);
+        $gateSectors = [];
+        foreach ($gates as $gateId => $edge) {
+            $gateSectors[$gateId] = self::gateSector($seed, (string) $gateId, $edge, [...array_values($islands), ...array_values($gateSectors)]);
+        }
+
+        return new self($islands, $withDeposit, $safeHarbors, $theme, $seaId, $gateSectors);
+    }
+
+    /**
+     * Sektor bramy na krawędzi mapy: miejsce na krawędzi z seeda akwenu i id
+     * bramy (osobny rzut, więc rozkład wysp się nie zmienia), przesunięte
+     * dalej wzdłuż krawędzi, gdy sektor jest zajęty przez wyspę albo inną bramę.
+     *
+     * @param list<array{x:int,y:int}> $taken
+     *
+     * @return array{x:int,y:int}
+     */
+    private static function gateSector(int $seed, string $gateId, SeaEdge $edge, array $taken): array
+    {
+        $length = match ($edge) {
+            SeaEdge::East, SeaEdge::West => self::HEIGHT,
+            SeaEdge::North, SeaEdge::South => self::WIDTH,
+        };
+        $offset = crc32("{$seed}:{$gateId}") % $length;
+        for ($i = 0; $i < $length; ++$i) {
+            $along = ($offset + $i) % $length;
+            $sector = match ($edge) {
+                SeaEdge::East => ['x' => self::WIDTH - 1, 'y' => $along],
+                SeaEdge::West => ['x' => 0, 'y' => $along],
+                SeaEdge::North => ['x' => $along, 'y' => 0],
+                SeaEdge::South => ['x' => $along, 'y' => self::HEIGHT - 1],
+            };
+            if (!in_array($sector, $taken, true)) {
+                return $sector;
+            }
+        }
+
+        throw new \DomainException('No free sector for sea gate');
     }
 
     /** Id akwenu, którego to mapa. */
@@ -130,5 +171,29 @@ final class WorldMap
     public function islands(): array
     {
         return $this->islands;
+    }
+
+    /** @return array<string, array{x:int,y:int}> sektory bram akwenu (klucz: id bramy) */
+    public function gates(): array
+    {
+        return $this->gates;
+    }
+
+    /** @return array{x:int,y:int}|null sektor bramy; null = brama nie leży na tym akwenie */
+    public function gatePosition(string $gateId): ?array
+    {
+        return $this->gates[$gateId] ?? null;
+    }
+
+    /** Id bramy na sektorze; null = brak bramy. */
+    public function gateAt(int $x, int $y): ?string
+    {
+        foreach ($this->gates as $id => $pos) {
+            if ($pos['x'] === $x && $pos['y'] === $y) {
+                return $id;
+            }
+        }
+
+        return null;
     }
 }

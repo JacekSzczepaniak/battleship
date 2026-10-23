@@ -62,6 +62,26 @@ oceaniczna) → Morze Mgieł. Motyw to trzy parametry: szansa sztormu,
 widoczność i mnożnik złóż. Brama „wody nieznane” wchodzi z Epikiem J razem z
 mapą akwenu.
 
+✅ (#107) Akwen 2 „Ocean Sztormów” (sztorm 40%, widoczność 1, złoża ×2) i
+strzeżona cieśnina. Sektor bramy leży na wschodniej krawędzi Morza Rozbitków,
+a jego położenie widać po odkryciu, jak wyspy. Bitwę ze strażnikiem przyjmuje
+flota stojąca na sektorze bramy, od rangi porucznik:
+- plansza 12×12 z bronią specjalną,
+- wróg ma stały skład: lotniskowiec, 2 niszczyciele, 2 kutry i 3 tratwy
+  (17 pól), z domyślnym wyposażeniem, bez lustra składu gracza,
+- gracz może wystawić do 20% pól planszy, jak przy wyspach,
+- wygrana daje 200 XP oraz 40 drewna, 40 stali i 20 złota, a przegrana 50 XP
+  i 10 drewna,
+- łup trafia do ładowni, bo przy bramie nie ma magazynu, a nadmiar ponad
+  pojemność przepada.
+Wygrana otwiera bramę na stałe, w obie strony. Przejście kosztuje 1 tik, a
+flota ląduje na sektorze bramy na zachodniej krawędzi Oceanu. Wpłynięcie
+liczy się jak rejs: sztorm akwenu docelowego, podwójne straty konwoju bez
+eskorty, kartografia. Na Oceanie jest 5 wysp: trzy od porucznika (Przystań
+Wichrów ze stocznią poziomu 2, Rafa Kotwiczna ze stalą 3/tik, Wyspa Latarników
+z drewnem 3/tik) i dwie od kapitana (Zatoka Burz ze stalą 2/tik i Bastion
+Fal). Każda daje więcej XP i łupów niż Twierdza Admiralicji.
+
 **Przejścia między akwenami — trzy rodzaje bram (mieszane):**
 1. **Strzeżona cieśnina** — bitwa-boss: flota strażnicza + fort,
 2. **Otwarty ocean** — wymaga technologii („Nawigacja oceaniczna"),
@@ -257,9 +277,11 @@ zmian: nigdy nie maleje, ranga wynika z XP (nie jest zapisywana).
   nie tracił — kosztem nazwy „kapitan” bez znaczenia w grze.
 - **Luka 250–600 XP:** na obecnym Akwenie 1 między sternikiem a kapitanem
   dostępne są tylko wyspy II poziomu (70–80 XP za wygraną, ok. 5 wygranych).
-  Do zapełnienia treścią (wyspy, akwen 2) — patrz otwarte pytania.
-- Rangi bez bramki (majtek, bosman, sternik, porucznik, komandor, admirał)
-  czekają na treść kolejnych akwenów.
+  Lukę zapełnia od #107 akwen 2: strażnik cieśniny od porucznika (400 XP)
+  i trzy porucznikowskie wyspy Oceanu Sztormów.
+- Rangi bez bramki (majtek, bosman, sternik, komandor, admirał) czekają na
+  treść kolejnych akwenów. Porucznik od #107 otwiera strażnika cieśniny
+  i wyspy Oceanu Sztormów.
 
 **Specjalizacje — rozwój obok rangi:** ✅ dwie równoległe ścieżki,
 rozwijane przez to, co gracz faktycznie robi (nie przez wybór z listy):

@@ -9,6 +9,8 @@ namespace App\Domain\Expedition;
 enum ResearchBlock: string
 {
     case Researched = 'researched';
+    /** Technologia ze zdobyczy (#121): odblokowuje ją tylko zbadanie konstrukcji zdobytego statku. */
+    case BoardingOnly = 'boarding-only';
     case Busy = 'busy';
     case Prerequisite = 'prerequisite';
     case Rank = 'rank';
@@ -21,9 +23,10 @@ enum ResearchBlock: string
     {
         return match ($this) {
             self::Researched => 'Technology already researched',
+            self::BoardingOnly => 'Technology available only from boarded ships',
             self::Busy => 'Research already in progress',
             self::Prerequisite => 'Technology requires previous level in branch',
-            self::Rank => sprintf('Technology locked: requires rank %s', $technology->level()->requiredRank()?->value),
+            self::Rank => sprintf('Technology locked: requires rank %s', $technology->academyLevel()->requiredRank()?->value),
             self::NoAcademy => 'No active academy on this island',
             self::NotPresent => 'Not at island',
             self::Resources => 'Not enough resources',

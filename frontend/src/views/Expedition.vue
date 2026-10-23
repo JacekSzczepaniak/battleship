@@ -246,31 +246,31 @@
                                 <ul class="ships">
                                     <li v-for="t in expedition.shipTypes" :key="t.type" class="ship">
                                         <span class="ship-name">{{ SHIP_ICONS[t.type] }} {{ SHIP_LABELS[t.type] }} <span class="muted">({{ t.length }}-masztowiec · ładownia {{ t.cargoCapacity }}{{ t.armed ? '' : ' · bez broni' }})</span></span>
-                                        <!-- wariant wybiera się przy budowie i zostaje na stałe (#99) -->
-                                        <template v-if="t.variants.length">
-                                            <button
-                                                v-for="v in t.variants"
-                                                :key="v.variant"
-                                                class="btn btn-small btn-secondary"
-                                                :disabled="busy || buildBlock(t, v) !== null"
-                                                :title="buildBlock(t, v) ?? `nośnik: ${carriedWeapon(t.length, VARIANTS[v.variant].w)} · wariant stały`"
-                                                @click="onBuild(t, v.variant)"
-                                            >
-                                                Buduj {{ SHIP_VARIANT_LABELS[v.variant] }} · {{ carriedWeapon(t.length, VARIANTS[v.variant].w) }} ({{ formatResources(t.buildCost) }})
-                                            </button>
-                                        </template>
+                                        <!-- wariant wybiera się przy budowie i zostaje na stałe (#99); kuter i lotniskowiec
+                                             mają obok wariantów statek podstawowy (defaultVariant null, #121) -->
                                         <button
-                                            v-else
+                                            v-if="!t.defaultVariant"
                                             class="btn btn-small btn-secondary"
                                             :disabled="busy || buildBlock(t) !== null"
                                             :title="buildBlock(t) ?? ''"
                                             @click="onBuild(t)"
                                         >
-                                            Buduj ({{ formatResources(t.buildCost) }})
+                                            Buduj{{ t.variants.length && t.armed ? ` · ${carriedWeapon(t.length)}` : '' }} ({{ formatResources(t.buildCost) }})
+                                        </button>
+                                        <button
+                                            v-for="v in buildableVariants(t)"
+                                            :key="v.variant"
+                                            class="btn btn-small btn-secondary"
+                                            :disabled="busy || buildBlock(t, v) !== null"
+                                            :title="buildBlock(t, v) ?? `nośnik: ${carriedWeapon(t.length, VARIANTS[v.variant].w)} · wariant stały`"
+                                            @click="onBuild(t, v.variant)"
+                                        >
+                                            Buduj {{ SHIP_VARIANT_LABELS[v.variant] }} · {{ carriedWeapon(t.length, VARIANTS[v.variant].w) }} ({{ formatResources(t.buildCost) }})
                                         </button>
                                         <span v-if="buildBlock(t)" class="why">{{ buildBlock(t) }}</span>
                                         <span v-for="v in lockedVariants(t)" :key="v.variant" class="why">
-                                            {{ SHIP_VARIANT_LABELS[v.variant] }}: po zbadaniu „{{ TECH_LABELS[v.requiredTechnology!] }}”
+                                            <template v-if="v.unlock === 'boarding'">{{ SHIP_VARIANT_NAMES[v.variant] }}: tylko z abordażu — zdobądź go u wroga i zbadaj konstrukcję</template>
+                                            <template v-else>{{ SHIP_VARIANT_LABELS[v.variant] }}: po zbadaniu „{{ TECH_LABELS[v.requiredTechnology!] }}”</template>
                                         </span>
                                     </li>
                                 </ul>
@@ -446,7 +446,7 @@ import { useRoute, useRouter } from 'vue-router';
 import {
     buildBuilding, buildShip, createProfile, decidePrize, getExpedition, passGate, repairShip, sail, settleBattle, startGuardianBattle, startIslandBattle, startSiege,
     startResearch, transferCargo,
-    RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, SHIP_VARIANT_LABELS, TECH_LABELS, fleetShipLabel,
+    RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, SHIP_VARIANT_LABELS, SHIP_VARIANT_NAMES, TECH_LABELS, fleetShipLabel,
     type BuildingTypeName, type TechnologyName, type ExpeditionDTO, type FleetShipDTO, type GateDTO, type GuardianDTO, type IslandDTO,
     type PrizeDTO, type PrizeDecisionName, type RankName, type ResourcesDTO, type SailResultDTO, type SeaThemeDTO, type ShipTypeDTO, type ShipVariantDTO, type ShipVariantName,
 } from '../api/expeditionApi';
@@ -744,6 +744,11 @@ function lockedVariants(t: ShipTypeDTO): ShipVariantDTO[] {
     return buildBlock(t) === null ? t.variants.filter(v => !v.unlocked) : [];
 }
 
+/** Przyciski wariantów: wariant ze zdobyczy (#121) pojawia się dopiero po zbadaniu konstrukcji. */
+function buildableVariants(t: ShipTypeDTO): ShipVariantDTO[] {
+    return t.variants.filter(v => v.unlocked || v.unlock !== 'boarding');
+}
+
 /** Akcja w porcie: wywołanie API i świeży stan wyprawy (HUD, dziennik, baner). */
 async function inPort(action: (profileId: string, island: IslandDTO) => Promise<unknown>, failure: string) {
     const profileId = getProfileId();
@@ -781,7 +786,7 @@ function onTransfer(direction: 'load' | 'unload', amount: ResourcesDTO) {
     return inPort((profileId, island) => transferCargo(profileId, island.id, direction, amount), 'Przeładunek nie powiódł się');
 }
 
-// --- zdobycz z abordażu (#118): opcje decyzji; #121 dopisze „zbadaj konstrukcję” ---
+// --- zdobycz z abordażu (#118): opcje decyzji; „zbadaj konstrukcję” tylko dla nieznanego wariantu (#121) ---
 
 interface PrizeOption { decision: PrizeDecisionName; label: string; hint: string; primary: boolean }
 
@@ -789,6 +794,12 @@ function prizeOptions(prize: PrizeDTO): PrizeOption[] {
     return [
         { decision: 'join', label: 'Wyremontuj i dołącz', hint: 'Statek dołącza do floty uszkodzony — remont w stoczni. Ranga nie ogranicza zdobyczy.', primary: true },
         { decision: 'scrap', label: `Rozbierz · +${formatResources(prize.scrapValue)}`, hint: 'Połowa kosztu budowy trafia do ładowni; to, co się nie zmieści, przepada.', primary: false },
+        ...(prize.studyTechnology ? [{
+            decision: 'study' as const,
+            label: 'Zbadaj konstrukcję',
+            hint: `Statek przepada, a „${TECH_LABELS[prize.studyTechnology]}” od razu trafia do stoczni — wariant wybierzesz przy budowie. Bez kosztu i tików.`,
+            primary: false,
+        }] : []),
     ];
 }
 

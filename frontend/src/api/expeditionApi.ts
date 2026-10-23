@@ -43,17 +43,31 @@ export const SHIP_LABELS: Record<ShipTypeName, string> = {
     transportowiec: 'Transportowiec',
 };
 
-// wariant statku (#99): ten sam kadłub, inne wyposażenie; dziś ma je tylko niszczyciel
-export type ShipVariantName = 'torpedowy' | 'zwiadowczy';
+// wariant statku (#99): ten sam kadłub, inne wyposażenie; trzy ostatnie ma tylko wróg,
+// dopóki gracz nie zbada konstrukcji zdobytego statku (#121)
+export type ShipVariantName = 'torpedowy' | 'zwiadowczy' | 'kuter-torpedowy' | 'ciezki-niszczyciel' | 'lotniskowiec-eskortowy';
 
+// krótka etykieta wariantu przy przycisku budowy („Buduj zwiadowczy”)
 export const SHIP_VARIANT_LABELS: Record<ShipVariantName, string> = {
     torpedowy: 'torpedowy',
     zwiadowczy: 'zwiadowczy',
+    'kuter-torpedowy': 'torpedowy',
+    'ciezki-niszczyciel': 'ciężki',
+    'lotniskowiec-eskortowy': 'eskortowy',
 };
 
-/** Nazwa statku floty z wariantem: „Niszczyciel zwiadowczy”, „Kuter”. */
+// pełna nazwa statku w wariancie
+export const SHIP_VARIANT_NAMES: Record<ShipVariantName, string> = {
+    torpedowy: 'Niszczyciel torpedowy',
+    zwiadowczy: 'Niszczyciel zwiadowczy',
+    'kuter-torpedowy': 'Kuter torpedowy',
+    'ciezki-niszczyciel': 'Ciężki niszczyciel',
+    'lotniskowiec-eskortowy': 'Lotniskowiec eskortowy',
+};
+
+/** Nazwa statku floty z wariantem: „Niszczyciel zwiadowczy”, „Ciężki niszczyciel”, „Kuter”. */
 export function fleetShipLabel(ship: { type: ShipTypeName; variant?: ShipVariantName | null }): string {
-    return ship.variant ? `${SHIP_LABELS[ship.type]} ${SHIP_VARIANT_LABELS[ship.variant]}` : SHIP_LABELS[ship.type];
+    return ship.variant ? SHIP_VARIANT_NAMES[ship.variant] : SHIP_LABELS[ship.type];
 }
 
 export const SHIP_ICONS: Record<ShipTypeName, string> = {
@@ -134,6 +148,8 @@ export interface ShipTypeDTO {
     repairCost: ResourcesDTO;
     requiredRank: RankName;
     requiredShipyardLevel: number;
+    // wariant statku budowanego bez wyboru; null = obok wariantów jest statek podstawowy (kuter, lotniskowiec)
+    defaultVariant: ShipVariantName | null;
     // warianty do wyboru przy budowie (pusta lista = typ bez wariantów)
     variants: ShipVariantDTO[];
 }
@@ -141,6 +157,8 @@ export interface ShipTypeDTO {
 export interface ShipVariantDTO {
     variant: ShipVariantName;
     requiredTechnology: TechnologyName | null;
+    // ścieżka odblokowania technologii wariantu; null = wariant bez technologii
+    unlock: TechUnlockName | null;
     unlocked: boolean;
 }
 
@@ -319,7 +337,11 @@ export interface LastCounterattackDTO {
 
 // drzewko technologii (Epic G): katalog zawiera tylko działające technologie
 export type TechBranchName = 'kadluby' | 'uzbrojenie' | 'nawigacja' | 'osady';
-export type TechnologyName = 'spichlerze' | 'mapy-sztormowe' | 'sonar-dalekiego-zasiegu' | 'zegluga-dwusektorowa' | 'pojemne-ladownie' | 'dok-remontowy' | 'lepsze-narzedzia' | 'niszczyciel-zwiadowczy' | 'nawigacja-oceaniczna';
+export type TechnologyName = 'spichlerze' | 'mapy-sztormowe' | 'sonar-dalekiego-zasiegu' | 'zegluga-dwusektorowa' | 'pojemne-ladownie' | 'dok-remontowy' | 'lepsze-narzedzia' | 'niszczyciel-zwiadowczy' | 'nawigacja-oceaniczna'
+    | 'kuter-torpedowy' | 'ciezki-niszczyciel' | 'lotniskowiec-eskortowy';
+
+// ścieżka odblokowania (#121): uczelnia (drzewko z poziomami) albo zbadanie konstrukcji zdobytego statku
+export type TechUnlockName = 'academy' | 'boarding';
 
 export const TECH_BRANCH_LABELS: Record<TechBranchName, string> = {
     kadluby: 'Kadłuby',
@@ -338,10 +360,13 @@ export const TECH_LABELS: Record<TechnologyName, string> = {
     'lepsze-narzedzia': 'Lepsze narzędzia',
     'niszczyciel-zwiadowczy': 'Niszczyciel zwiadowczy',
     'nawigacja-oceaniczna': 'Nawigacja oceaniczna',
+    'kuter-torpedowy': 'Kuter torpedowy',
+    'ciezki-niszczyciel': 'Ciężki niszczyciel',
+    'lotniskowiec-eskortowy': 'Lotniskowiec eskortowy',
 };
 
 // powód blokady badania (Domain/Expedition/ResearchBlock); null = można badać
-export type ResearchBlockCode = 'researched' | 'busy' | 'prerequisite' | 'rank' | 'no-academy' | 'not-present' | 'resources';
+export type ResearchBlockCode = 'researched' | 'boarding-only' | 'busy' | 'prerequisite' | 'rank' | 'no-academy' | 'not-present' | 'resources';
 
 export interface TechLevelDTO {
     level: number;
@@ -353,7 +378,9 @@ export interface TechLevelDTO {
 export interface TechnologyDTO {
     id: TechnologyName;
     branch: TechBranchName;
-    level: number;
+    // null = technologia ze zdobyczy, poza poziomami drzewka
+    level: number | null;
+    unlock: TechUnlockName;
     state: 'researched' | 'in-progress' | 'available' | 'locked';
     // tylko dla badania w toku
     ticksLeft: number | null;
@@ -409,14 +436,15 @@ export interface LogEntryDTO {
     strikeAt?: number;
     technology?: TechnologyName;
     building?: BuildingTypeName;
-    // decyzja o zdobyczy (#118): rozbiórka podaje zwrot i to, co nie zmieściło się w ładowni
+    // decyzja o zdobyczy (#118): rozbiórka podaje zwrot i to, co nie zmieściło się w ładowni,
+    // a zbadanie konstrukcji (#121) odblokowaną technologię (pole technology)
     decision?: PrizeDecisionName;
     refund?: ResourcesDTO;
     lost?: ResourcesDTO;
 }
 
-// decyzja o statku zdobytym abordażem (#118); #121 dopisze 'study'
-export type PrizeDecisionName = 'join' | 'scrap';
+// decyzja o statku zdobytym abordażem (#118); study = zbadaj konstrukcję (#121)
+export type PrizeDecisionName = 'join' | 'scrap' | 'study';
 
 // statek zdobyty abordażem, czekający na decyzję kapitana (#118)
 export interface PrizeDTO {
@@ -427,6 +455,8 @@ export interface PrizeDTO {
     tick: number;
     // zwrot z rozbiórki: połowa kosztu budowy
     scrapValue: ResourcesDTO;
+    // technologia z „Zbadaj konstrukcję” (#121); null = wariant znany albo statek bez wariantu ze zdobyczy
+    studyTechnology: TechnologyName | null;
 }
 
 export interface DecidePrizeDTO {
@@ -436,6 +466,8 @@ export interface DecidePrizeDTO {
     refund: ResourcesDTO;
     cargoLost: ResourcesDTO;
     cargo: ResourcesDTO;
+    // odblokowana technologia przy zbadaniu konstrukcji (#121)
+    technology: TechnologyName | null;
 }
 
 export async function decidePrize(profileId: string, prizeId: string, decision: PrizeDecisionName): Promise<DecidePrizeDTO> {
@@ -482,7 +514,7 @@ export interface SettleResultDTO {
     // wygrana ze strażnikiem otworzyła bramę akwenu (#107)
     gateOpened: boolean;
     // abordaż (#118): zdobyty statek czeka na decyzję na ekranie Rejs; null = bez udanego abordażu
-    prize: Omit<PrizeDTO, 'length' | 'scrapValue'> | null;
+    prize: Omit<PrizeDTO, 'length' | 'scrapValue' | 'studyTechnology'> | null;
 }
 
 export async function createProfile(name: string): Promise<ProfileDTO> {

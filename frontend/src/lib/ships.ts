@@ -1,9 +1,9 @@
 // Nazwy i role jednostek po stronie UI. Broń wynika z wyposażenia statku; domyślne
 // zależy od długości (Loadout::defaultFor): kuter(2)=sonar, niszczyciel(3)=torpeda,
-// lotniskowiec(4)=nalot. Transportowiec(5) broni nie ma. Warianty statków (#99)
-// niosą inne wyposażenie: niszczyciel zwiadowczy 2 sonary zamiast torpedy.
+// lotniskowiec(4)=nalot. Transportowiec(5) broni nie ma. Warianty statków (#99, #121)
+// niosą inne wyposażenie, np. niszczyciel zwiadowczy 2 sonary zamiast torpedy.
 
-import type { ShipTypeName, ShipVariantName } from '../api/expeditionApi';
+import { SHIP_VARIANT_NAMES, type ShipTypeName, type ShipVariantName } from '../api/expeditionApi';
 import type { Loadout } from '../api/gameApi';
 
 export type WeaponKey = 'shot' | 'sonar' | 'torpedo' | 'airraid';
@@ -16,8 +16,12 @@ const DEFAULT_LOADOUT: Record<number, Loadout> = {
 
 /** Wyposażenie wariantu (ShipVariant::loadout) i nazwa statku w tym wariancie. */
 export const VARIANTS: Record<ShipVariantName, { length: number; w: Loadout; name: string }> = {
-    torpedowy: { length: 3, w: { torpedo: 1 }, name: 'Niszczyciel torpedowy' },
-    zwiadowczy: { length: 3, w: { sonar: 2 }, name: 'Niszczyciel zwiadowczy' },
+    torpedowy: { length: 3, w: { torpedo: 1 }, name: SHIP_VARIANT_NAMES.torpedowy },
+    zwiadowczy: { length: 3, w: { sonar: 2 }, name: SHIP_VARIANT_NAMES.zwiadowczy },
+    // warianty ze zdobyczy (#121): wróg ma je w składzie, gracz po zbadaniu konstrukcji
+    'kuter-torpedowy': { length: 2, w: { torpedo: 1 }, name: SHIP_VARIANT_NAMES['kuter-torpedowy'] },
+    'ciezki-niszczyciel': { length: 3, w: { torpedo: 2 }, name: SHIP_VARIANT_NAMES['ciezki-niszczyciel'] },
+    'lotniskowiec-eskortowy': { length: 4, w: { airRaid: 1, sonar: 1 }, name: SHIP_VARIANT_NAMES['lotniskowiec-eskortowy'] },
 };
 
 const LOADOUT_WEAPON: Record<keyof Loadout, Exclude<WeaponKey, 'shot'>> = {

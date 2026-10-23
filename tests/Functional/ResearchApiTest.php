@@ -36,15 +36,19 @@ final class ResearchApiTest extends WebTestCase
             ['level' => 3, 'cost' => ['wood' => 60, 'steel' => 50, 'gold' => 30], 'ticks' => 14, 'requiredRank' => 'kapitan'],
         ], $research['levels']);
         self::assertSame([
-            ['id' => 'spichlerze', 'branch' => 'osady', 'level' => 1, 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'no-academy'],
-            ['id' => 'mapy-sztormowe', 'branch' => 'nawigacja', 'level' => 1, 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'no-academy'],
-            ['id' => 'sonar-dalekiego-zasiegu', 'branch' => 'uzbrojenie', 'level' => 1, 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'no-academy'],
-            ['id' => 'zegluga-dwusektorowa', 'branch' => 'nawigacja', 'level' => 2, 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'prerequisite'],
-            ['id' => 'pojemne-ladownie', 'branch' => 'kadluby', 'level' => 1, 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'no-academy'],
-            ['id' => 'dok-remontowy', 'branch' => 'kadluby', 'level' => 2, 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'prerequisite'],
-            ['id' => 'lepsze-narzedzia', 'branch' => 'osady', 'level' => 2, 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'prerequisite'],
-            ['id' => 'niszczyciel-zwiadowczy', 'branch' => 'uzbrojenie', 'level' => 2, 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'prerequisite'],
-            ['id' => 'nawigacja-oceaniczna', 'branch' => 'nawigacja', 'level' => 3, 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'prerequisite'],
+            ['id' => 'spichlerze', 'branch' => 'osady', 'level' => 1, 'unlock' => 'academy', 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'no-academy'],
+            ['id' => 'mapy-sztormowe', 'branch' => 'nawigacja', 'level' => 1, 'unlock' => 'academy', 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'no-academy'],
+            ['id' => 'sonar-dalekiego-zasiegu', 'branch' => 'uzbrojenie', 'level' => 1, 'unlock' => 'academy', 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'no-academy'],
+            ['id' => 'zegluga-dwusektorowa', 'branch' => 'nawigacja', 'level' => 2, 'unlock' => 'academy', 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'prerequisite'],
+            ['id' => 'pojemne-ladownie', 'branch' => 'kadluby', 'level' => 1, 'unlock' => 'academy', 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'no-academy'],
+            ['id' => 'dok-remontowy', 'branch' => 'kadluby', 'level' => 2, 'unlock' => 'academy', 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'prerequisite'],
+            ['id' => 'lepsze-narzedzia', 'branch' => 'osady', 'level' => 2, 'unlock' => 'academy', 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'prerequisite'],
+            ['id' => 'niszczyciel-zwiadowczy', 'branch' => 'uzbrojenie', 'level' => 2, 'unlock' => 'academy', 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'prerequisite'],
+            ['id' => 'nawigacja-oceaniczna', 'branch' => 'nawigacja', 'level' => 3, 'unlock' => 'academy', 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'prerequisite'],
+            // ze zdobyczy (#121): poza poziomami, uczelnia ich nie bada
+            ['id' => 'kuter-torpedowy', 'branch' => 'uzbrojenie', 'level' => null, 'unlock' => 'boarding', 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'boarding-only'],
+            ['id' => 'ciezki-niszczyciel', 'branch' => 'uzbrojenie', 'level' => null, 'unlock' => 'boarding', 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'boarding-only'],
+            ['id' => 'lotniskowiec-eskortowy', 'branch' => 'uzbrojenie', 'level' => null, 'unlock' => 'boarding', 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'boarding-only'],
         ], $research['technologies']);
 
         // bez uczelni badania nie da się zacząć
@@ -56,7 +60,7 @@ final class ResearchApiTest extends WebTestCase
         $this->post($client, "/api/profiles/$profileId/islands/zatoka-rozbitka/buildings", ['type' => 'uczelnia']);
         self::assertResponseStatusCodeSame(201);
         self::assertSame(
-            ['spichlerze' => 'available', 'mapy-sztormowe' => 'available', 'sonar-dalekiego-zasiegu' => 'available', 'zegluga-dwusektorowa' => 'locked', 'pojemne-ladownie' => 'available', 'dok-remontowy' => 'locked', 'lepsze-narzedzia' => 'locked', 'niszczyciel-zwiadowczy' => 'locked', 'nawigacja-oceaniczna' => 'locked'],
+            ['spichlerze' => 'available', 'mapy-sztormowe' => 'available', 'sonar-dalekiego-zasiegu' => 'available', 'zegluga-dwusektorowa' => 'locked', 'pojemne-ladownie' => 'available', 'dok-remontowy' => 'locked', 'lepsze-narzedzia' => 'locked', 'niszczyciel-zwiadowczy' => 'locked', 'nawigacja-oceaniczna' => 'locked', 'kuter-torpedowy' => 'locked', 'ciezki-niszczyciel' => 'locked', 'lotniskowiec-eskortowy' => 'locked'],
             $this->states($this->expedition($client, $profileId)),
         );
 
@@ -80,7 +84,7 @@ final class ResearchApiTest extends WebTestCase
             'ticksLeft' => 6,
             'paused' => false,
         ], $expedition['research']['current']);
-        self::assertSame(['id' => 'spichlerze', 'branch' => 'osady', 'level' => 1, 'state' => 'in-progress', 'ticksLeft' => 6, 'blocker' => null], $expedition['research']['technologies'][0]);
+        self::assertSame(['id' => 'spichlerze', 'branch' => 'osady', 'level' => 1, 'unlock' => 'academy', 'state' => 'in-progress', 'ticksLeft' => 6, 'blocker' => null], $expedition['research']['technologies'][0]);
         self::assertSame('busy', $expedition['research']['technologies'][1]['blocker']);
 
         // drugie badanie czeka na koniec pierwszego
@@ -127,7 +131,7 @@ final class ResearchApiTest extends WebTestCase
         $expedition = $this->expedition($client, $granary);
         self::assertNull($expedition['research']['current']);
         self::assertSame(
-            ['spichlerze' => 'researched', 'mapy-sztormowe' => 'researched', 'sonar-dalekiego-zasiegu' => 'available', 'zegluga-dwusektorowa' => 'locked', 'pojemne-ladownie' => 'available', 'dok-remontowy' => 'locked', 'lepsze-narzedzia' => 'locked', 'niszczyciel-zwiadowczy' => 'locked', 'nawigacja-oceaniczna' => 'locked'],
+            ['spichlerze' => 'researched', 'mapy-sztormowe' => 'researched', 'sonar-dalekiego-zasiegu' => 'available', 'zegluga-dwusektorowa' => 'locked', 'pojemne-ladownie' => 'available', 'dok-remontowy' => 'locked', 'lepsze-narzedzia' => 'locked', 'niszczyciel-zwiadowczy' => 'locked', 'nawigacja-oceaniczna' => 'locked', 'kuter-torpedowy' => 'locked', 'ciezki-niszczyciel' => 'locked', 'lotniskowiec-eskortowy' => 'locked'],
             $this->states($expedition),
         );
         $mielizny = array_column($expedition['islands'], null, 'id')['mielizny'];

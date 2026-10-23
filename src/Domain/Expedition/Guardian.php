@@ -2,16 +2,19 @@
 
 namespace App\Domain\Expedition;
 
+use App\Domain\Game\Weapon\Loadout;
+
 /**
  * Strażnik strzeżonej cieśniny (Epic I): bitwa o zadanych zasadach z flotą
  * wroga o stałym składzie, niezależnym od składu gracza (jak napastnik
- * w obronie, #79), z domyślnym wyposażeniem. Nagrody jak za wyspę: XP
+ * w obronie, #79), z domyślnym wyposażeniem poza wariantami ze zdobyczy (#121). Nagrody jak za wyspę: XP
  * i surowce za wygraną, mniejsze za przegraną.
  */
 final class Guardian
 {
     /**
-     * @param list<ShipType> $fleet flota strażnika
+     * @param list<ShipType>    $fleet    flota strażnika
+     * @param list<ShipVariant> $variants warianty ze zdobyczy w jego flocie (#121): każdy zastępuje jeden statek swojego typu
      */
     public function __construct(
         public readonly string $name,
@@ -25,6 +28,7 @@ final class Guardian
         public readonly Resources $lootLoss,
         public readonly int $boardWidth,
         public readonly int $boardHeight,
+        public readonly array $variants = [],
     ) {
         if (!in_array($mode, ['classic', 'fun'], true)) {
             throw new \InvalidArgumentException('Guardian mode must be classic|fun');
@@ -38,6 +42,13 @@ final class Guardian
         if ($boardWidth < 5 || $boardHeight < 5) {
             throw new \InvalidArgumentException('Invalid guardian board');
         }
+        foreach ($variants as $variant) {
+            $hulls = count(array_filter($fleet, static fn (ShipType $type) => $type === $variant->type()));
+            $taken = count(array_filter($variants, static fn (ShipVariant $v) => $v->type() === $variant->type()));
+            if ($taken > $hulls) {
+                throw new \InvalidArgumentException('Guardian variants exceed its fleet');
+            }
+        }
     }
 
     /** @return array<int,int> skład floty strażnika: długość => liczba sztuk */
@@ -50,6 +61,17 @@ final class Guardian
         krsort($composition);
 
         return $composition;
+    }
+
+    /** @return array<int,list<Loadout>> wyposażenie wariantów w kształcie, który przyjmuje gra */
+    public function loadouts(): array
+    {
+        $loadouts = [];
+        foreach ($this->variants as $variant) {
+            $loadouts[$variant->type()->length()][] = $variant->loadout();
+        }
+
+        return $loadouts;
     }
 
     /** Pola planszy zajęte przez flotę strażnika. */

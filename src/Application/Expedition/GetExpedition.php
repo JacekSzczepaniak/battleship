@@ -129,10 +129,13 @@ final class GetExpedition
             'repairCost' => $profile->repairCost($type)->toArray(),
             'requiredRank' => $type->requiredRank()->value,
             'requiredShipyardLevel' => $type->requiredShipyardLevel(),
-            // warianty do wyboru przy budowie; zablokowany czeka na technologię
+            // wariant statku budowanego bez wyboru; null = statek podstawowy obok wariantów (#121)
+            'defaultVariant' => ShipVariant::defaultFor($type)?->value,
+            // warianty do wyboru przy budowie; zablokowany czeka na technologię (z uczelni albo ze zdobyczy, #121)
             'variants' => array_map(static fn (ShipVariant $variant) => [
                 'variant' => $variant->value,
                 'requiredTechnology' => $variant->requiredTechnology()?->value,
+                'unlock' => $variant->requiredTechnology()?->unlock()->value,
                 'unlocked' => null === $variant->requiredTechnology() || $profile->hasResearched($variant->requiredTechnology()),
             ], ShipVariant::forType($type)),
         ], ShipType::cases());
@@ -161,10 +164,12 @@ final class GetExpedition
                 )),
             ],
             'fleet' => $fleet,
-            // statki zdobyte abordażem, czekające na decyzję (#118); scrapValue = zwrot z rozbiórki
+            // statki zdobyte abordażem, czekające na decyzję (#118); scrapValue = zwrot z rozbiórki,
+            // studyTechnology = technologia z „Zbadaj konstrukcję” (#121), null = nie ma czego badać
             'prizes' => array_map(static fn (Prize $prize) => $prize->toArray() + [
                 'length' => $prize->type->length(),
                 'scrapValue' => $prize->scrapValue()->toArray(),
+                'studyTechnology' => $profile->studyableTechnology($prize)?->value,
             ], $profile->prizes()),
             'shipTypes' => $shipTypes,
             'buildingTypes' => $buildingTypes,
@@ -299,7 +304,9 @@ final class GetExpedition
             return [
                 'id' => $t->value,
                 'branch' => $t->branch()->value,
-                'level' => $t->level()->value,
+                'level' => $t->level()?->value,
+                // academy | boarding: technologia ze zdobyczy jest poza poziomami drzewka (#121)
+                'unlock' => $t->unlock()->value,
                 // researched | in-progress | available | locked (z powodem w blocker)
                 'state' => match (true) {
                     $profile->hasResearched($t) => 'researched',
@@ -318,7 +325,7 @@ final class GetExpedition
                 'island' => $current['island'],
                 'islandName' => $this->islandName($current['island']),
                 'progress' => $current['progress'],
-                'ticks' => $current['technology']->level()->researchTicks(),
+                'ticks' => $current['technology']->academyLevel()->researchTicks(),
                 'ticksLeft' => $profile->researchTicksLeft(),
                 // wyspa uczelni bez bandery: badanie stoi do odbicia
                 'paused' => $profile->isResearchPaused(),

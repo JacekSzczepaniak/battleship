@@ -35,7 +35,7 @@ wymagają obecności) · bandery na wyspach i kontrataki z bitwą obronną; peł
 bandera daje obrońcy pierwszy strzał i odbiera napastnikowi największy statek
 (Epic E) · drzewko technologii (Epic G: uczelnia, 9 technologii w 4
 gałęziach na 3 poziomach, niszczyciel zwiadowczy jako pierwszy wariant
-statku) · trzy akweny połączone strzeżoną cieśniną i otwartym oceanem
+statku; 3 warianty tylko z abordażu, #121) · trzy akweny połączone strzeżoną cieśniną i otwartym oceanem
 (#106–#108) · UI flow
 bitwy: port → rozstawianie → bitwa → wynik oraz ekran Rejs z mapą zawsze
 widoczną, panelem z zakładkami i dziennikiem kapitana (#111)
@@ -209,7 +209,9 @@ nie działa. Pełne oblężenie fortu z własną planszą to Epic H.
      na decyzję: **wyremontuj i dołącz** (do floty jako uszkodzony, typ
      z długości, bez wymogu rangi) albo **rozbierz** (połowa kosztu budowy do
      ładowni, nadmiar przepada — decyzja czeka, więc można najpierw rozładować).
-     Trzecia opcja, **zbadaj konstrukcję**, przyjdzie w #121,
+     ✅ (#121) Trzecia opcja, **zbadaj konstrukcję**, jest tylko dla wariantu
+     ze zdobyczy, którego kapitan nie zna: statek przepada, a wariant od razu
+     trafia do stoczni (filar V),
 3. **oblężenie fortu** — „battleship w innym smaku": plansza fortu (mury,
    działa nadbrzeżne, **magazyn prochu** = trafienie wywołuje eksplozję
    łańcuchową). Ta sama mechanika obsługuje bramy-cieśniny.
@@ -350,6 +352,27 @@ Każdy węzeł ma **dwie ścieżki odblokowania**:
 Kilka węzłów-legend **tylko questowych** (czarna perła → „Nawigacja Legend").
 Questy nie są obok gry — są skrótami i sekretami w drzewku.
 
+✅ (#121) **Druga ścieżka działa jako „ze zdobyczy”:** technologia może mieć
+odblokowanie `boarding` zamiast uczelni. Taka technologia nie ma poziomu ani
+kosztu, uczelnia jej nie bada, a odblokowuje ją zbadanie konstrukcji statku
+zdobytego abordażem (filar III), od razu i bez tików. Drzewko pokazuje te
+pozycje osobno, w sekcji „Tylko z abordażu”. Na start są to trzy warianty,
+które wróg ma w składzie na swoim akwenie:
+
+| wariant | kadłub | wyposażenie | u wroga |
+|---|---|---|---|
+| Kuter torpedowy | kuter (2) | torpeda zamiast sonaru | Ocean Sztormów |
+| Ciężki niszczyciel | niszczyciel (3) | 2 torpedy | Ocean Sztormów |
+| Lotniskowiec eskortowy | lotniskowiec (4) | nalot + sonar | Morze Mgieł |
+
+Skład wroga (decyzje Jacka z 23.10): każda wyspa akwenu ma jeden z jego
+wariantów, wybrany z seeda świata i id wyspy. Wariant zastępuje pierwszy zwykły
+statek swojego kadłuba w lustrze, więc pojawia się tylko wtedy, gdy gracz
+przyprowadzi statek tego kadłuba. Strażnik cieśniny ma oba warianty Oceanu.
+W obronie przed kontratakiem napastnik ma tylko lustro wariantów gracza, także
+tych zbadanych (D6). Kuter i lotniskowiec bez wariantu to statek podstawowy,
+który stocznia buduje obok wariantu. Stawiacz min dojdzie tą samą drogą z #123.
+
 **Warianty statków (kierunek):** ✅ technologia odblokowuje nie tylko
 parametry, ale **warianty kadłubów z różnym wyposażeniem** — ten sam rozmiar,
 inny loadout, np. trójmasztowiec torpedowy vs zwiadowczy (lepszy sonar
@@ -362,6 +385,8 @@ nie ulepszenie. Techniczna droga wejścia: WeaponSpec + koszt w stoczni.
   zwiadowczym (2 sonary, bez torpedy). Koszt budowy i remontu jak niszczyciela,
   wariant jest stały. Sonar zwiadowcy ma promień sonaru gracza. Wariant to
   skład, a nie technologia, więc lustrzana flota wroga go przejmuje.
+- ✅ (#121) **Kuter torpedowy, ciężki niszczyciel, lotniskowiec eskortowy**:
+  warianty tylko z abordażu (wyżej, druga ścieżka odblokowania).
 - ⏸️ **Lotniskowiec śmigłowcowy** czeka na okręty podwodne: bez nich nie ma
   czego zwalczać (Epic G, D5).
 
@@ -481,7 +506,7 @@ Eventy losowe w bitwie (mgła, cisza morska, prąd) · frakcje jako skórki
 (technologia/magia/rasa — flavor over mechanics) · miny (#123: stawiacze min —
 gracz przed bitwą rozmieszcza miny, a statek wroga, który na nią trafi, jest
 trafiony; do zbalansowania liczba min, kto je ma i czy wróg też; wrogi stawiacz
-min to kandydat na technologię tylko z abordażu, #121) · replay partii ·
+min dojdzie jako kolejny wariant tylko z abordażu, ścieżką z #121) · replay partii ·
 statystyki/osiągnięcia · daily challenge · PvP (tylko na czystym rulesecie,
 jeśli kiedykolwiek). Perki kapitanów przeniesione do Filaru VIII
 (specjalizacje).

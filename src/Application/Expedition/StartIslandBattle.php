@@ -5,6 +5,7 @@ namespace App\Application\Expedition;
 use App\Application\Game\CreateGame;
 use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\ProfileRepository;
+use App\Domain\Expedition\SeaGraph;
 use App\Domain\Expedition\Technology;
 use App\Domain\Game\FleetComposition;
 use App\Domain\Game\Game;
@@ -18,6 +19,7 @@ final class StartIslandBattle
         private IslandCatalog $islands,
         private CreateGame $createGame,
         private WorldFactory $worldFactory,
+        private SeaGraph $seas,
     ) {
     }
 
@@ -32,7 +34,8 @@ final class StartIslandBattle
      * największego statku (#79). Technologie gracza (Epic G) wchodzą do reguł
      * gry przy jej starcie — badanie ukończone w trakcie bitwy jej nie zmienia.
      * Na twierdzy to potyczka z flotą: wygrana oblega wyspę, a fort zdobywa się
-     * osobną akcją (StartSiege, #120).
+     * osobną akcją (StartSiege, #120). Wróg na wyspie akwenu z wariantami ze
+     * zdobyczy ma jeden z nich zamiast zwykłego statku tego kadłuba (#121).
      *
      * @param list<string>|null $shipIds skład bitewny; null = dobór domyślny
      */
@@ -78,9 +81,21 @@ final class StartIslandBattle
         $firstTurn = $defense && !$fullFlag ? 'opponent' : 'player';
         $opponentComposition = $fullFlag ? FleetComposition::withoutLargest($composition) : null;
 
+        // wróg broniący wyspy ma w składzie wariant ze zdobyczy swojego akwenu
+        // (#121); napastnik w obronie przenosi tylko lustro wariantów gracza
+        $opponentVariants = null;
+        $enemyVariant = $defense ? null : $this->seas->sea($profile->currentSea())?->enemyVariantFor($profile->worldSeed(), $island->id);
+        if (null !== $enemyVariant) {
+            $opponentVariants = FleetComposition::addVariants(
+                FleetComposition::variantsWithin($variants, $composition),
+                $composition,
+                [$enemyVariant->type()->length() => [$enemyVariant->loadout()]],
+            );
+        }
+
         $sonarRadius = $profile->hasResearched(Technology::SonarDalekiegoZasiegu) ? SonarSpec::LONG_RANGE_RADIUS : null;
 
-        $game = $this->createGame->handle($island->boardWidth, $island->boardHeight, $island->mode, $composition, $firstTurn, $opponentComposition, $variants ?: null, $sonarRadius, boarding: true);
+        $game = $this->createGame->handle($island->boardWidth, $island->boardHeight, $island->mode, $composition, $firstTurn, $opponentComposition, $variants ?: null, $sonarRadius, $opponentVariants, boarding: true);
         $shipIds = array_map(static fn ($s) => $s->id, $squad);
         $defense
             ? $profile->startDefense($island->id, $game->id(), $shipIds)

@@ -51,6 +51,6 @@ enum LogEvent: string
     /** Udany abordaż: statek wroga czeka na decyzję kapitana (#118). */
     case ShipBoarded = 'ship-boarded';
 
-    /** Kapitan zdecydował o zdobytym statku: dołączył go albo rozebrał (#118). */
+    /** Kapitan zdecydował o zdobytym statku: dołączył go, rozebrał (#118) albo zbadał konstrukcję (#121). */
     case PrizeDecided = 'prize-decided';
 }

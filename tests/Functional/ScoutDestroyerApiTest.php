@@ -38,10 +38,13 @@ final class ScoutDestroyerApiTest extends WebTestCase
 
         $types = array_column($this->expedition($client, $profileId)['shipTypes'], null, 'type');
         self::assertSame([
-            ['variant' => 'torpedowy', 'requiredTechnology' => null, 'unlocked' => true],
-            ['variant' => 'zwiadowczy', 'requiredTechnology' => 'niszczyciel-zwiadowczy', 'unlocked' => false],
+            ['variant' => 'torpedowy', 'requiredTechnology' => null, 'unlock' => null, 'unlocked' => true],
+            ['variant' => 'zwiadowczy', 'requiredTechnology' => 'niszczyciel-zwiadowczy', 'unlock' => 'academy', 'unlocked' => false],
+            ['variant' => 'ciezki-niszczyciel', 'requiredTechnology' => 'ciezki-niszczyciel', 'unlock' => 'boarding', 'unlocked' => false],
         ], $types['niszczyciel']['variants']);
-        self::assertSame([], $types['kuter']['variants']);
+        self::assertSame('torpedowy', $types['niszczyciel']['defaultVariant']);
+        self::assertNull($types['kuter']['defaultVariant']);
+        self::assertSame(['kuter-torpedowy'], array_column($types['kuter']['variants'], 'variant'));
 
         $this->post($client, "/api/profiles/$profileId/ships", ['type' => 'niszczyciel', 'islandId' => 'wyspa-sygnalowa', 'variant' => 'zwiadowczy']);
         self::assertResponseStatusCodeSame(403);

@@ -30,8 +30,8 @@ final class StaticSeaGraph implements SeaGraph
         if (null === $seas) {
             $this->seas = [
                 new Sea(Sea::START, 'Morze Rozbitków', new SeaTheme(stormChance: 20, visibility: 1, depositMultiplier: 1), $shipwreckIslands),
-                new Sea(self::STORM_OCEAN, 'Ocean Sztormów', new SeaTheme(stormChance: 40, visibility: 1, depositMultiplier: 2), new StormOceanIslandCatalog()),
-                new Sea(self::MIST_SEA, 'Morze Mgieł', new SeaTheme(stormChance: 10, visibility: 0, depositMultiplier: 2), new MistSeaIslandCatalog()),
+                new Sea(self::STORM_OCEAN, 'Ocean Sztormów', new SeaTheme(stormChance: 40, visibility: 1, depositMultiplier: 2), new StormOceanIslandCatalog(), [ShipVariant::KuterTorpedowy, ShipVariant::CiezkiNiszczyciel]),
+                new Sea(self::MIST_SEA, 'Morze Mgieł', new SeaTheme(stormChance: 10, visibility: 0, depositMultiplier: 2), new MistSeaIslandCatalog(), [ShipVariant::LotniskowiecEskortowy]),
             ];
             $strait = self::guardedStrait();
             // otwarty ocean: bez bitwy, otwiera go technologia (#108)
@@ -82,6 +82,7 @@ final class StaticSeaGraph implements SeaGraph
     /**
      * Strzeżona cieśnina: od rangi porucznik, strażnik z flotą silniejszą niż
      * garnizony Akwenu 1 (17 pól na planszy 12×12). Łup trafia do ładowni.
+     * Kuter torpedowy i ciężki niszczyciel to warianty Oceanu ze zdobyczy (#121).
      */
     private static function guardedStrait(): SeaGate
     {
@@ -102,6 +103,8 @@ final class StaticSeaGraph implements SeaGraph
             lootLoss: new Resources(wood: 10),
             boardWidth: 12,
             boardHeight: 12,
+            // strażnik wejścia na Ocean Sztormów pływa z wariantami Oceanu (#121)
+            variants: [ShipVariant::KuterTorpedowy, ShipVariant::CiezkiNiszczyciel],
         )));
     }
 

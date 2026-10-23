@@ -72,7 +72,7 @@
                 <div class="kicker">ZASADY AKWENU</div>
                 <ul>
                     <li><Ban :size="14" /> Statki nie mogą się stykać — także po skosie.</li>
-                    <li v-if="ruleset === 'fun'"><Crosshair :size="14" /> Nośniki dają broń: kuter → sonar, niszczyciel → torpeda<template v-if="ships.some(s => variantOf(s.l, s.w) === 'zwiadowczy')">, niszczyciel zwiadowczy → 2 sonary</template>, lotniskowiec → nalot. Zatopiony nośnik odbiera broń.</li>
+                    <li v-if="ruleset === 'fun'"><Crosshair :size="14" /> Nośniki dają broń: kuter → sonar, niszczyciel → torpeda<template v-for="v in squadVariants" :key="v.name">, {{ v.name.toLowerCase() }} → {{ v.weapon }}</template>, lotniskowiec → nalot. Zatopiony nośnik odbiera broń.</li>
                     <li v-else><Crosshair :size="14" /> Zasady klasyczne: tylko pojedyncze salwy.</li>
                     <li v-if="battle"><Anchor :size="14" /> Stawka: zatopione jednostki po wygranej idą do remontu, po przegranej przepadają.</li>
                     <li v-else><Anchor :size="14" /> Trening — bez XP, łupów i strat we flocie.</li>
@@ -140,6 +140,15 @@ const battle = computed(() => {
     return b && b.gameId === id.value ? b : null;
 });
 const training = computed(() => battle.value === null);
+
+// warianty w składzie (#99, #121): opis ich broni obok domyślnych nośników
+const squadVariants = computed(() => {
+    const seen = new Map<string, string>();
+    for (const s of ships.value) {
+        if (variantOf(s.l, s.w) && !seen.has(shipName(s.l, s.w))) seen.set(shipName(s.l, s.w), carriedWeapon(s.l, s.w) ?? '');
+    }
+    return [...seen].map(([name, weapon]) => ({ name, weapon }));
+});
 
 const CLASSIC_INVENTORY: Record<string, number> = { 4: 1, 3: 2, 2: 3, 1: 4 };
 

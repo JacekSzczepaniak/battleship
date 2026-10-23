@@ -9,7 +9,9 @@ namespace App\Domain\Expedition;
  * jej poziom ogranicza dostępne typy statków (0 = brak stoczni, tylko
  * tratwa). Złoże wyspy produkuje surowiec co tik, dopóki wyspa jest pod
  * banderą kapitana (GAME_DESIGN.md, filar III). Bezpieczną przystań zdobywa
- * się jak każdą wyspę, ale kontrataki jej nie dotyczą (#78).
+ * się jak każdą wyspę, ale kontrataki jej nie dotyczą (#78). Twierdzę (najwyższą
+ * wyspę akwenu) broni fort: wygrana potyczka z flotą tylko ją oblega, a banderę
+ * daje dopiero wygrane oblężenie (#120).
  */
 final class Island
 {
@@ -44,7 +46,11 @@ final class Island
         public readonly int $boardHeight,
         public readonly Resources $depositYield = new Resources(),
         public readonly bool $safeHarbor = false,
+        public readonly bool $stronghold = false,
     ) {
+        if ($stronghold && $safeHarbor) {
+            throw new \InvalidArgumentException('Safe harbor cannot be a stronghold');
+        }
         if (!in_array($mode, ['classic', 'fun'], true)) {
             throw new \InvalidArgumentException('Island mode must be classic|fun');
         }

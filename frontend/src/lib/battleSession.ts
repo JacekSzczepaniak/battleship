@@ -41,7 +41,7 @@ export interface ExpeditionOutcome {
     // bitwa ze strażnikiem (#107): islandId = id bramy, islandName = nazwa strażnika
     islandId: string;
     islandName: string;
-    kind?: 'guardian';
+    kind?: 'guardian' | 'siege';
     /** akwen, na którym stoi flota po bitwie */
     seaName?: string;
     settle: SettleResultDTO;

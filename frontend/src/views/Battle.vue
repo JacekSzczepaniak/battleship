@@ -601,7 +601,7 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
         <!-- HUD -->
         <header class="hud">
             <div class="hud-turn">
-                <div class="kicker">{{ expeditionBattle && battle ? `BITWA · ${battle.islandName.toUpperCase()}` : fort ? 'OBLĘŻENIE · TRENING' : 'BITWA TRENINGOWA' }}</div>
+                <div class="kicker">{{ expeditionBattle && battle ? `${fort ? 'OBLĘŻENIE' : 'BITWA'} · ${battle.islandName.toUpperCase()}` : fort ? 'OBLĘŻENIE · TRENING' : 'BITWA TRENINGOWA' }}</div>
                 <div class="turn-line">
                     OSTRZELANO {{ fieldsLabel(shotsCount).toUpperCase() }} · <span :class="{ mine: turn === 'player' && !gameOver }">{{ turnLabel }}</span>
                 </div>

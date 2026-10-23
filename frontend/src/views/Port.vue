@@ -157,7 +157,7 @@ import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
 import { useRouter } from 'vue-router';
 import { Anchor, Compass, Container, Map as MapIcon, Plane, Radar, Settings, Ship, Sailboat, Wrench, Crosshair } from 'lucide-vue-next';
 import {
-    createProfile, getExpedition, settleBattle, startIslandBattle,
+    createProfile, getExpedition, settleBattle, startIslandBattle, startSiege,
     RANK_LABELS, RANK_LABELS_GENITIVE, fleetShipLabel,
     type ExpeditionDTO, type FleetShipDTO, type IslandDTO, type RankName,
 } from '../api/expeditionApi';
@@ -280,8 +280,19 @@ const primary = computed<Primary>(() => {
     if (island && island.owned && canDefend(island, pending) && (expedition.value?.fleet.length ?? 0) > 0) {
         return { kind: 'island', label: 'Broń wyspy', hint: `kontratak · ${island.name} · uderzenie za ${ticksLabel(pending!.ticksLeft)}` };
     }
+    // oblężona twierdza (#120): banderę daje oblężenie fortu
+    if (island && island.unlocked && island.besieged && (expedition.value?.fleet.length ?? 0) > 0) {
+        return {
+            kind: 'island',
+            label: 'Rozpocznij oblężenie',
+            hint: `${island.name} · fort · 🚩 bandera, +${island.xpWin} XP, ${formatResources(island.lootWin, 'bez łupów')} za wygraną`,
+        };
+    }
     // wyspa pod banderą nie jest areną (#78)
     if (island && island.unlocked && !island.owned && (expedition.value?.fleet.length ?? 0) > 0) {
+        if (island.stronghold) {
+            return { kind: 'island', label: 'Nowa potyczka', hint: `${island.name} · wygrana obleże twierdzę, banderę da fort` };
+        }
         return {
             kind: 'island',
             label: 'Nowa bitwa',
@@ -317,8 +328,9 @@ async function startIsland() {
     starting.value = true;
     error.value = '';
     try {
-        const game = await startIslandBattle(profileId, island.id);
-        setCurrentBattle({ profileId, gameId: game.id, islandId: island.id, islandName: island.name });
+        const siege = island.besieged && !island.owned;
+        const game = siege ? await startSiege(profileId, island.id) : await startIslandBattle(profileId, island.id);
+        setCurrentBattle({ profileId, gameId: game.id, islandId: island.id, islandName: island.name, kind: siege ? 'siege' : undefined });
         await router.push({ name: 'place-fleet', params: { id: game.id } });
     } catch (e: any) {
         error.value = e?.message ?? 'Nie udało się rozpocząć bitwy';

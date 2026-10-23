@@ -188,6 +188,7 @@ Wszystkie ścieżki pod `/api`, JSON. Pełna lista: `docker compose exec app php
 | `POST` | `/profiles/{id}/islands/{islandId}/battle` | bitwa o wyspę albo obrona wyspy pod banderą (kapitan musi stać na wyspie) |
 | `POST` | `/profiles/{id}/islands/{islandId}/buildings` | budynek osady (`type`) na posiadanej wyspie |
 | `POST` | `/profiles/{id}/islands/{islandId}/research` | start badania (`technology`) w uczelni wyspy, na której stoi kapitan |
+| `POST` | `/profiles/{id}/islands/{islandId}/siege` | oblężenie fortu oblężonej twierdzy (po wygranej potyczce, flota przy wyspie); wygrana stawia banderę |
 | `POST` | `/profiles/{id}/gates/{gateId}/battle` | bitwa ze strażnikiem bramy (flota na sektorze bramy, ranga strażnika); wygrana otwiera bramę |
 | `POST` | `/profiles/{id}/gates/{gateId}/pass` | przejście przez otwartą bramę na sektor bramy drugiego akwenu, za 1 tik |
 | `POST` | `/profiles/{id}/battles/{gameId}/settle` | rozliczenie zakończonej bitwy |

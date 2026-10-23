@@ -156,6 +156,10 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             'Building already standing' => ['BUILDING_ALREADY_STANDING', 409],
             'Building site not suitable' => ['BUILDING_SITE_UNSUITABLE', 409],
             'Island already captured' => ['ISLAND_ALREADY_CAPTURED', 409],
+            // twierdze z fortem (#120)
+            'Island already besieged' => ['ISLAND_ALREADY_BESIEGED', 409],
+            'Island not besieged' => ['ISLAND_NOT_BESIEGED', 409],
+            'Island has no fort' => ['ISLAND_HAS_NO_FORT', 409],
             'No counterattack on this island' => ['NO_COUNTERATTACK', 409],
             'Defense already started' => ['DEFENSE_ALREADY_STARTED', 409],
             'Technology already researched' => ['TECHNOLOGY_RESEARCHED', 409],

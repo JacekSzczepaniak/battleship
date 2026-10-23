@@ -16,6 +16,10 @@ export function logText(e: LogEntryDTO, tick?: number): string {
             return `Sztorm: fale zabrały ${formatResources(e.cargoLost ?? { wood: 0, steel: 0, gold: 0 }, 'nic — ładownia była pusta')}${e.unescorted ? ' (konwój bez eskorty — podwójne straty)' : ''}.`;
         case 'island-captured':
             return `Bandera na wyspie: ${island}.`;
+        case 'island-besieged':
+            return `Twierdza oblężona: ${island} — flota strażnicza rozbita, banderę da zdobycie fortu.`;
+        case 'siege-failed':
+            return `Fort się obronił: ${island} — oblężenie trwa, szturm możesz ponowić.`;
         case 'island-lost': {
             const lost = formatResources(e.stockpileLost ?? { wood: 0, steel: 0, gold: 0 }, 'nic — magazyn był pusty');
             return `Wyspa utracona: ${island} (${e.absent ? 'nikt nie stanął do obrony' : 'obrona przegrana'}) — z magazynu przepadło: ${lost}.`;
@@ -56,7 +60,7 @@ function prizeLabel(e: LogEntryDTO): string {
 export function logTone(e: LogEntryDTO): 'danger' | 'warn' | 'info' {
     switch (e.event) {
         case 'island-lost': case 'counterattack-announced': return 'danger';
-        case 'storm': case 'island-plundered': return 'warn';
+        case 'storm': case 'island-plundered': case 'siege-failed': return 'warn';
         default: return 'info';
     }
 }

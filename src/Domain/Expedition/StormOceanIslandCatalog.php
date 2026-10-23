@@ -89,6 +89,8 @@ final class StormOceanIslandCatalog implements IslandCatalog
                 shipyardLevel: 0,
                 boardWidth: 12,
                 boardHeight: 12,
+                // fort: banderę daje dopiero wygrane oblężenie (#120)
+                stronghold: true,
             ),
         ];
     }

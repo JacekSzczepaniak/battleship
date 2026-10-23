@@ -171,8 +171,8 @@ Wszystkie ścieżki pod `/api`, JSON. Pełna lista: `docker compose exec app php
 
 | metoda | ścieżka | co robi |
 |---|---|---|
-| `POST` | `/games` | nowa gra: `mode` (`classic`/`fun`), `width`, `height`, opcjonalnie `ships` i `variants` (`{"3": [{"sonar": 2}]}`) |
-| `GET` | `/games/{id}` | projekcja gry: plansze, mgła wroga, bronie (`used`/`limit`, sonar też `radius`), warianty obu stron (`variants`/`opponentVariants`), tura, energia gracza (`energy`: `left`/`max`/`costs`, `null` w classic), ruch statku w tej turze (`moveUsed`), abordaż (`boarding`: `available`, `blocker`, `threshold`, `modifiers`, `cost`, `attempt`; `null` poza bitwą wyprawy z energią) |
+| `POST` | `/games` | nowa gra: `mode` (`classic`/`fun`), `width`, `height`, opcjonalnie `ships` i `variants` (`{"3": [{"sonar": 2}]}`); `siege: true` (+ opcjonalny `seed`) = oblężenie fortu 10×10 z zasadami fun, odpowiedź z `fortSeed` |
+| `GET` | `/games/{id}` | projekcja gry: plansze, mgła wroga, bronie (`used`/`limit`, sonar też `radius`), warianty obu stron (`variants`/`opponentVariants`), tura, energia gracza (`energy`: `left`/`max`/`costs`, `null` w classic), ruch statku w tej turze (`moveUsed`), abordaż (`boarding`: `available`, `blocker`, `threshold`, `modifiers`, `cost`, `attempt`; `null` poza bitwą wyprawy z energią i w oblężeniu), fort w oblężeniu (`fort`: `guns` `left`/`total`, `revealed` z rodzajem trafionych konstrukcji, pola `explosion`; `null` w zwykłej bitwie) |
 | `POST` | `/games/{id}/fleet` | rozstawienie floty gracza; statek z wariantem niesie `w` (`{"sonar": 2}`) |
 | `POST` | `/games/{id}/shots` | salwa w pole `x`, `y` |
 | `GET` | `/games/{id}/shots` | strzały gracza z wynikami |

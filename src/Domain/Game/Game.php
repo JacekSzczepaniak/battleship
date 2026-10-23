@@ -6,6 +6,8 @@ use App\Domain\Game\Boarding\BoardingAttempt;
 use App\Domain\Game\Boarding\BoardingOdds;
 use App\Domain\Game\Boarding\BoardingRoll;
 use App\Domain\Game\Boarding\BoardingTarget;
+use App\Domain\Game\Siege\Fort;
+use App\Domain\Game\Siege\FortPiece;
 use App\Domain\Game\Weapon\Loadout;
 use App\Domain\Game\Weapon\WeaponKind;
 use App\Domain\Game\Weapon\WeaponSpecs;
@@ -69,6 +71,9 @@ final class Game
     /** Jedyna w bitwie próba abordażu; null = jeszcze nie było. */
     private ?BoardingAttempt $boarding = null;
 
+    /** Fort na planszy wroga w bitwie oblężniczej (#119); null = zwykła bitwa z flotą. */
+    private ?Fort $fort = null;
+
     public function __construct(
         private GameId $id,
         private Ruleset $ruleset,
@@ -105,6 +110,10 @@ final class Game
     {
         if (in_array($this->status, [GameStatus::Won, GameStatus::Lost], true)) {
             return true;
+        }
+
+        if (null !== $this->fort) {
+            return 0 === $this->fortGunsLeft();
         }
 
         return $this->targetSide()->allShipsHit();
@@ -312,7 +321,8 @@ final class Game
      */
     public function boardingBlocker(): ?string
     {
-        if (!$this->boardingEnabled || !$this->hasEnergy()) {
+        // w oblężeniu (#119) wróg to konstrukcje fortu, nie statki do przejęcia
+        if (!$this->boardingEnabled || !$this->hasEnergy() || null !== $this->fort) {
             return 'Boarding not available';
         }
         if (null !== $this->boarding) {
@@ -367,13 +377,13 @@ final class Game
 
     /**
      * Stan abordażu do API: dostępność, próg i modyfikatory dla bieżącego celu
-     * (przy kilku statkach wroga — bazowe), wynik próby; null = bitwa bez abordażu.
+     * (przy kilku statkach wroga — bazowe), wynik próby; null = bitwa bez abordażu (także oblężenie).
      *
      * @return array{available:bool, blocker:?string, threshold:int, modifiers:list<array{code:string, value:int}>, cost:int, attempt:array<string,mixed>|null}|null
      */
     public function boardingState(BoardingOdds $odds = new BoardingOdds()): ?array
     {
-        if (!$this->boardingEnabled || !$this->hasEnergy()) {
+        if (!$this->boardingEnabled || !$this->hasEnergy() || null !== $this->fort) {
             return null;
         }
 
@@ -481,11 +491,96 @@ final class Game
 
         $result = $target->receiveShot($c);
 
+        if (null !== $this->fort) {
+            $this->resolveFortShot($c, $result);
+
+            return $result;
+        }
+
         if ($target->allShipsHit()) {
             $this->status = GameStatus::Won;
         }
 
         return $result;
+    }
+
+    // --- Oblężenie fortu (#119) ---
+
+    /**
+     * Stawia fort na planszy wroga zamiast floty AI (bitwa oblężnicza).
+     * Konstrukcje są statkami bez broni, więc fort nie ma broni specjalnych;
+     * w przeciwieństwie do floty mogą stać na styk (bez nakładania).
+     */
+    public function placeFort(Fort $fort): void
+    {
+        if ($this->opponentSide->hasFleet()) {
+            throw new \DomainException('Opponent fleet already placed');
+        }
+        $this->opponentSide->allowContact();
+        $this->opponentSide->placeFleet($fort->toShips());
+        $this->fort = $fort;
+    }
+
+    /**
+     * Odtworzenie ze snapshotu: plansza wroga wraca z opponentFleet, tu tylko
+     * opis fortu. Wołać PRZED setOpponentFleetFromSnapshot (konstrukcje na styk).
+     */
+    public function setFortFromSnapshot(Fort $fort): void
+    {
+        $this->opponentSide->allowContact();
+        $this->fort = $fort;
+    }
+
+    public function fort(): ?Fort
+    {
+        return $this->fort;
+    }
+
+    /** Działa fortu, które jeszcze stoją; fort strzela, dopóki to > 0. */
+    public function fortGunsLeft(): int
+    {
+        if (null === $this->fort) {
+            return 0;
+        }
+
+        return count(array_filter(
+            $this->fort->guns,
+            fn (Coordinate $gun) => $this->opponentSide->hasUnsunkShipAt($gun->x, $gun->y),
+        ));
+    }
+
+    /**
+     * Czy magazyn prochu wybuchł (trafiony). Eksplozja nie ma osobnego stanu:
+     * wynika z trafienia magazynu, a jej pola są zwykłymi strzałami.
+     */
+    public function fortExploded(): bool
+    {
+        if (null === $this->fort) {
+            return false;
+        }
+
+        return $this->opponentSide->hasShipAt($this->fort->magazine->x, $this->fort->magazine->y)
+            && !$this->opponentSide->hasUnsunkShipAt($this->fort->magazine->x, $this->fort->magazine->y);
+    }
+
+    /**
+     * Skutki strzału w fort: trafiony magazyn wybucha i trafia pola 3×3 wokół
+     * siebie (działa i mury też); mur tylko pochłania strzał. Wygrana dopiero
+     * po zniszczeniu ostatniego działa.
+     */
+    private function resolveFortShot(Coordinate $c, ShotResult $result): void
+    {
+        \assert(null !== $this->fort);
+        if (ShotResult::Sunk === $result && FortPiece::Magazine === $this->fort->pieceAt($c->x, $c->y)) {
+            $size = $this->ruleset->boardSize();
+            foreach ($this->fort->blastCells($size->width, $size->height) as $cell) {
+                $this->opponentSide->receiveShot($cell);
+            }
+        }
+
+        if (0 === $this->fortGunsLeft()) {
+            $this->status = GameStatus::Won;
+        }
     }
 
     /**

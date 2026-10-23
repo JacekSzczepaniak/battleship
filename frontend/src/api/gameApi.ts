@@ -61,6 +61,16 @@ export interface EnergyState {
     costs: Partial<Record<BattleActionName, number>> & Record<string, number>;
 }
 
+// fort w bitwie oblężniczej (#119): rodzaj konstrukcji tylko na trafionych polach
+export type FortPieceKind = 'gun' | 'wall' | 'magazine';
+export interface FortView {
+    seed: number;
+    guns: { left: number; total: number };
+    revealed: { x: number; y: number; kind: FortPieceKind }[];
+    // pola eksplozji magazynu prochu; null = magazyn jeszcze stoi
+    explosion: [number, number][] | null;
+}
+
 export interface GameViewDTO {
     id: string;
     status: 'pending' | 'in_progress' | 'won' | 'lost';
@@ -92,6 +102,8 @@ export interface GameViewDTO {
     };
     shotsCount: number;
     finished: boolean;
+    // bitwa oblężnicza (#119); null = zwykła bitwa z flotą
+    fort?: FortView | null;
 }
 
 export interface CreateGameResponse {
@@ -99,14 +111,16 @@ export interface CreateGameResponse {
     status: string;
     ruleset: RulesetName;
     board: { w: number; h: number };
+    fortSeed?: number | null;
 }
 
 export interface ShotResultDTO extends TurnOutcomeDTO {
     result: 'miss' | 'hit' | 'sunk' | 'duplicate';
 }
 
-export async function createGame(mode: RulesetName = 'classic', size = 10): Promise<CreateGameResponse> {
-    return http.post<CreateGameResponse>('/games', { mode, width: size, height: size });
+// siege = bitwa oblężnicza (#119): fort 10×10 z zasadami fun narzuca backend
+export async function createGame(mode: RulesetName = 'classic', size = 10, siege = false): Promise<CreateGameResponse> {
+    return http.post<CreateGameResponse>('/games', siege ? { mode: 'fun', siege: true } : { mode, width: size, height: size });
 }
 
 export async function getGame(id: string): Promise<GameViewDTO> {

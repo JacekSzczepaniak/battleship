@@ -14,15 +14,17 @@ export const TRAINING_SIZES = [10, 12, 14] as const;
 export interface TrainingPrefs {
     ruleset: RulesetName;
     size: number;
+    // oblężenie fortu (#119): plansza 10×10 i zasady fun narzuca fort
+    siege: boolean;
 }
 
-const DEFAULT_PREFS: TrainingPrefs = { ruleset: 'fun', size: 12 };
+const DEFAULT_PREFS: TrainingPrefs = { ruleset: 'fun', size: 12, siege: false };
 
 export function getTrainingPrefs(): TrainingPrefs {
     try {
         const parsed = JSON.parse(localStorage.getItem(PREFS_KEY) ?? 'null');
         if (parsed && (parsed.ruleset === 'classic' || parsed.ruleset === 'fun') && typeof parsed.size === 'number') {
-            return { ruleset: parsed.ruleset, size: parsed.size };
+            return { ruleset: parsed.ruleset, size: parsed.size, siege: parsed.siege === true };
         }
     } catch {
         // uszkodzony wpis — wracamy do domyślnych
@@ -63,6 +65,8 @@ export interface BattleReport {
     playerSunk: number[];
     /** ostatni statek wroga zdobyty abordażem (#118); brak w raportach sprzed abordażu */
     boarded?: boolean;
+    // bitwa oblężnicza (#119): zniszczone działa zamiast zatopień
+    fort?: { destroyed: number; total: number } | null;
     /** null = bitwa treningowa (bez stawki) */
     expedition: ExpeditionOutcome | null;
 }

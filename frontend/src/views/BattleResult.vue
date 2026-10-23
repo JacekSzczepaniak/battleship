@@ -31,6 +31,11 @@ const description = computed(() => {
     const r = report.value;
     if (!r) return '';
     if (!r.expedition) {
+        if (r.fort) {
+            return won.value
+                ? 'Działa fortu zamilkły. Trening bez stawki — flota wraca do portu cała, bez XP i łupów.'
+                : 'Fort się obronił. Trening bez stawki — nic nie przepada.';
+        }
         return won.value
             ? 'Wrogie wody oczyszczone. Trening bez stawki — flota wraca do portu cała, bez XP i łupów.'
             : 'Tym razem morze było po stronie wroga. Trening bez stawki — nic nie przepada.';
@@ -139,6 +144,7 @@ async function load() {
             enemySunk: g.enemyFogGrid.sunk.map(s => s.cells.length),
             enemyTotal: Object.values(g.opponentShips ?? g.allowedShips ?? {}).reduce((a, b) => a + b, 0),
             playerSunk: [],
+            fort: g.fort ? { destroyed: g.fort.guns.total - g.fort.guns.left, total: g.fort.guns.total } : null,
             expedition: null,
         };
     } catch (e: any) {
@@ -163,7 +169,7 @@ async function repeat() {
             setCurrentBattle({ profileId, gameId: game.id, islandId, islandName, kind });
             await router.push({ name: 'place-fleet', params: { id: game.id } });
         } else {
-            const game = await createGame(r.ruleset, r.board.w);
+            const game = await createGame(r.ruleset, r.board.w, !!r.fort);
             await router.push({ name: 'place-fleet', params: { id: game.id } });
         }
     } catch (e: any) {
@@ -184,7 +190,7 @@ onMounted(load);
         <template v-else>
             <div class="left">
                 <div class="kicker outcome-kicker">
-                    {{ exp ? `${exp.kind === 'guardian' ? 'CIEŚNINA' : exp.settle.defense ? 'OBRONA' : 'BITWA'} · ${exp.islandName.toUpperCase()}${exp.seaName ? ` · ${exp.seaName.toUpperCase()}` : ''}` : `BITWA TRENINGOWA · ${report.board.w}×${report.board.h}` }}
+                    {{ exp ? `${exp.kind === 'guardian' ? 'CIEŚNINA' : exp.settle.defense ? 'OBRONA' : 'BITWA'} · ${exp.islandName.toUpperCase()}${exp.seaName ? ` · ${exp.seaName.toUpperCase()}` : ''}` : `${report.fort ? 'OBLĘŻENIE · TRENING' : 'BITWA TRENINGOWA'} · ${report.board.w}×${report.board.h}` }}
                 </div>
                 <h1>{{ won ? 'ZWYCIĘSTWO' : 'PORAŻKA' }}</h1>
                 <p class="lead">{{ description }}</p>
@@ -219,7 +225,13 @@ onMounted(load);
                     <div><b>{{ accuracy }}%</b><span>CELNOŚĆ</span></div>
                 </div>
 
-                <div class="chips-block">
+                <div v-if="report.fort" class="chips-block">
+                    <div class="kicker">DZIAŁA FORTU · {{ report.fort.destroyed }} / {{ report.fort.total }}</div>
+                    <div class="chips">
+                        <span class="chip">{{ report.fort.destroyed === report.fort.total ? 'fort zamilkł' : 'fort się obronił' }}</span>
+                    </div>
+                </div>
+                <div v-else class="chips-block">
                     <div class="kicker">ZATOPIONE · {{ report.enemySunk.length }} / {{ report.enemyTotal }}</div>
                     <div class="chips">
                         <span v-for="chip in enemyChips" :key="chip.key" class="chip">{{ chip.label }}</span>

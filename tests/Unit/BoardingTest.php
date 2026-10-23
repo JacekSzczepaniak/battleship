@@ -19,9 +19,11 @@ use App\Domain\Game\Game;
 use App\Domain\Game\GameStatus;
 use App\Domain\Game\Orientation;
 use App\Domain\Game\Ship;
+use App\Domain\Game\Siege\Fort;
 use App\Domain\Shared\GameId;
 use App\Infrastructure\Persistence\Doctrine\Mapper\GameSnapshotMapper;
 use App\Infrastructure\Persistence\InMemory\InMemoryGameRepository;
+use Tests\Support\FleetFactory;
 
 // Abordaż (#118): ⚡3, tylko ostatni statek wroga, jedna próba na bitwę,
 // rzut k6 z seeda gry i numeru tury, próg 5+ (−1 przy połowie pól trafionych).
@@ -84,6 +86,33 @@ it('jest niedostępny w bitwie treningowej, w klasyce, przy kilku statkach wroga
 
     expect(fn () => boardingGame(lastShip: false)->attemptBoarding())
         ->toThrow(DomainException::class, 'Boarding requires the last enemy ship');
+});
+
+it('w oblężeniu fortu abordażu nie ma — konstrukcje to nie statki do przejęcia', function () {
+    $fort = new Fort(
+        7,
+        [new Coordinate(0, 0), new Coordinate(9, 0)],
+        [new Ship(new Coordinate(3, 2), Orientation::H, 3), new Ship(new Coordinate(8, 6), Orientation::V, 2)],
+        new Coordinate(5, 3),
+    );
+    $game = Game::create(new FunRuleset(new BoardSize(10, 10)));
+    $game->placeFort($fort);
+    $game->placeFleet(FleetFactory::classic10x10());
+    $game->enableBoarding();
+    // zostaje jedna konstrukcja: mur (8,6)–(8,7)
+    foreach ($fort->toShips() as $piece) {
+        if (8 === $piece->start->x && 6 === $piece->start->y) {
+            continue;
+        }
+        foreach ($piece->cells() as $cell) {
+            $game->fireShot($cell);
+        }
+    }
+
+    expect($game->opponentFleet())->not->toBeNull()
+        ->and($game->boardingBlocker())->toBe('Boarding not available')
+        ->and($game->boardingState())->toBeNull()
+        ->and(fn () => $game->attemptBoarding())->toThrow(DomainException::class, 'Boarding not available');
 });
 
 it('rzut jest powtarzalny dla seeda i tury, a tury dają różne wyniki k6', function () {

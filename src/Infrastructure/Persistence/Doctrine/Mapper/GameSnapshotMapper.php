@@ -13,6 +13,7 @@ use App\Domain\Game\GameStatus;
 use App\Domain\Game\Orientation;
 use App\Domain\Game\Ruleset;
 use App\Domain\Game\Ship;
+use App\Domain\Game\Siege\Fort;
 use App\Domain\Game\Weapon\Loadout;
 use App\Domain\Game\Weapon\SonarSpec;
 use App\Domain\Shared\GameId;
@@ -75,6 +76,8 @@ final class GameSnapshotMapper
             'round' => $game->round() > 1 ? $game->round() : null,
             // abordaż (#118) — tylko w bitwie, która go dopuszcza; attempt = jedyna próba
             'boarding' => $game->boardingEnabled() ? ['attempt' => $game->boardingAttempt()?->toArray()] : null,
+            // układ fortu w bitwie oblężniczej (#119) — tylko, gdy jest
+            'fort' => $game->fort()?->toArray(),
             // Iteration 1 meta
             'mode' => $game->mode(),
             'opponent' => $game->opponent(),
@@ -112,6 +115,12 @@ final class GameSnapshotMapper
                 $ships[] = $this->shipFromArray($s);
             }
             $game->setFleetFromSnapshot($ships);
+        }
+
+        // opis fortu (#119) — PRZED flotą przeciwnika: konstrukcje fortu stoją
+        // na styk, więc plansza wroga musi to wiedzieć, zanim je odtworzy
+        if (!empty($state['fort']) && is_array($state['fort'])) {
+            $game->setFortFromSnapshot(Fort::fromArray($state['fort']));
         }
 
         // opponent fleet from snapshot (optional) — PRZED strzałami gracza:

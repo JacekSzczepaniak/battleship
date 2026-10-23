@@ -59,7 +59,18 @@ final class GameController
             }
         }
 
-        $game = $this->createGame->handle($w, $h, $mode, $ships, variants: $variants);
+        // Bitwa oblężnicza (#119, trening): fort z seeda zamiast floty AI;
+        // brak seeda = losowy. Plansza i zasady narzuca fort (10×10, fun).
+        $fortSeed = null;
+        if (true === ($data['siege'] ?? false)) {
+            $seed = $data['seed'] ?? random_int(0, 0x7FFFFFFF);
+            if (!is_int($seed) || $seed < 0) {
+                throw new ApiException('Invalid seed: expected non-negative int', 'VALIDATION_ERROR', 400);
+            }
+            $fortSeed = $seed;
+        }
+
+        $game = $this->createGame->handle($w, $h, $mode, $ships, variants: $variants, fortSeed: $fortSeed);
 
         return new JsonResponse([
             'id' => (string) $game->id(),
@@ -69,6 +80,7 @@ final class GameController
                 'w' => $game->ruleset()->boardSize()->width,
                 'h' => $game->ruleset()->boardSize()->height,
             ],
+            'fortSeed' => $game->fort()?->seed,
         ], 201);
     }
 

@@ -74,6 +74,7 @@
             <!-- Kontratak w toku (#78): stan do decyzji, nie zdarzenie — zawsze na wierzchu -->
             <section v-if="counterattack.pending" class="alert counterattack" :class="{ defending: counterattack.pending.defenseStarted }">
                 <strong>{{ counterattack.pending.defenseStarted ? '🛡️' : '⚔️' }} {{ pendingLabel(counterattack.pending) }}</strong>
+                <span v-if="pendingRoute" class="route" :class="{ late: !pendingRoute.inTime }">🧭 {{ pendingRoute.text }}</span>
                 <span v-if="counterattack.pending.fullFlag" class="full-flag">🚩 {{ FULL_FLAG_BONUS }}</span>
                 <span v-if="!counterattack.pending.defenseStarted" class="muted">{{ defenseHint(counterattack.pending) }}</span>
             </section>
@@ -312,6 +313,15 @@
                         <!-- Przegląd akwenu: na morzu wprost, w porcie i przy bramie zwinięty -->
                         <component :is="currentIsland || currentGate ? 'details' : 'div'" class="overview">
                             <summary v-if="currentIsland || currentGate">Wyspy i bramy akwenu</summary>
+                            <div v-if="expedition.world.flags.length > 1" class="block">
+                                <div class="kicker">Bandery na akwenach</div>
+                                <ul class="flags-by-sea">
+                                    <li v-for="f in expedition.world.flags" :key="f.sea" :class="{ full: f.fullFlag }">
+                                        {{ f.name }}: {{ f.owned }}/{{ f.total }} wysp<span v-if="f.fullFlag"> · 🚩 pełna bandera</span>
+                                    </li>
+                                </ul>
+                                <p class="muted small">Pełna bandera działa przy obronie wysp swojego akwenu.</p>
+                            </div>
                             <div class="block">
                                 <div class="kicker">Bramy akwenu</div>
                                 <ul class="gates">
@@ -411,7 +421,7 @@ import FleetPanel from '../components/FleetPanel.vue';
 import SeaMap from '../components/SeaMap.vue';
 import SettlementPanel from '../components/SettlementPanel.vue';
 import TechTreePanel from '../components/TechTreePanel.vue';
-import { canDefend, defenseHint, FULL_FLAG_BONUS, pendingLabel, ticksLabel } from '../lib/counterattack';
+import { canDefend, defenseHint, FULL_FLAG_BONUS, pendingLabel, routeWarning, ticksLabel } from '../lib/counterattack';
 import {
     RESOURCES, addResources, covers, formatResources, isEmpty, missing, totalResources,
 } from '../lib/resources';
@@ -531,6 +541,8 @@ async function reloadAfterVoyage(profileId: string) {
 }
 
 const counterattack = computed(() => expedition.value?.counterattack ?? { pending: null, last: null });
+// cel na innym akwenie niż flota (#109): czas do uderzenia wobec drogi przez bramę
+const pendingRoute = computed(() => counterattack.value.pending ? routeWarning(counterattack.value.pending) : null);
 
 const discoveredIslands = computed<IslandDTO[]>(
     () => expedition.value?.islands.filter(i => i.discovered) ?? []
@@ -903,6 +915,10 @@ h2, h3 { font-family: var(--font-head); }
 .counterattack { border-color: var(--danger); }
 .counterattack.defending { border-color: var(--info); }
 .counterattack .full-flag { font: 600 12px var(--font-mono); color: var(--info); }
+.counterattack .route { font: 600 12px var(--font-mono); color: var(--warn); }
+.counterattack .route.late { color: var(--danger); }
+.flags-by-sea { list-style: none; margin: 0 0 4px; padding: 0; font: 500 12px var(--font-mono); }
+.flags-by-sea .full { color: var(--info); }
 .pending { border-color: var(--accent); }
 
 /* mapa + panel */

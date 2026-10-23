@@ -14,11 +14,32 @@ export function ticksLabel(n: number): string {
 
 // nazw wysp nie odmieniamy (Mielizny, Archipelag Mgieł) — stoją po dwukropku
 
-/** „Kontratak: Mielizny — uderzenie za 7 tików” albo informacja o trwającej obronie. */
+/**
+ * „Kontratak: Mielizny — uderzenie za 7 tików” albo informacja o trwającej
+ * obronie. Wyspa innego akwenu niż flota dostaje nazwę akwenu (#109).
+ */
 export function pendingLabel(c: PendingCounterattackDTO): string {
+    const island = c.fleetAway && c.sea ? `${c.islandName} (${c.sea.name})` : c.islandName;
     return c.defenseStarted
-        ? `Obrona: ${c.islandName} — termin wstrzymany do końca bitwy`
-        : `Kontratak: ${c.islandName} — uderzenie za ${ticksLabel(c.ticksLeft)} (tik ${c.strikeAt})`;
+        ? `Obrona: ${island} — termin wstrzymany do końca bitwy`
+        : `Kontratak: ${island} — uderzenie za ${ticksLabel(c.ticksLeft)} (tik ${c.strikeAt})`;
+}
+
+/**
+ * Ostrzeżenie, gdy cel leży na innym akwenie niż flota (#109): pozostały
+ * czas wobec drogi przez bramę. Obronę przyjmuje się przed uderzeniem, więc
+ * zdąży tylko droga krótsza niż czas do uderzenia. null = flota na akwenie celu.
+ */
+export function routeWarning(c: PendingCounterattackDTO): { text: string; inTime: boolean } | null {
+    if (!c.fleetAway || c.defenseStarted) return null;
+    const sea = c.sea?.name ?? 'inny akwen';
+    if (!c.route) return { text: `Flota jest poza akwenem ${sea}, a przejście jest zamknięte — nie zdążysz przed uderzeniem.`, inTime: false };
+    const gates = c.route.gates === 1 ? 'przez bramę' : `przez ${c.route.gates} bramy`;
+    const verdict = c.route.inTime ? 'zdążysz' : 'nie zdążysz';
+    return {
+        text: `Flota jest poza akwenem ${sea}: droga ${gates} to ${ticksLabel(c.route.ticks)}, do uderzenia ${ticksLabel(c.ticksLeft)} — ${verdict}.`,
+        inTime: c.route.inTime,
+    };
 }
 
 /**

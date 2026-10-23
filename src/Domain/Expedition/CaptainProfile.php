@@ -786,6 +786,8 @@ final class CaptainProfile
      * zmieniająca bandery woła wcześniej ensureWorldState(), więc rzut dla
      * tiku widzi stan profilu z tego tiku. Uderzenie bez rozpoczętej obrony
      * odbiera wyspę, a pod fortem ją plądruje (nieobecność nie kosztuje floty).
+     * Celem jest wyspa z dowolnego akwenu, który zna mapa (WorldMap::otherSeas(),
+     * #109), więc rzut nie zależy od tego, gdzie stoi flota.
      */
     private function rollCounterattacks(WorldMap $world): void
     {
@@ -799,11 +801,11 @@ final class CaptainProfile
             if ($t - $this->counterattackCalmFrom <= self::COUNTERATTACK_CALM_TICKS) {
                 continue;
             }
-            // cele z bieżącego akwenu: przystań innego akwenu nie jest na tej mapie
-            // bezpieczna (kontrataki na wielu akwenach — #109)
+            // cele z całego świata (#109): przystań rozpoznaje mapa akwenu wyspy,
+            // a wyspa spoza znanych map nie jest celem
             $targets = array_values(array_filter(
-                array_keys($this->ownedIslands),
-                static fn (string $id) => null !== $world->islandPosition($id) && !$world->isSafeHarbor($id),
+                array_map('strval', array_keys($this->ownedIslands)),
+                static fn (string $id) => !($world->seaOf($id)?->isSafeHarbor($id) ?? true),
             ));
             if ([] === $targets || crc32("{$this->worldSeed}:{$t}:counterattack") % 100 >= self::COUNTERATTACK_CHANCE) {
                 continue;
@@ -841,10 +843,12 @@ final class CaptainProfile
         if (!$held) {
             // badanie w uczelni wyspy liczy tiki pod banderą do tiku uderzenia
             $this->accrueResearch($tick, $world);
-            // urobek złoża należy się do tiku uderzenia — potem złoże staje, chyba że fort utrzymał wyspę
-            $island = $world?->deposits()[$islandId] ?? null;
+            // urobek złoża należy się do tiku uderzenia — potem złoże staje, chyba że fort utrzymał wyspę;
+            // złoże i motyw z akwenu wyspy, także gdy flota stoi na innym (#109)
+            $islandSea = $world?->seaOf($islandId);
+            $island = $islandSea?->deposits()[$islandId] ?? null;
             if (null !== $island) {
-                $this->accrueDeposit($islandId, $island, $tick, $world->theme());
+                $this->accrueDeposit($islandId, $island, $tick, $islandSea->theme());
             }
             $stock = $this->stockpile($islandId);
             $lost = new Resources(intdiv($stock->wood, 2), intdiv($stock->steel, 2), intdiv($stock->gold, 2));
@@ -1384,9 +1388,10 @@ final class CaptainProfile
     }
 
     /**
-     * Pełna bandera: wszystkie wyspy akwenu (z Zatoką Rozbitka) pod banderą
-     * kapitana. Daje przewagę w bitwie obronnej i znika z utratą którejkolwiek
-     * wyspy (#79). Dziś jest jeden akwen, więc liczy się cała mapa.
+     * Pełna bandera akwenu danej mapy: wszystkie jego wyspy (z przystanią)
+     * pod banderą kapitana. Daje przewagę w bitwie obronnej wyspy tego akwenu
+     * i znika z utratą którejkolwiek jego wyspy (#79). Liczy się osobno na
+     * każdym akwenie (#109): bandera Morza Rozbitków nie pomaga na Oceanie.
      */
     public function hasFullFlag(WorldMap $world): bool
     {

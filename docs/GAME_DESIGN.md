@@ -147,7 +147,8 @@ wygrana stawia banderę. Posiadana wyspa ma pracujące złoże, a jej magazyn je
 stawką kontrataku. Zatoka Rozbitka to bezpieczna przystań: da się ją zdobyć,
 ale nikt jej nie atakuje. Nowe źródła walki to NPC, piraci i **kontrataki**:
 - najwyżej jeden naraz; po zdobyciu albo rozstrzygnięciu 8 tików spokoju,
-  potem 15%/tik (seed+tik); cel to losowa posiadana wyspa poza Zatoką,
+  potem 15%/tik (seed+tik); cel to losowa posiadana wyspa z dowolnego
+  akwenu poza bezpiecznymi przystaniami (Zatoka Rozbitka),
 - zapowiedź 12 tików przed uderzeniem (największa odległość na mapie 12×12
   to 11 rejsów),
 - obrona to bitwa w odwróconych rolach: flota musi stać na wyspie w oknie
@@ -160,7 +161,26 @@ ale nikt jej nie atakuje. Nowe źródła walki to NPC, piraci i **kontrataki**:
 - pełna bandera na akwenie: obrońca strzela pierwszy, napastnik płynie bez
   największego statku; gdy lustrzany skład ma jeden statek, bonusem jest
   tylko pierwszy strzał. Bonus widać w zapowiedzi i znika z utratą
-  którejkolwiek wyspy.
+  którejkolwiek wyspy tego akwenu.
+
+✅ (#109) Kontrataki i pełna bandera na wielu akwenach (D4 z Epica I):
+- pełna bandera liczy się osobno na każdym akwenie. Morze Rozbitków pod
+  banderą daje bonus przy obronie swoich wysp, a przy obronie wyspy Oceanu
+  Sztormów już nie, dopóki cały Ocean nie jest pod banderą,
+- kontratak obejmuje cały świat: dalej jeden naraz, a celem może być wyspa
+  innego akwenu niż ten, na którym stoi flota. Rzut zależy tylko od seeda i
+  tiku, nie od akwenu floty,
+- zapowiedź dalej 12 tików. Droga na wyspę innego akwenu to rejsy do bramy,
+  1 tik przejścia i rejsy do wyspy. Obronę trzeba przyjąć przed uderzeniem,
+  więc zdąży tylko droga krótsza niż czas do uderzenia,
+- zapowiedź podaje akwen celu, a gdy flota jest gdzie indziej, zestawia
+  pozostałe tiki z drogą przez bramę. Przegląd akwenu pokazuje bandery
+  na każdym znanym akwenie,
+- fort chroni wyspę pod nieobecność floty, także gdy flota jest na innym
+  akwenie. Urobek złoża do tiku uderzenia liczy się z motywu akwenu wyspy.
+Do obserwacji: czy kontrataki nie wymuszają ciągłego krążenia przez bramy.
+Jeśli tak, można je ograniczyć do akwenu floty albo wydłużyć zapowiedź dla
+celów na innym akwenie.
 
 Obrona wyspy bez floty: fort w osadzie (#81, Filar III wyżej).
 

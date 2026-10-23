@@ -32,8 +32,10 @@ nieobecność przy kontrataku to grabież połowy magazynu, wyspa zostaje) · wo
 sztormy przy pierwszym wpłynięciu na sektor · geografia=logistyka (bitwa/stocznia
 wymagają obecności) · bandery na wyspach i kontrataki z bitwą obronną; pełna
 bandera daje obrońcy pierwszy strzał i odbiera napastnikowi największy statek
-(Epic E) · drzewko technologii (Epic G: uczelnia, 8 technologii w 4
-gałęziach, niszczyciel zwiadowczy jako pierwszy wariant statku) · UI flow
+(Epic E) · drzewko technologii (Epic G: uczelnia, 9 technologii w 4
+gałęziach na 3 poziomach, niszczyciel zwiadowczy jako pierwszy wariant
+statku) · trzy akweny połączone strzeżoną cieśniną i otwartym oceanem
+(#106–#108) · UI flow
 bitwy: port → rozstawianie → bitwa → wynik oraz ekran Rejs z mapą zawsze
 widoczną, panelem z zakładkami i dziennikiem kapitana (#111)
 (projekt: `docs/design/ui-flow/`). Elementy projektu UI bez pokrycia
@@ -82,6 +84,22 @@ eskorty, kartografia. Na Oceanie jest 5 wysp: trzy od porucznika (Przystań
 Wichrów ze stocznią poziomu 2, Rafa Kotwiczna ze stalą 3/tik, Wyspa Latarników
 z drewnem 3/tik) i dwie od kapitana (Zatoka Burz ze stalą 2/tik i Bastion
 Fal). Każda daje więcej XP i łupów niż Twierdza Admiralicji.
+
+✅ (#108) Akwen 3 „Morze Mgieł” (sztorm 10%, widoczność 0, złoża ×2) i otwarty
+ocean. Sektor bramy leży na wschodniej krawędzi Oceanu Sztormów, a po drugiej
+stronie na zachodniej krawędzi Morza Mgieł. Bramę otwiera zbadana Nawigacja
+oceaniczna, bez bitwy i bez stanu w profilu. Działa w obie strony, a przejście
+kosztuje 1 tik. Przy widoczności 0 flota odkrywa tylko sektor, na który
+wpływa. Rejs o 2 sektory (Żegluga dwusektorowa) odkrywa też sektor po drodze:
+jeden krok od startu w stronę celu, przy ruchu 2+1 po skosie. Ten sektor daje
+kartografię, ale nie grozi sztormem i nie liczy się jako odwiedzony. Na Morzu
+Mgieł jest 5 wysp na planszach 12×12:
+- od komandora: Kotwicowisko Mgieł (stocznia poziomu 3), Wyspa Szeptów
+  (złoto 2/tik), Mielizna Widm (drewno 4/tik),
+- od admirała: Archipelag Ślepców (stal 3/tik) i Cytadela Mgieł (największy
+  łup, 340 XP).
+Każda daje więcej XP i łupów niż wyspy Oceanu Sztormów. Kapitan może wpłynąć
+na Morze Mgieł i zarabiać na kartografii, ale wyspy zdobędzie od komandora.
 
 **Przejścia między akwenami — trzy rodzaje bram (mieszane):**
 1. **Strzeżona cieśnina** — bitwa-boss: flota strażnicza + fort,
@@ -224,6 +242,11 @@ sektory, odporność na sztormy, jakość map, przejścia oceaniczne) ·
 ✅ (Epic G) Uczelnia na posiadanej wyspie, jedno badanie naraz, czas w tikach
 pod banderą. Drzewko startowe: 4 gałęzie po 2 poziomy, drugi poziom od rangi
 sternik. Technologie działają tylko po stronie gracza.
+
+✅ (#108) Trzeci poziom drzewka: 60 drewna, 50 stali, 30 złota i 14 tików, od
+rangi kapitan, po zbadaniu poziomu 2 tej samej gałęzi. Pierwsza technologia
+poziomu 3 to Nawigacja oceaniczna (po Żegludze dwusektorowej), która otwiera
+otwarty ocean między Oceanem Sztormów a Morzem Mgieł.
 
 ✅ (#96) Ekonomia: Pojemne ładownie (ładownia statku +50%, w dół) i Dok
 remontowy (remont za pół ceny, w górę) w Kadłubach; Lepsze narzędzia (złoże

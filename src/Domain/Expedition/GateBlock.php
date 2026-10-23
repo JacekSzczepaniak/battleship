@@ -15,12 +15,16 @@ enum GateBlock: string
     /** Strażnik cieśniny jeszcze nie został pokonany. */
     case Guardian = 'guardian';
 
+    /** Kapitan nie zbadał technologii, która otwiera bramę (otwarty ocean, #108). */
+    case Technology = 'technology';
+
     /** Komunikat błędu domenowego (mapowany na kod API). */
     public function message(): string
     {
         return match ($this) {
             self::Rank => 'Gate locked: requires higher rank',
             self::Guardian => 'Gate guarded: defeat the guardian first',
+            self::Technology => 'Gate locked: requires technology',
         };
     }
 }

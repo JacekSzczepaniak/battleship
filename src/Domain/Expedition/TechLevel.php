@@ -10,12 +10,14 @@ enum TechLevel: int
 {
     case First = 1;
     case Second = 2;
+    case Third = 3;
 
     public function researchCost(): Resources
     {
         return match ($this) {
             self::First => new Resources(wood: 20, steel: 20, gold: 5),
             self::Second => new Resources(wood: 40, steel: 30, gold: 15),
+            self::Third => new Resources(wood: 60, steel: 50, gold: 30),
         };
     }
 
@@ -24,13 +26,18 @@ enum TechLevel: int
         return match ($this) {
             self::First => 6,
             self::Second => 10,
+            self::Third => 14,
         };
     }
 
     /** Ranga wymagana do badania; null = bez bramki. */
     public function requiredRank(): ?Rank
     {
-        return self::Second === $this ? Rank::Sternik : null;
+        return match ($this) {
+            self::First => null,
+            self::Second => Rank::Sternik,
+            self::Third => Rank::Kapitan,
+        };
     }
 
     /** Poziom, który musi być zbadany w tej samej gałęzi; null dla pierwszego. */

@@ -192,7 +192,7 @@ export interface SeaDTO {
 }
 
 // powód zamknięcia bramy (Domain/Expedition/GateBlock); null = brama otwarta
-export type GateBlockCode = 'rank' | 'guardian';
+export type GateBlockCode = 'rank' | 'guardian' | 'technology';
 
 // strażnik strzeżonej cieśniny (#107): stała flota wroga, nagrody jak za wyspę
 export interface GuardianDTO {
@@ -226,6 +226,8 @@ export interface GateDTO {
     present: boolean;
     blocker: GateBlockCode | null;
     open: boolean;
+    // technologia, która otwiera bramę (otwarty ocean, #108); null = inny warunek
+    technology: TechnologyName | null;
     guardian: GuardianDTO | null;
 }
 
@@ -312,7 +314,7 @@ export interface LastCounterattackDTO {
 
 // drzewko technologii (Epic G): katalog zawiera tylko działające technologie
 export type TechBranchName = 'kadluby' | 'uzbrojenie' | 'nawigacja' | 'osady';
-export type TechnologyName = 'spichlerze' | 'mapy-sztormowe' | 'sonar-dalekiego-zasiegu' | 'zegluga-dwusektorowa' | 'pojemne-ladownie' | 'dok-remontowy' | 'lepsze-narzedzia' | 'niszczyciel-zwiadowczy';
+export type TechnologyName = 'spichlerze' | 'mapy-sztormowe' | 'sonar-dalekiego-zasiegu' | 'zegluga-dwusektorowa' | 'pojemne-ladownie' | 'dok-remontowy' | 'lepsze-narzedzia' | 'niszczyciel-zwiadowczy' | 'nawigacja-oceaniczna';
 
 export const TECH_BRANCH_LABELS: Record<TechBranchName, string> = {
     kadluby: 'Kadłuby',
@@ -330,6 +332,7 @@ export const TECH_LABELS: Record<TechnologyName, string> = {
     'dok-remontowy': 'Dok remontowy',
     'lepsze-narzedzia': 'Lepsze narzędzia',
     'niszczyciel-zwiadowczy': 'Niszczyciel zwiadowczy',
+    'nawigacja-oceaniczna': 'Nawigacja oceaniczna',
 };
 
 // powód blokady badania (Domain/Expedition/ResearchBlock); null = można badać

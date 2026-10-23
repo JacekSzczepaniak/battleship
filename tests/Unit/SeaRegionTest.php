@@ -94,7 +94,7 @@ it('Morze Rozbitków to start grafu z motywem 20% / 1 / ×1', function () {
         ->and($start->name)->toBe('Morze Rozbitków')
         ->and($start->theme->toArray())->toBe(['stormChance' => 20, 'visibility' => 1, 'depositMultiplier' => 1])
         ->and($graph->sea(Sea::START))->toBe($start)
-        ->and($graph->sea('morze-mgiel'))->toBeNull();
+        ->and($graph->sea('morze-nieznane'))->toBeNull();
 });
 
 it('mapa Morza Rozbitków to dawna mapa świata z seeda profilu, więc stare profile nie tracą wysp', function () {

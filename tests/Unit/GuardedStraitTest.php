@@ -104,7 +104,7 @@ it('za strzeżoną cieśniną leży Ocean Sztormów: motyw 40% / 1 / ×2 i 5 wys
     $graph = straitGraph();
     $ocean = $graph->sea(OCEAN);
 
-    expect(array_map(static fn (Sea $s) => $s->id, $graph->seas()))->toBe([Sea::START, OCEAN])
+    expect(array_map(static fn (Sea $s) => $s->id, $graph->seas()))->toBe([Sea::START, OCEAN, 'morze-mgiel'])
         ->and($ocean->name)->toBe('Ocean Sztormów')
         ->and($ocean->theme->toArray())->toBe(['stormChance' => 40, 'visibility' => 1, 'depositMultiplier' => 2])
         ->and(array_map(static fn (Island $i) => [$i->id, $i->requiredRank, $i->shipyardLevel, $i->depositYield->toArray()], $ocean->islands->all()))->toBe([

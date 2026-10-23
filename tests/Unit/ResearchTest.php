@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\Island;
+use App\Domain\Expedition\LogEntry;
+use App\Domain\Expedition\LogEvent;
 use App\Domain\Expedition\Rank;
 use App\Domain\Expedition\ResearchBlock;
 use App\Domain\Expedition\Resources;
@@ -150,6 +152,7 @@ it('badanie kończy się po 6 tikach pod banderą i od tej chwili działa', func
     $profile->ensureWorldState($world);
     expect($profile->research())->toBeNull()
         ->and($profile->researched())->toBe([Technology::Spichlerze])
+        ->and($profile->log())->toEqual([new LogEntry(6, LogEvent::ResearchCompleted, ['technology' => 'spichlerze', 'island' => 'mielizny'])])
         ->and($profile->researchBlocker(Technology::MapySztormowe, academyIsland('mielizny'), $world))->toBeNull();
 });
 

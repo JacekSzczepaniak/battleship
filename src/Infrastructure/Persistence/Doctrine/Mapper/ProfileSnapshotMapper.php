@@ -4,6 +4,8 @@ namespace App\Infrastructure\Persistence\Doctrine\Mapper;
 
 use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\CaptainProfile;
+use App\Domain\Expedition\LogEntry;
+use App\Domain\Expedition\LogEvent;
 use App\Domain\Expedition\OwnedShip;
 use App\Domain\Expedition\Resources;
 use App\Domain\Expedition\SeaState;
@@ -57,6 +59,12 @@ final class ProfileSnapshotMapper
             ),
             // badania (Epic G): zbadane technologie i badanie w toku
             'research' => $profile->researchState(),
+            // dziennik kapitana (#111): ostatnie zdarzenia, najstarsze pierwsze
+            'log' => array_map(static fn (LogEntry $entry) => [
+                'tick' => $entry->tick,
+                'event' => $entry->event->value,
+                'data' => $entry->data,
+            ], $profile->log()),
         ];
     }
 
@@ -143,7 +151,30 @@ final class ProfileSnapshotMapper
             seaStates: $seaStates,
             // brak klucza = profil sprzed bram, żadna nie jest otwarta
             openedGates: array_map('intval', (array) ($state['gates'] ?? [])),
+            // brak klucza = profil sprzed dziennika, dziennik zaczyna się pusty
+            log: $this->logFrom($state),
         );
+    }
+
+    /**
+     * Dziennik kapitana; wpis z nieznanym rodzajem zdarzenia jest pomijany.
+     *
+     * @param array<string,mixed> $state
+     *
+     * @return list<LogEntry>
+     */
+    private function logFrom(array $state): array
+    {
+        $out = [];
+        foreach ((array) ($state['log'] ?? []) as $entry) {
+            $event = is_array($entry) ? LogEvent::tryFrom((string) ($entry['event'] ?? '')) : null;
+            if (null === $event || !isset($entry['tick'])) {
+                continue;
+            }
+            $out[] = new LogEntry((int) $entry['tick'], $event, (array) ($entry['data'] ?? []));
+        }
+
+        return $out;
     }
 
     /**

@@ -7,6 +7,8 @@ use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\GateBlock;
 use App\Domain\Expedition\Island;
+use App\Domain\Expedition\LogEntry;
+use App\Domain\Expedition\LogEvent;
 use App\Domain\Expedition\OwnedShip;
 use App\Domain\Expedition\Rank;
 use App\Domain\Expedition\Resources;
@@ -202,7 +204,8 @@ it('wygrana ze strażnikiem daje 200 XP i łup do ładowni; nadmiar ponad pojemn
         ->and($profile->cargo()->total())->toBe(75)
         ->and($outcome['cargoLost']->total())->toBe(25)
         ->and($profile->cargo()->add($outcome['cargoLost'])->toArray())->toBe(['wood' => 40, 'steel' => 40, 'gold' => 20])
-        ->and($profile->stockpiles())->toBe([]);
+        ->and($profile->stockpiles())->toBe([])
+        ->and($profile->log())->toEqual([new LogEntry(1, LogEvent::GateOpened, ['gate' => STRAIT])]);
 });
 
 it('przegrana ze strażnikiem działa jak każda: zatopione statki przepadają, brama zostaje zamknięta, próbę można powtórzyć', function () {
@@ -268,6 +271,13 @@ it('przejście przez otwartą bramę kosztuje 1 tik, działa w obie strony i zac
         ->and($profile->discoveredSectors())->toContain('0:0', '5:5')
         ->and($profile->seaStates()[OCEAN]->isDiscovered(0, 0))->toBe(abs($west['y']) <= 1)
         ->and($profile->seaStates()[OCEAN]->position())->toBe($west);
+
+    // dziennik (#111): oba przejścia, bez sztormów (wpis sztormu dochodzi tylko, gdy się zdarzył)
+    $passages = array_values(array_filter($profile->log(), static fn (LogEntry $e) => LogEvent::GatePassed === $e->event));
+    expect($passages)->toEqual([
+        new LogEntry(11, LogEvent::GatePassed, ['gate' => STRAIT, 'from' => Sea::START, 'to' => OCEAN]),
+        new LogEntry(12, LogEvent::GatePassed, ['gate' => STRAIT, 'from' => OCEAN, 'to' => Sea::START]),
+    ]);
 });
 
 it('na Oceanie sztorm ma 40% (20% z Mapami sztormowymi), a złoża dają podwójny urobek', function () {
@@ -301,7 +311,11 @@ it('wyspy Oceanu się zdobywa i stawia na nich budynki, jak w Akwenie 1', functi
 
     $profile->buildBuilding(BuildingType::Kopalnia, $rafa, $world);
     // kopalnia podwaja urobek już podwojony przez motyw: (3 ×2) ×2
-    expect($profile->depositYield($rafa, $world->theme())->steel)->toBe(12);
+    expect($profile->depositYield($rafa, $world->theme())->steel)->toBe(12)
+        ->and(array_map(static fn (LogEntry $e) => [$e->event, $e->data], $profile->log()))->toBe([
+            [LogEvent::IslandCaptured, ['island' => 'rafa-kotwiczna']],
+            [LogEvent::BuildingBuilt, ['building' => 'kopalnia', 'island' => 'rafa-kotwiczna']],
+        ]);
 });
 
 it('konwój bez eskorty traci w sztormie przy wpłynięciu przez bramę podwójnie, jak w rejsie', function () {
@@ -315,7 +329,13 @@ it('konwój bez eskorty traci w sztormie przy wpłynięciu przez bramę podwójn
             expect($outcome['event']['unescorted'])->toBeTrue()
                 ->and($outcome['event']['cargoLost'])->toBe(['wood' => 10, 'steel' => 0, 'gold' => 0])
                 // kartografia po sztormie dokłada drewno do ładowni
-                ->and($profile->cargo()->wood)->toBe(40 + $outcome['cartography'] - $outcome['cartographyLost']);
+                ->and($profile->cargo()->wood)->toBe(40 + $outcome['cartography'] - $outcome['cartographyLost'])
+                // sztorm trafia do dziennika za przejściem przez bramę, w tym samym tiku
+                ->and(array_map(static fn (LogEntry $e) => [$e->tick, $e->event], $profile->log()))->toBe([
+                    [$attempt + 1, LogEvent::GatePassed],
+                    [$attempt + 1, LogEvent::Storm],
+                ])
+                ->and(array_slice($profile->log(), -1)[0]->data)->toBe(['effect' => 'cargo-lost', 'cargoLost' => ['wood' => 10, 'steel' => 0, 'gold' => 0], 'unescorted' => true]);
 
             return;
         }

@@ -87,14 +87,16 @@ function blockLabel(t: BuildingTypeDTO): string | null {
 </template>
 
 <style scoped>
-.settlement { margin: 0.3rem 0 0.8rem; }
-.buildings { list-style: none; padding: 0; margin: 0 0 0.4rem; }
-.buildings li { display: flex; gap: 0.6rem; align-items: center; padding: 0.3rem 0; flex-wrap: wrap; }
+.settlement { display: flex; flex-direction: column; gap: 8px; }
+.buildings { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; }
+.buildings li { display: flex; gap: 4px 10px; align-items: center; padding: 8px 0; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
 .buildings li.off .name { opacity: 0.6; }
-.name { min-width: 12rem; }
-.on { color: var(--info); font-size: 0.9rem; }
-.block { color: var(--text-muted); font-size: 0.85rem; }
-.btn { padding: 5px 10px; font: 700 12px var(--font-head); border-radius: 8px; background: var(--bg-card-active); color: var(--text); border: 1px solid var(--line-btn); cursor: pointer; }
-.btn[disabled] { background: var(--bg-disabled); color: var(--text-dim); cursor: not-allowed; }
-.muted { color: var(--text-muted); font-size: 0.85rem; }
+.name { flex: 0 0 11rem; font: 600 14px var(--font-head); }
+.on { flex: 1 1 12rem; color: var(--info); font-size: 12px; }
+.muted { color: var(--text-muted); font-size: 12px; margin: 0; }
+.buildings .muted { flex: 1 1 12rem; }
+.block { flex-basis: 100%; font: 500 11px var(--font-mono); color: var(--text-muted); }
+.btn { padding: 6px 10px; font: 600 11px var(--font-mono); border-radius: 8px; background: var(--bg-card); color: var(--text); border: 1px solid var(--line-btn); cursor: pointer; }
+.btn:hover:not([disabled]) { border-color: var(--info); }
+.btn[disabled] { background: var(--bg-disabled); color: var(--text-dim); border-color: transparent; cursor: not-allowed; }
 </style>

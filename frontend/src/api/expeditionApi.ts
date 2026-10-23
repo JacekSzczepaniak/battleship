@@ -354,6 +354,36 @@ export interface ResearchDTO {
     technologies: TechnologyDTO[];
 }
 
+// dziennik kapitana (#111): rodzaj zdarzenia (Domain/Expedition/LogEvent) z danymi; treść składa lib/eventLog
+export type LogEventName =
+    | 'storm' | 'island-captured' | 'island-lost' | 'island-defended' | 'island-plundered' | 'counterattack-announced'
+    | 'research-completed' | 'ship-built' | 'building-built' | 'gate-opened' | 'gate-passed';
+
+export interface LogEntryDTO {
+    tick: number;
+    event: LogEventName;
+    // dane zależne od rodzaju; nazwy wysp, bram i akwenów dokłada backend
+    island?: string;
+    islandName?: string;
+    gate?: string;
+    gateName?: string;
+    from?: string;
+    fromName?: string;
+    to?: string;
+    toName?: string;
+    // sztorm: jak SailResultDTO.event
+    effect?: 'cargo-lost' | 'ship-damaged';
+    ship?: ShipTypeName;
+    variant?: ShipVariantName;
+    cargoLost?: ResourcesDTO;
+    unescorted?: boolean;
+    absent?: boolean;
+    stockpileLost?: ResourcesDTO;
+    strikeAt?: number;
+    technology?: TechnologyName;
+    building?: BuildingTypeName;
+}
+
 export interface ExpeditionDTO {
     profile: ExpeditionProfileDTO;
     fleet: FleetShipDTO[];
@@ -363,6 +393,8 @@ export interface ExpeditionDTO {
     world: WorldDTO;
     counterattack: { pending: PendingCounterattackDTO | null; last: LastCounterattackDTO | null };
     research: ResearchDTO;
+    // od najnowszego wpisu, najwyżej 50
+    log: LogEntryDTO[];
 }
 
 export interface SettleResultDTO {

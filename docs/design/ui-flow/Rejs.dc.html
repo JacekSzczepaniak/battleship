@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:#071319;color:#e8f0f0;font-family:'Archivo',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:#3fb6c4;text-decoration:none}
+  a:hover{color:#e8843c}
+  button{font:inherit}
+  input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:radial-gradient(1200px 700px at 70% -10%,#0e2a34 0%,#071319 60%);">
+  <!-- app nav -->
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 32px;flex-wrap:wrap;">
+    <div style="font:700 22px 'Space Grotesk';">STATKI<span style="color:#3fb6c4;">.</span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <a href="#" style="padding:8px 14px;border-radius:9px;border:1px solid #1c3b46;background:#0d2530;font:600 12px 'IBM Plex Mono';color:#c3d3d6;">Port</a>
+      <a href="#" style="padding:8px 14px;border-radius:9px;border:1px solid #1c3b46;background:#0d2530;font:600 12px 'IBM Plex Mono';color:#c3d3d6;">Bitwa</a>
+      <a href="#" style="padding:8px 14px;border-radius:9px;border:1px solid #e8843c;background:#1a2f30;font:600 12px 'IBM Plex Mono';color:#fff;">Rejs</a>
+    </div>
+  </div>
+
+  <div style="max-width:1440px;margin:0 auto;padding:0 32px 48px;display:flex;flex-direction:column;gap:16px;">
+
+    <!-- HUD -->
+    <div style="display:flex;align-items:center;gap:22px;flex-wrap:wrap;padding:16px 22px;border-radius:16px;background:#0b2129;border:1px solid #1c3b46;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="width:42px;height:42px;border-radius:11px;background:#12303b;border:1px solid #2b5866;display:flex;align-items:center;justify-content:center;font:700 18px 'Space Grotesk';color:#3fb6c4;">J</div>
+        <div>
+          <div style="display:flex;align-items:baseline;gap:9px;"><span style="font:700 17px 'Space Grotesk';">jack</span><span style="font:600 10px 'IBM Plex Mono';color:#e8843c;letter-spacing:.18em;">ADMIRAŁ</span></div>
+          <div style="font:500 11px 'IBM Plex Mono';color:#8fa6ab;">3 554 XP · najwyższa ranga</div>
+        </div>
+      </div>
+      <div style="width:1px;height:36px;background:#1c3b46;"></div>
+      <div style="display:flex;gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:#0d2530;border:1px solid #1c3b46;"><span style="width:12px;height:12px;border-radius:3px;background:#8a6a3e;"></span><span style="font:700 15px 'Space Grotesk';">163</span><span style="font:500 10px 'IBM Plex Mono';color:#8fa6ab;">drewno</span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:#0d2530;border:1px solid #1c3b46;"><span style="width:12px;height:12px;border-radius:3px;background:#7d8b93;"></span><span style="font:700 15px 'Space Grotesk';">242</span><span style="font:500 10px 'IBM Plex Mono';color:#8fa6ab;">stal</span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:#0d2530;border:1px solid #1c3b46;"><span style="width:12px;height:12px;border-radius:3px;background:#d8ae4c;"></span><span style="font:700 15px 'Space Grotesk';">380</span><span style="font:500 10px 'IBM Plex Mono';color:#8fa6ab;">złoto</span></div>
+      </div>
+      <div style="flex:1;min-width:200px;">
+        <div style="display:flex;justify-content:space-between;font:500 11px 'IBM Plex Mono';color:#8fa6ab;"><span>ŁADOWNIA FLOTY</span><span><b style="color:#e8f0f0;">785</b> / 1041 · wolne 256</span></div>
+        <div style="display:flex;height:8px;border-radius:5px;background:#0a1a22;border:1px solid #1c3b46;margin-top:7px;overflow:hidden;">
+          <div style="width:15.7%;background:#8a6a3e;"></div><div style="width:23.2%;background:#7d8b93;"></div><div style="width:36.5%;background:#d8ae4c;"></div>
+        </div>
+      </div>
+      <div style="width:1px;height:36px;background:#1c3b46;"></div>
+      <div>
+        <div style="font:600 10px 'IBM Plex Mono';color:#5f8089;letter-spacing:.16em;">TIK</div>
+        <div style="font:700 20px 'Space Grotesk';">835</div>
+      </div>
+    </div>
+
+    <!-- event banner -->
+    <div style="display:flex;align-items:center;gap:12px;padding:11px 18px;border-radius:12px;background:#123039;border:1px solid #2b5866;">
+      <span style="width:8px;height:8px;border-radius:50%;background:#3fb6c4;box-shadow:0 0 8px #3fb6c4;"></span>
+      <span style="font:600 11px 'IBM Plex Mono';color:#3fb6c4;">TIK 833</span>
+      <span style="font:500 14px 'Archivo';color:#e8f0f0;flex:1;">Wyspa obroniona: Archipelag Mgieł — bandera została.</span>
+      <button onClick="{{ openLog }}" style="padding:6px 12px;border-radius:8px;border:1px solid #2b5866;background:transparent;color:#c3d3d6;font:600 11px 'IBM Plex Mono';cursor:pointer;">Dziennik →</button>
+    </div>
+
+    <!-- main: map + context panel -->
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;">
+      <!-- map -->
+      <div style="flex:none;max-width:100%;overflow-x:auto;padding:22px;border-radius:18px;background:linear-gradient(160deg,#0b2129,#081820);border:1px solid #1c3b46;display:flex;flex-direction:column;gap:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:16px;">
+          <div>
+            <div style="font:600 10px 'IBM Plex Mono';color:#5f8089;letter-spacing:.24em;">AKWEN I</div>
+            <div style="font:700 24px 'Space Grotesk';margin-top:2px;">Morze Rozbitków</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 11px;border-radius:8px;background:#2a2418;border:1px solid #5a4a28;font:600 11px 'IBM Plex Mono';color:#d8ae4c;">sztorm w nieznanych: 10%</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:18px auto;grid-template-rows:16px auto;gap:6px;">
+          <div></div>
+          <div style="display:grid;grid-template-columns:repeat(12,42px);gap:4px;">
+            <sc-for list="{{ cols }}" as="c" hint-placeholder-count="12"><div style="text-align:center;font:600 10px 'IBM Plex Mono';color:#5f8089;">{{ c }}</div></sc-for>
+          </div>
+          <div style="display:grid;grid-template-rows:repeat(12,42px);gap:4px;">
+            <sc-for list="{{ rows }}" as="r" hint-placeholder-count="12"><div style="display:flex;align-items:center;justify-content:center;font:600 10px 'IBM Plex Mono';color:#5f8089;">{{ r }}</div></sc-for>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(12,42px);gap:4px;">
+            <sc-for list="{{ cells }}" as="cell" hint-placeholder-count="144">
+              <div title="{{ cell.title }}" style="{{ cell.style }}">
+                <div style="{{ cell.island }}"></div>
+                <div style="{{ cell.flag }}"></div>
+                <div style="{{ cell.ship }}"></div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:16px;flex-wrap:wrap;font:500 11px 'IBM Plex Mono';color:#8fa6ab;padding-top:4px;border-top:1px solid #143743;padding-top:14px;">
+          <span style="display:inline-flex;align-items:center;gap:7px;"><span style="width:14px;height:14px;border-radius:50%;box-shadow:0 0 0 2px #e8843c;"></span>Twoja flota</span>
+          <span style="display:inline-flex;align-items:center;gap:7px;"><span style="width:14px;height:14px;border-radius:4px;border:1.5px dashed #3fb6c4;"></span>zasięg rejsu</span>
+          <span style="display:inline-flex;align-items:center;gap:7px;"><span style="width:12px;height:12px;border-radius:50%;background:#c9a874;"></span>wyspa</span>
+          <span style="display:inline-flex;align-items:center;gap:7px;"><span style="width:8px;height:8px;border-radius:2px;background:#e8843c;"></span>Twoja bandera</span>
+          <span style="display:inline-flex;align-items:center;gap:7px;"><span style="width:14px;height:14px;border-radius:4px;background:#0a1b23;box-shadow:inset 0 0 0 1px #12303a;"></span>niezbadane</span>
+        </div>
+        <div style="font:400 12px 'Archivo';color:#8fa6ab;">Kliknij sektor w zasięgu, aby wypłynąć — <b style="color:#c3d3d6;">1 tik</b> za ruch (żegluga dwusektorowa: do 2 sektorów).</div>
+      </div>
+
+      <!-- context panel -->
+      <div style="flex:1 1 380px;min-width:0;border-radius:18px;background:#0b2129;border:1px solid #1c3b46;overflow:hidden;display:flex;flex-direction:column;">
+        <div style="display:flex;gap:4px;padding:8px;border-bottom:1px solid #143743;background:#081a21;">
+          <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+            <button onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}<span style="{{ t.badgeStyle }}">{{ t.badge }}</span></button>
+          </sc-for>
+        </div>
+
+        <!-- WYSPA -->
+        <sc-if value="{{ isIsland }}" hint-placeholder-val="{{ true }}">
+          <div style="padding:24px;display:flex;flex-direction:column;gap:22px;">
+            <div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <span style="padding:4px 10px;border-radius:999px;background:#3a2516;border:1px solid #7a4a2a;font:600 10px 'IBM Plex Mono';color:#e8b48a;letter-spacing:.1em;">TWOJA OSADA</span>
+                <span style="padding:4px 10px;border-radius:999px;background:#0d2530;border:1px solid #24505e;font:600 10px 'IBM Plex Mono';color:#8fa6ab;letter-spacing:.1em;">SEKTOR E-2 · ZADOKOWANO</span>
+              </div>
+              <div style="font:700 28px 'Space Grotesk';margin-top:10px;">Wyspa Sygnałowa</div>
+            </div>
+
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
+                <div style="font:600 11px 'IBM Plex Mono';color:#5f8089;letter-spacing:.2em;">PRZEŁADUNEK</div>
+                <div style="font:500 11px 'IBM Plex Mono';color:#8fa6ab;">wolne w ładowni: <b style="color:#e8f0f0;">256</b></div>
+              </div>
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:0;border-radius:12px;border:1px solid #1c3b46;overflow:hidden;">
+                <div style="padding:9px 14px;background:#081a21;font:600 10px 'IBM Plex Mono';color:#5f8089;letter-spacing:.12em;">SUROWIEC</div>
+                <div style="padding:9px 6px;background:#081a21;font:600 10px 'IBM Plex Mono';color:#5f8089;letter-spacing:.12em;text-align:right;">WYSPA</div>
+                <div style="padding:9px 6px;background:#081a21;font:600 10px 'IBM Plex Mono';color:#5f8089;letter-spacing:.12em;text-align:center;">← PRZENIEŚ →</div>
+                <div style="padding:9px 14px;background:#081a21;font:600 10px 'IBM Plex Mono';color:#5f8089;letter-spacing:.12em;text-align:right;">STATKI</div>
+                <sc-for list="{{ cargo }}" as="row" hint-placeholder-count="3">
+                  <div style="padding:12px 14px;border-top:1px solid #143743;display:flex;align-items:center;gap:9px;font:600 14px 'Space Grotesk';"><span style="{{ row.swatch }}"></span>{{ row.name }}</div>
+                  <div style="padding:12px 6px;border-top:1px solid #143743;text-align:right;font:600 14px 'IBM Plex Mono';color:#8fa6ab;">{{ row.island }}</div>
+                  <div style="padding:8px 6px;border-top:1px solid #143743;display:flex;align-items:center;justify-content:center;gap:4px;">
+                    <button title="na wyspę" style="width:30px;height:30px;border-radius:8px;border:1px solid #24505e;background:#0d2530;color:#c3d3d6;cursor:pointer;">‹</button>
+                    <input type="number" placeholder="0" style="width:48px;height:30px;border-radius:8px;border:1px solid #24505e;background:#081a21;color:#e8f0f0;text-align:center;font:600 13px 'IBM Plex Mono';"></input>
+                    <button title="na statki" style="width:30px;height:30px;border-radius:8px;border:1px solid #24505e;background:#0d2530;color:#c3d3d6;cursor:pointer;">›</button>
+                  </div>
+                  <div style="padding:12px 14px;border-top:1px solid #143743;text-align:right;font:600 14px 'IBM Plex Mono';">{{ row.ship }}</div>
+                </sc-for>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+                <button style="padding:10px 16px;border-radius:10px;border:none;background:#e8843c;color:#0a1a24;font:700 13px 'Space Grotesk';cursor:pointer;">Rozładuj wszystko na wyspę</button>
+                <button style="padding:10px 16px;border-radius:10px;border:1px solid #24505e;background:#0d2530;color:#e8f0f0;font:600 13px 'Space Grotesk';cursor:pointer;">Załaduj ile się zmieści</button>
+              </div>
+            </div>
+
+            <div style="padding:14px 16px;border-radius:12px;background:#0d2530;border:1px dashed #24505e;font:400 12px 'Archivo';color:#8fa6ab;line-height:1.5;">Magazyn wyspy jest pusty. Tę wyspę obronisz łatwiej, jeśli zbudujesz na niej fort.</div>
+          </div>
+        </sc-if>
+
+        <!-- FLOTA -->
+        <sc-if value="{{ isFleet }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:24px;display:flex;flex-direction:column;gap:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;">
+              <div style="font:700 22px 'Space Grotesk';">27 jednostek</div>
+              <span style="padding:4px 10px;border-radius:999px;background:#123039;border:1px solid #2b5866;font:600 10px 'IBM Plex Mono';color:#3fb6c4;letter-spacing:.1em;">WSZYSTKIE SPRAWNE</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <sc-for list="{{ fleet }}" as="g" hint-placeholder-count="6">
+                <div style="display:grid;grid-template-columns:48px 1fr auto;align-items:center;gap:14px;padding:12px 14px;border-radius:12px;background:#0d2530;border:1px solid #1c3b46;">
+                  <div style="font:700 20px 'Space Grotesk';color:#e8f0f0;">{{ g.count }}<span style="font:500 12px 'IBM Plex Mono';color:#5f8089;">×</span></div>
+                  <div>
+                    <div style="font:600 15px 'Space Grotesk';">{{ g.name }}</div>
+                    <div style="font:500 11px 'IBM Plex Mono';color:#8fa6ab;margin-top:2px;">{{ g.role }}</div>
+                  </div>
+                  <div style="display:flex;gap:3px;"><sc-for list="{{ g.len }}" as="s" hint-placeholder-count="3"><span style="width:12px;height:8px;border-radius:2px;background:#4b7a89;"></span></sc-for></div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- BADANIA -->
+        <sc-if value="{{ isTech }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:24px;display:flex;flex-direction:column;gap:18px;">
+            <div>
+              <div style="font:700 22px 'Space Grotesk';">Drzewko ukończone</div>
+              <div style="font:400 13px 'Archivo';color:#8fa6ab;margin-top:4px;line-height:1.5;">Naraz trwa jedno badanie. Koszt pobierany z magazynu wyspy z uczelnią, resztę dopłaca ładownia. Czas liczy się w tikach pod banderą wyspy.</div>
+            </div>
+            <sc-for list="{{ tech }}" as="lvl" hint-placeholder-count="2">
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;">
+                  <div style="font:600 14px 'Space Grotesk';">{{ lvl.name }}</div>
+                  <div style="font:500 11px 'IBM Plex Mono';color:#5f8089;">{{ lvl.cost }}</div>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">
+                  <sc-for list="{{ lvl.nodes }}" as="n" hint-placeholder-count="4">
+                    <div style="padding:12px 14px;border-radius:12px;background:#0d2530;border:1px solid #24505e;display:flex;flex-direction:column;gap:5px;">
+                      <div style="display:flex;justify-content:space-between;gap:8px;align-items:start;">
+                        <div style="font:600 14px 'Space Grotesk';">{{ n.name }}</div>
+                        <span style="flex:none;width:18px;height:18px;border-radius:50%;background:#123039;border:1px solid #3fb6c4;color:#3fb6c4;font:700 11px 'Archivo';display:flex;align-items:center;justify-content:center;">✓</span>
+                      </div>
+                      <div style="font:400 12px 'Archivo';color:#a9c0c5;line-height:1.45;">{{ n.desc }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- DZIENNIK -->
+        <sc-if value="{{ isLog }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:24px;display:flex;flex-direction:column;gap:8px;">
+            <sc-for list="{{ log }}" as="e" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:72px 1fr;gap:12px;padding:11px 14px;border-radius:10px;background:#0d2530;border:1px solid #1c3b46;">
+                <div style="font:600 11px 'IBM Plex Mono';color:#5f8089;">TIK {{ e.tick }}</div>
+                <div style="font:400 13px 'Archivo';color:#c3d3d6;">{{ e.text }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;defaultTab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Wyspa&quot;,&quot;Flota&quot;,&quot;Badania&quot;,&quot;Dziennik&quot;],&quot;default&quot;:&quot;Wyspa&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { tab: null };
+  grid() {
+    if (this._cells) return this._cells;
+    const islands = { '4-3': 'Wyspa Kamienna', '4-7': 'Wyspa Palmowa', '2-5': 'Wyspa Sygnałowa', '8-11': 'Archipelag Mgieł', '10-1': 'Zatoka Wraków', '10-9': 'Wyspa Kupców' };
+    const owned = new Set(['4-3', '4-7', '2-5', '8-11', '10-1', '10-9']);
+    const player = '2-5';
+    const cells = [];
+    for (let r = 1; r <= 12; r++) for (let c = 1; c <= 12; c++) {
+      const k = r + '-' + c;
+      const explored = r <= 4 && c >= 3 && c <= 7;
+      const reach = Math.abs(r - 2) + Math.abs(c - 5) <= 2 && k !== player;
+      const base = { position: 'relative', width: '42px', height: '42px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+      let style = explored || islands[k]
+        ? { ...base, background: '#0f2a34', boxShadow: 'inset 0 0 0 1px #1c3b46' }
+        : { ...base, background: '#0a1b23', boxShadow: 'inset 0 0 0 1px #12303a' };
+      if (reach) style = { ...style, background: '#0f2f38', boxShadow: 'none', border: '1.5px dashed #3fb6c4', cursor: 'pointer' };
+      const none = { display: 'none' };
+      const island = islands[k] ? { width: '24px', height: '20px', borderRadius: '50% 45% 50% 40%', background: '#c9a874', boxShadow: 'inset -3px -3px 0 #a68756' } : none;
+      const flag = owned.has(k) ? { position: 'absolute', top: '4px', left: '4px', width: '8px', height: '8px', borderRadius: '2px', background: '#e8843c' } : none;
+      const ship = k === player ? { position: 'absolute', inset: '-3px', borderRadius: '10px', boxShadow: '0 0 0 2px #e8843c, 0 0 16px #e8843c88' } : none;
+      const title = islands[k] ? islands[k] + (k === player ? ' · tu jesteś' : '') : (reach ? 'Wypłyń · 1 tik' : '');
+      cells.push({ key: k, style, island, flag, ship, title });
+    }
+    return (this._cells = cells);
+  }
+  renderVals() {
+    const tab = this.state.tab ?? this.props.defaultTab ?? 'Wyspa';
+    const defs = [['Wyspa', 'Wyspa Sygnałowa', ''], ['Flota', 'Flota', '27'], ['Badania', 'Badania', '8/8'], ['Dziennik', 'Dziennik', '']];
+    const tabs = defs.map(([id, label, badge]) => {
+      const on = tab === id;
+      return {
+        key: id, label, badge,
+        onClick: () => this.setState({ tab: id }),
+        style: { flex: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '11px 10px', borderRadius: '10px', border: 'none', cursor: 'pointer', background: on ? '#123039' : 'transparent', boxShadow: on ? 'inset 0 0 0 1px #2b5866' : 'none', color: on ? '#e8f0f0' : '#8fa6ab', font: "600 13px 'Space Grotesk'" },
+        badgeStyle: badge ? { padding: '1px 7px', borderRadius: '999px', background: '#0a1a22', font: "600 10px 'IBM Plex Mono'", color: '#8fa6ab' } : { display: 'none' }
+      };
+    });
+    const sw = c => ({ width: '12px', height: '12px', borderRadius: '3px', background: c });
+    return {
+      tabs,
+      isIsland: tab === 'Wyspa', isFleet: tab === 'Flota', isTech: tab === 'Badania', isLog: tab === 'Dziennik',
+      openLog: () => this.setState({ tab: 'Dziennik' }),
+      cols: ['A','B','C','D','E','F','G','H','I','J','K','L'],
+      rows: ['1','2','3','4','5','6','7','8','9','10','11','12'],
+      cells: this.grid(),
+      cargo: [
+        { key: 'w', name: 'Drewno', swatch: sw('#8a6a3e'), island: 0, ship: 163 },
+        { key: 's', name: 'Stal', swatch: sw('#7d8b93'), island: 0, ship: 242 },
+        { key: 'g', name: 'Złoto', swatch: sw('#d8ae4c'), island: 0, ship: 380 }
+      ],
+      fleet: [
+        { key: 'tr', count: 10, name: 'Tratwa', role: 'darmowa · bez uzbrojenia', len: [1] },
+        { key: 'tp', count: 9, name: 'Transportowiec', role: 'duża ładownia · wymaga eskorty', len: [1, 2, 3] },
+        { key: 'nt', count: 3, name: 'Niszczyciel torpedowy', role: 'nośnik · torpeda', len: [1, 2, 3, 4] },
+        { key: 'ku', count: 3, name: 'Kuter', role: 'nośnik · sonar', len: [1, 2] },
+        { key: 'nz', count: 1, name: 'Niszczyciel zwiadowczy', role: 'nośnik · 2× sonar', len: [1, 2, 3, 4] },
+        { key: 'lo', count: 1, name: 'Lotniskowiec', role: 'nośnik · nalot', len: [1, 2, 3, 4, 5] }
+      ],
+      tech: [
+        { key: 'l1', name: 'Poziom 1', cost: '20 drewna · 20 stali · 5 złota · 6 tików', nodes: [
+          { key: 'a', name: 'Większa ładownia', desc: 'Ładownia każdego statku +50%.' },
+          { key: 'b', name: 'Sonar dalekiego zasięgu', desc: 'Sonar w bitwach: krzyż o promieniu 4 zamiast 3.' },
+          { key: 'c', name: 'Locja', desc: 'Sztorm przy pierwszym wpłynięciu: 10% zamiast 20%.' },
+          { key: 'd', name: 'Pojemne magazyny', desc: 'Magazyn złoża mieści 20 tików produkcji zamiast 10.' }
+        ] },
+        { key: 'l2', name: 'Poziom 2', cost: '40 drewna · 30 stali · 15 złota · 10 tików · od rangi Sternik', nodes: [
+          { key: 'e', name: 'Dok remontowy', desc: 'Remont za połowę ceny.' },
+          { key: 'f', name: 'Niszczyciel zwiadowczy', desc: 'Stocznia buduje wariant z 2 sonarami zamiast torpedy.' },
+          { key: 'g', name: 'Żegluga dwusektorowa', desc: 'Rejs o 2 sektory za 1 tik.' },
+          { key: 'h', name: 'Lepsze narzędzia', desc: 'Złoże +1 na tik; tartak i kopalnia podwajają urobek.' }
+        ] }
+      ],
+      log: [
+        { key: 1, tick: 835, text: 'Zadokowano przy Wyspie Sygnałowej.' },
+        { key: 2, tick: 833, text: 'Wyspa obroniona: Archipelag Mgieł — bandera została.' },
+        { key: 3, tick: 830, text: 'Konwój dotarł bez strat: +60 złota.' },
+        { key: 4, tick: 826, text: 'Badanie ukończone: Lepsze narzędzia.' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

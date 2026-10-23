@@ -17,6 +17,15 @@ final class WorldMap
     public const HEIGHT = 12;
 
     /**
+     * Mapy pozostałych akwenów świata (#109): kontratak celuje w wyspę
+     * dowolnego akwenu, więc profil musi znać jej przystanie, złoża i motyw.
+     * Pusta lista = świat z jednym akwenem (testy, profile sprzed akwenów).
+     *
+     * @var list<WorldMap>
+     */
+    private array $otherSeas = [];
+
+    /**
      * @param array<string, array{x:int,y:int}> $islands
      * @param array<string, Island>             $deposits    wyspy ze złożem (klucz: id)
      * @param array<string, bool>               $safeHarbors bezpieczne przystanie (klucz: id) — kontrataki ich nie dotyczą
@@ -107,6 +116,45 @@ final class WorldMap
         }
 
         throw new \DomainException('No free sector for sea gate');
+    }
+
+    /**
+     * Ta sama mapa ze znajomością pozostałych akwenów świata (#109). Mapa
+     * własnego akwenu na liście jest pomijana, a dołączone mapy nie niosą
+     * dalej swoich sąsiadów.
+     */
+    public function withOtherSeas(WorldMap ...$maps): self
+    {
+        $copy = clone $this;
+        $copy->otherSeas = [];
+        foreach ($maps as $map) {
+            if ($map->seaId === $this->seaId) {
+                continue;
+            }
+            $other = clone $map;
+            $other->otherSeas = [];
+            $copy->otherSeas[] = $other;
+        }
+
+        return $copy;
+    }
+
+    /** @return list<WorldMap> mapy pozostałych akwenów świata */
+    public function otherSeas(): array
+    {
+        return $this->otherSeas;
+    }
+
+    /** Mapa akwenu, na którym leży wyspa: ta albo jedna z pozostałych; null = wyspa spoza znanego świata. */
+    public function seaOf(string $islandId): ?self
+    {
+        foreach ([$this, ...$this->otherSeas] as $map) {
+            if (null !== $map->islandPosition($islandId)) {
+                return $map;
+            }
+        }
+
+        return null;
     }
 
     /** Id akwenu, którego to mapa. */

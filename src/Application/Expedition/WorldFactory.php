@@ -26,8 +26,22 @@ final class WorldFactory
         return $this->mapOf($this->seaFor($profile), $profile);
     }
 
-    /** Mapa dowolnego akwenu dla kapitana (np. akwenu docelowego bramy). */
+    /**
+     * Mapa dowolnego akwenu dla kapitana (np. akwenu docelowego bramy), ze
+     * znajomością pozostałych akwenów: kontrataki i ich rozstrzygnięcia
+     * obejmują cały świat (#109).
+     */
     public function mapOf(Sea $sea, CaptainProfile $profile): WorldMap
+    {
+        $others = array_map(
+            fn (Sea $other) => $this->bareMapOf($other, $profile),
+            array_values(array_filter($this->seas->seas(), static fn (Sea $other) => $other->id !== $sea->id)),
+        );
+
+        return $this->bareMapOf($sea, $profile)->withOtherSeas(...$others);
+    }
+
+    private function bareMapOf(Sea $sea, CaptainProfile $profile): WorldMap
     {
         return $sea->map($profile->worldSeed(), $this->seas->passagesFrom($sea->id));
     }

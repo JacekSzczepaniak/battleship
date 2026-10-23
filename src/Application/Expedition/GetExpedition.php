@@ -24,6 +24,7 @@ final class GetExpedition
         private IslandCatalog $islands,
         private WorldFactory $worldFactory,
         private SeaGraph $seas,
+        private SeaRoute $route,
     ) {
     }
 
@@ -33,7 +34,8 @@ final class GetExpedition
      * z kłódkami, banderami, stoczniami, złożami i budynkami, kontratak
      * w toku i ostatnie rozstrzygnięcie (#78), drzewko badań (Epic G) oraz bramy
      * bieżącego akwenu z powodem blokady i strażnikiem (#107) oraz dziennik
-     * kapitana (#111).
+     * kapitana (#111). Kontratak może celować w wyspę innego akwenu (#109):
+     * zapowiedź podaje akwen celu i drogę floty, a świat — bandery per akwen.
      *
      * @return array{profile: array<string,mixed>, fleet: list<array<string,mixed>>, shipTypes: list<array<string,mixed>>, buildingTypes: list<array<string,mixed>>, islands: list<array<string,mixed>>, world: array<string,mixed>, counterattack: array<string,mixed>, research: array<string,mixed>, log: list<array<string,mixed>>}
      */
@@ -178,6 +180,8 @@ final class GetExpedition
                 'sailRange' => $profile->sailRange(),
                 // zegar świata: rejs i bitwa kosztują tik
                 'tick' => $profile->tick(),
+                // bandery per akwen (#109): pełna bandera działa tylko przy obronie wyspy swojego akwenu
+                'flags' => $this->flagsView($profile, $world),
             ],
             'counterattack' => $this->counterattackView($profile, $world),
             'research' => $this->researchView($profile, $world),
@@ -317,9 +321,10 @@ final class GetExpedition
     }
 
     /**
-     * Zapowiedź kontrataku (wyspa, za ile tików uderzenie, bonus pełnej
-     * bandery, fort) oraz ostatnie rozstrzygnięcie — także utrata wyspy albo
-     * grabież pod fortem pod nieobecność kapitana.
+     * Zapowiedź kontrataku (wyspa i jej akwen, za ile tików uderzenie, droga
+     * floty, bonus pełnej bandery akwenu celu, fort) oraz ostatnie
+     * rozstrzygnięcie — także utrata wyspy albo grabież pod fortem pod
+     * nieobecność kapitana.
      *
      * @return array{pending: array<string,mixed>|null, last: array<string,mixed>|null}
      */
@@ -327,6 +332,10 @@ final class GetExpedition
     {
         $pending = $profile->counterattack();
         $last = $profile->lastCounterattack();
+        $targetMap = null !== $pending ? $world->seaOf($pending['island']) : null;
+        $targetSea = null !== $targetMap ? $this->seas->sea($targetMap->seaId()) : null;
+        $route = null !== $pending ? $this->route->toIsland($profile, $pending['island']) : null;
+        $ticksLeft = null !== $pending ? max(0, $pending['strikeAt'] - $profile->tick()) : 0;
 
         return [
             'pending' => null !== $pending ? [
@@ -334,11 +343,17 @@ final class GetExpedition
                 'islandName' => $this->islandName($pending['island']),
                 'announcedAt' => $pending['announcedAt'],
                 'strikeAt' => $pending['strikeAt'],
-                'ticksLeft' => max(0, $pending['strikeAt'] - $profile->tick()),
+                'ticksLeft' => $ticksLeft,
+                // akwen celu (#109): kontratak może uderzyć na innym akwenie niż flota
+                'sea' => null !== $targetSea ? ['id' => $targetSea->id, 'name' => $targetSea->name] : null,
+                'fleetAway' => null !== $targetSea && $targetSea->id !== $profile->currentSea(),
+                // droga floty na wyspę w tikach (rejsy + 1 tik za bramę); obronę trzeba
+                // przyjąć przed uderzeniem, więc zdąży droga krótsza niż ticksLeft
+                'route' => null !== $route ? $route + ['inTime' => $route['ticks'] < $ticksLeft] : null,
                 // rozpoczęta obrona wstrzymuje termin do rozliczenia bitwy
                 'defenseStarted' => null !== $pending['defense'],
-                // pełna bandera (#79): obrońca strzela pierwszy, napastnik bez największego statku
-                'fullFlag' => $profile->hasFullFlag($world),
+                // pełna bandera akwenu celu (#79, #109): obrońca strzela pierwszy, napastnik bez największego statku
+                'fullFlag' => null !== $targetMap && $profile->hasFullFlag($targetMap),
                 // czynny fort (#81): bez obrony wyspa zostaje pod banderą, magazyn traci połowę
                 'fort' => $profile->hasActiveBuilding($pending['island'], BuildingType::Fort),
             ] : null,
@@ -353,6 +368,37 @@ final class GetExpedition
                 'stockpileLost' => $last['stockpileLost'],
             ] : null,
         ];
+    }
+
+    /**
+     * Bandery na akwenach, które kapitan zna (stoi tam albo już był): ile wysp
+     * pod banderą i czy to pełna bandera akwenu.
+     *
+     * @return list<array{sea: string, name: string, owned: int, total: int, fullFlag: bool}>
+     */
+    private function flagsView(CaptainProfile $profile, WorldMap $world): array
+    {
+        $flags = [];
+        foreach ([$world, ...$world->otherSeas()] as $map) {
+            $sea = $this->seas->sea($map->seaId());
+            if (null === $sea || ($map !== $world && !isset($profile->seaStates()[$sea->id]))) {
+                continue;
+            }
+            $islands = array_keys($map->islands());
+            $flags[$sea->id] = [
+                'sea' => $sea->id,
+                'name' => $sea->name,
+                'owned' => count(array_filter($islands, static fn ($id) => $profile->ownsIsland((string) $id))),
+                'total' => count($islands),
+                'fullFlag' => $profile->hasFullFlag($map),
+            ];
+        }
+
+        // kolejność progresji akwenów, nie kolejność map
+        return array_values(array_filter(array_map(
+            static fn (Sea $sea) => $flags[$sea->id] ?? null,
+            $this->seas->seas(),
+        )));
     }
 
     private function islandName(string $islandId): string

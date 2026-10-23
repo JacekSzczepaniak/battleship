@@ -246,6 +246,16 @@ export interface WorldDTO {
     sailRange: number;
     // zegar świata: liczba akcji morskich (rejs, bitwa)
     tick: number;
+    // bandery na akwenach, które kapitan zna (#109): pełna bandera działa przy obronie wyspy swojego akwenu
+    flags: SeaFlagDTO[];
+}
+
+export interface SeaFlagDTO {
+    sea: string;
+    name: string;
+    owned: number;
+    total: number;
+    fullFlag: boolean;
 }
 
 export interface SailResultDTO {
@@ -275,9 +285,14 @@ export interface PendingCounterattackDTO {
     announcedAt: number;
     strikeAt: number;
     ticksLeft: number;
+    // akwen celu (#109); fleetAway = flota stoi na innym akwenie
+    sea: { id: string; name: string } | null;
+    fleetAway: boolean;
+    // droga floty na wyspę: rejsy + 1 tik za bramę; inTime = dopłynie przed uderzeniem; null = brak przejścia
+    route: { ticks: number; gates: number; inTime: boolean } | null;
     // rozpoczęta obrona wstrzymuje termin do rozliczenia bitwy
     defenseStarted: boolean;
-    // pełna bandera (#79): obrońca strzela pierwszy, napastnik bez największego statku
+    // pełna bandera akwenu celu (#79, #109): obrońca strzela pierwszy, napastnik bez największego statku
     fullFlag: boolean;
     // czynny fort na wyspie celu (#81): bez obrony wyspa zostaje, magazyn traci połowę
     fort: boolean;

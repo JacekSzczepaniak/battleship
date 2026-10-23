@@ -4,13 +4,16 @@
     ryzyka), osiami A–… / 1–…, stanami sektorów i legendą. Zasięg rejsu jak
     w CaptainProfile::sail(): większa z różnic x i y ≤ sailRange (#98).
     Przy wąskim oknie przewija się sama mapa, nie strona.
+    Znaczniki wysp (#131): twierdza, stocznia z poziomem, złoże w kolorze
+    surowca i budynki osady pod banderą — widoczne bez najeżdżania.
 -->
 <script setup lang="ts">
-import { computed } from 'vue';
-import type { ExpeditionDTO, GateDTO } from '../api/expeditionApi';
+import { computed, type Component } from 'vue';
+import { Anchor, Axe, Castle, Coins, GraduationCap, Mountain, Pickaxe, Shield, Trees, Wrench } from 'lucide-vue-next';
+import { BUILDING_LABELS, type BuildingTypeName, type ExpeditionDTO, type GateDTO, type IslandDTO } from '../api/expeditionApi';
 import { columnLabel } from '../lib/ships';
-import { depositLabel } from '../lib/economy';
-import { formatResources, isEmpty } from '../lib/resources';
+import { depositLabel, depositState } from '../lib/economy';
+import { RESOURCES, formatResources, isEmpty, type ResourceKey } from '../lib/resources';
 import { pendingLabel } from '../lib/counterattack';
 import { seaKicker } from '../lib/seas';
 
@@ -34,6 +37,44 @@ const themeText = computed(() => {
     return `widoczność: ${visibility} · złoża ×${t.depositMultiplier}`;
 });
 
+// ikony lucide zamiast emoji z BUILDING_ICONS — w komórce 42 px muszą mieć kolor i grubość kreski
+const BUILDING_MARKS: Record<BuildingTypeName, Component> = {
+    tartak: Axe,
+    kopalnia: Pickaxe,
+    'rozbudowa-stoczni': Wrench,
+    fort: Shield,
+    uczelnia: GraduationCap,
+};
+const DEPOSIT_MARKS: Record<ResourceKey, Component> = { wood: Trees, steel: Mountain, gold: Coins };
+// więcej znaczników budynków nie mieści się w dolnym pasku komórki; reszta jako „+N”
+const MAX_BUILDING_MARKS = 3;
+
+interface Marks {
+    stronghold: boolean;
+    besieged: boolean;
+    shipyard: number;
+    // złoże stoi (bez bandery albo pełny magazyn) — znaczek przygaszony
+    deposit: { key: ResourceKey; color: string; icon: Component }[];
+    depositIdle: boolean;
+    buildings: { type: BuildingTypeName; icon: Component }[];
+    moreBuildings: number;
+}
+
+function islandMarks(island: IslandDTO): Marks {
+    const d = island.deposit;
+    // budynki bez bandery są nieczynne i nie należą do kapitana — na mapie tylko własne osady
+    const buildings = island.owned ? island.buildings : [];
+    return {
+        stronghold: island.stronghold,
+        besieged: island.besieged,
+        shipyard: island.shipyardLevel,
+        deposit: d ? RESOURCES.filter(r => d.yield[r.key] > 0).map(r => ({ key: r.key, color: r.color, icon: DEPOSIT_MARKS[r.key] })) : [],
+        depositIdle: !!d && depositState(island) !== 'working',
+        buildings: buildings.slice(0, MAX_BUILDING_MARKS).map(type => ({ type, icon: BUILDING_MARKS[type] })),
+        moreBuildings: Math.max(0, buildings.length - MAX_BUILDING_MARKS),
+    };
+}
+
 interface Cell {
     key: string; x: number; y: number;
     cls: Record<string, boolean>;
@@ -41,6 +82,7 @@ interface Cell {
     // nazwa wyspy albo bramy — etykieta po najechaniu
     name: string;
     title: string;
+    marks: Marks | null;
 }
 
 const cells = computed<Cell[]>(() => {
@@ -67,6 +109,7 @@ const cells = computed<Cell[]>(() => {
             // sztorm grozi przy pierwszym wpłynięciu na sektor docelowy (#68)
             const risk = sailable && !visited.has(key);
             const attacked = !!island && pending?.island === island.id;
+            const marks = island ? islandMarks(island) : null;
 
             out.push({
                 key, x, y, sailable,
@@ -74,16 +117,20 @@ const cells = computed<Cell[]>(() => {
                     explored: discovered || !!island, fog: !discovered && !island, reach: sailable, risk,
                     island: !!island, locked: !!island && !island.unlocked, owned: !!island?.owned,
                     gate: !!gate, 'gate-open': !!gate?.open, here, attacked,
+                    marked: !!marks && (marks.shipyard > 0 || marks.deposit.length > 0 || marks.buildings.length > 0),
                 },
+                marks,
                 name: island?.name ?? (gate ? `${gate.name} → ${gate.to.name}` : ''),
                 title: [
                     island ? island.name : gate ? `${gate.name} → ${gate.to.name} (${props.gateStatus(gate)})` : `${columnLabel(x)}${y + 1}${discovered ? '' : ' · niezbadane wody'}`,
                     here ? 'tu jesteś' : '',
                     island?.owned ? 'pod Twoją banderą' : '',
+                    island?.stronghold ? (island.besieged && !island.owned ? 'twierdza oblężona' : 'twierdza z fortem') : '',
                     island && !island.unlocked ? 'zamknięta rangą' : '',
                     attacked ? pendingLabel(pending!) : '',
                     island && island.shipyardLevel > 0 ? `stocznia poz. ${island.shipyardLevel}` : '',
                     island?.deposit ? `złoże: ${depositLabel(island)}` : '',
+                    island?.owned && island.buildings.length ? `budynki: ${island.buildings.map(b => BUILDING_LABELS[b]).join(', ')}` : '',
                     island && !isEmpty(island.stockpile) ? `magazyn: ${formatResources(island.stockpile)}` : '',
                     sailable ? `wypłyń · 1 tik${distance > 1 ? ' (2 sektory)' : ''}` : '',
                     risk ? `pierwsze wpłynięcie — ryzyko sztormu ${w.stormChance}%` : '',
@@ -126,9 +173,21 @@ const rows = computed(() => Array.from({ length: world.value.height }, (_, y) =>
                     :aria-label="cell.title"
                     @click="emit('sail', cell.x, cell.y)"
                 >
-                    <span v-if="cell.cls.island" class="isle"></span>
+                    <span v-if="cell.cls.island" class="isle" :class="{ besieged: cell.marks?.besieged && !cell.cls.owned }">
+                        <Castle v-if="cell.marks?.stronghold" class="castle" :size="13" :stroke-width="2.25" />
+                    </span>
                     <span v-else-if="cell.cls.gate" class="portal"></span>
                     <span v-if="cell.cls.owned" class="flag"></span>
+                    <span v-if="cell.marks?.buildings.length" class="blds">
+                        <component :is="b.icon" v-for="b in cell.marks.buildings" :key="b.type" :size="10" :stroke-width="2.5" />
+                        <em v-if="cell.marks.moreBuildings">+{{ cell.marks.moreBuildings }}</em>
+                    </span>
+                    <span v-if="cell.marks && (cell.marks.shipyard || cell.marks.deposit.length)" class="badges">
+                        <span v-if="cell.marks.shipyard" class="yard"><Anchor :size="9" :stroke-width="2.5" />{{ cell.marks.shipyard }}</span>
+                        <span v-if="cell.marks.deposit.length" class="dep" :class="{ idle: cell.marks.depositIdle }">
+                            <i v-for="r in cell.marks.deposit" :key="r.key" :style="{ '--res': r.color }"><component :is="r.icon" :size="9" :stroke-width="2.5" /></i>
+                        </span>
+                    </span>
                     <span v-if="cell.cls.attacked" class="alarm">⚔</span>
                     <span v-if="cell.cls.here" class="fleet"></span>
                     <span v-if="cell.name" class="name">{{ cell.name }}</span>
@@ -141,6 +200,11 @@ const rows = computed(() => Array.from({ length: world.value.height }, (_, y) =>
             <span><i class="lg-reach"></i>zasięg rejsu</span>
             <span><i class="lg-risk"></i>w zasięgu, nieodwiedzony — ryzyko sztormu</span>
             <span><i class="lg-isle"></i>wyspa</span>
+            <span><Castle :size="12" :stroke-width="2.25" class="lg-icon" />twierdza<i class="lg-siege"></i>oblężona</span>
+            <span><Anchor :size="11" :stroke-width="2.5" class="lg-icon" />stocznia i poziom</span>
+            <span v-for="r in RESOURCES" :key="r.key" class="dep"><i :style="{ '--res': r.color }"><component :is="DEPOSIT_MARKS[r.key]" :size="9" :stroke-width="2.5" /></i>złoże: {{ r.label.toLowerCase() }}</span>
+            <span class="dep idle"><i :style="{ '--res': 'var(--text-muted)' }"></i>złoże stoi (bez bandery albo pełny magazyn)</span>
+            <span v-for="(icon, type) in BUILDING_MARKS" :key="type" class="lg-bld"><component :is="icon" :size="11" :stroke-width="2.5" />{{ BUILDING_LABELS[type].toLowerCase() }}</span>
             <span><i class="lg-gate"></i>brama akwenu</span>
             <span><i class="lg-flag"></i>Twoja bandera</span>
             <span><i class="lg-fog"></i>niezbadane</span>
@@ -197,8 +261,25 @@ h2 { margin: 2px 0 0; font: 700 24px var(--font-head); }
 .cell.reach:not(:disabled) { background: #0f2f38; box-shadow: none; border: 1.5px dashed var(--info); cursor: pointer; }
 .cell.reach.risk:not(:disabled) { border-color: var(--warn); }
 .cell.reach:not(:disabled):hover { filter: brightness(1.35); }
-.isle { width: 24px; height: 20px; border-radius: 50% 45% 50% 40%; background: #c9a874; box-shadow: inset -3px -3px 0 #a68756; }
+.isle { position: relative; width: 24px; height: 20px; border-radius: 50% 45% 50% 40%; background: #c9a874; box-shadow: inset -3px -3px 0 #a68756; display: flex; align-items: center; justify-content: center; }
 .cell.locked .isle { opacity: .45; }
+.castle { color: #3a2c18; }
+.isle.besieged { box-shadow: inset -3px -3px 0 #a68756, 0 0 0 1.5px var(--danger); }
+.isle.besieged .castle { color: var(--danger); }
+/* znaczniki pod wyspą (#131): rogi zostają dla bandery i alarmu kontrataku;
+   wyspa bez znaczników zostaje na środku */
+.cell.marked { flex-direction: column; justify-content: flex-start; padding-top: 4px; }
+.cell.marked .isle { width: 22px; height: 15px; }
+/* stocznia i złoże: rząd pod plamą wyspy */
+.badges { position: absolute; left: 2px; right: 2px; bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 4px; line-height: 1; pointer-events: none; }
+.yard { display: inline-flex; align-items: center; gap: 1px; color: var(--info-light); font: 700 9px var(--font-mono); }
+.dep { display: inline-flex; gap: 1px; }
+/* złoże: krążek w kolorze surowca — ciemne tokeny drewna i stali giną na morzu jako sama kreska */
+.dep i { display: inline-flex; align-items: center; justify-content: center; width: 11px; height: 11px; border-radius: 50%; background: var(--res); color: #10202a; }
+.dep.idle i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--res); color: var(--res); opacity: .7; }
+/* budynki osady: dolny pasek komórki */
+.blds { position: absolute; left: 0; right: 0; bottom: 2px; display: flex; align-items: center; justify-content: center; gap: 1px; color: var(--accent-light); line-height: 1; pointer-events: none; }
+.blds em { font: 700 8px var(--font-mono); font-style: normal; }
 .portal { width: 22px; height: 22px; border-radius: 50%; border: 2px dashed #6f86d6; box-shadow: inset 0 0 6px #4a5ea8; }
 .cell.gate-open .portal { border-style: solid; border-color: var(--info); }
 .flag { position: absolute; top: 4px; left: 4px; width: 8px; height: 8px; border-radius: 2px; background: var(--accent); }
@@ -236,6 +317,12 @@ h2 { margin: 2px 0 0; font: 700 24px var(--font-head); }
 .lg-isle { width: 12px; height: 12px; border-radius: 50%; background: #c9a874; }
 .lg-gate { width: 12px; height: 12px; border-radius: 50%; border: 2px dashed #6f86d6; }
 .lg-flag { width: 8px; height: 8px; border-radius: 2px; background: var(--accent); }
+.lg-icon { color: var(--text-2); flex: none; }
+.legend .dep { gap: 7px; }
+.legend .dep > i { display: inline-flex; width: 13px; height: 13px; }
+.lg-bld { color: var(--text-muted); }
+.lg-bld svg { color: var(--accent-light); flex: none; }
+.lg-siege { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--danger); margin-left: 4px; }
 .lg-fog { width: 14px; height: 14px; border-radius: 4px; background: #0a1b23; box-shadow: inset 0 0 0 1px #12303a; }
 .hint { margin: 0; font: 400 12px var(--font-body); color: var(--text-muted); max-width: 560px; }
 .hint b { color: var(--text-2); }

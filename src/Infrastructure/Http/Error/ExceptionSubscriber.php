@@ -106,6 +106,9 @@ final class ExceptionSubscriber implements EventSubscriberInterface
         if (str_starts_with($message, 'Technology locked')) {
             return ['TECHNOLOGY_LOCKED', 403];
         }
+        if (str_starts_with($message, 'Gate locked')) {
+            return ['GATE_LOCKED', 403];
+        }
 
         return match ($message) {
             'Fleet not placed' => ['FLEET_NOT_PLACED', 422],
@@ -141,6 +144,12 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             'Research already in progress' => ['RESEARCH_IN_PROGRESS', 409],
             'Technology requires previous level in branch' => ['TECHNOLOGY_PREREQUISITE', 409],
             'No active academy on this island' => ['NO_ACADEMY', 409],
+            // bramy akwenów (#107)
+            'Gate not found' => ['GATE_NOT_FOUND', 404],
+            'Gate has no guardian' => ['GATE_HAS_NO_GUARDIAN', 409],
+            'Gate already open' => ['GATE_ALREADY_OPEN', 409],
+            'Gate guarded: defeat the guardian first' => ['GATE_GUARDED', 409],
+            'Not at gate' => ['NOT_AT_GATE', 409],
             default => ['VALIDATION_ERROR', 400],
         };
     }

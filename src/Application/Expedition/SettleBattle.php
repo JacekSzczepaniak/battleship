@@ -2,8 +2,10 @@
 
 namespace App\Application\Expedition;
 
+use App\Domain\Expedition\BattleKind;
 use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\ProfileRepository;
+use App\Domain\Expedition\SeaGraph;
 use App\Domain\Expedition\ShipVariant;
 use App\Domain\Game\Game;
 use App\Domain\Game\GameRepository;
@@ -19,6 +21,7 @@ final class SettleBattle
         private GameRepository $games,
         private IslandCatalog $islands,
         private WorldFactory $worldFactory,
+        private SeaGraph $seas,
     ) {
     }
 
@@ -27,14 +30,17 @@ final class SettleBattle
      * klienta), XP i surowce wg definicji wyspy, idempotentnie (ponowne
      * wywołanie → zera). Pierwsza wygrana o wyspę stawia banderę; obrona
      * rozstrzyga kontratak (przegrana odbiera wyspę i połowę magazynu, #78).
-     * Zatopione statki: wygrana → do remontu, przegrana → stracone.
+     * Bitwa ze strażnikiem płaci wg strażnika bramy, a wygrana otwiera bramę;
+     * łup ląduje w ładowni (#107). Zatopione statki: wygrana → do remontu,
+     * przegrana → stracone.
      *
      * @return array{result:string, awarded:int, xp:int, rank:string, rankUp:bool,
-     *     loot:array{wood:int, steel:int, gold:int}, stockpile:array{wood:int, steel:int, gold:int},
+     *     loot:array{wood:int, steel:int, gold:int},
+     *     stockpile:array{wood:int, steel:int, gold:int}|null,
      *     cargo:array{wood:int, steel:int, gold:int}, cargoLost:array{wood:int, steel:int, gold:int},
      *     lostShips:list<string>, damagedShips:list<string>, captured:bool,
      *     depositStarted:array{wood:int, steel:int, gold:int}|null,
-     *     defense:array{held:bool, stockpileLost:array{wood:int, steel:int, gold:int}}|null}
+     *     defense:array{held:bool, stockpileLost:array{wood:int, steel:int, gold:int}}|null, gateOpened:bool}
      */
     public function handle(string $profileId, string $gameId): array
     {
@@ -53,10 +59,15 @@ final class SettleBattle
             throw new \DomainException('Battle not registered for this profile');
         }
 
-        $island = $this->islands->byId($islandId);
-        if (null === $island) {
-            throw new \DomainException('Island not found');
+        // bitwa ze strażnikiem: w rejestrze zamiast wyspy stoi brama
+        $guardian = null;
+        $island = null;
+        if (BattleKind::Guardian === $profile->battleKindFor($game->id())) {
+            $guardian = $this->seas->gate($islandId)?->guardian() ?? throw new \DomainException('Gate not found');
+        } else {
+            $island = $this->islands->byId($islandId) ?? throw new \DomainException('Island not found');
         }
+        $rewards = $guardian ?? $island;
 
         if (!$game->isFinished()) {
             throw new \DomainException('Battle not finished yet');
@@ -77,8 +88,8 @@ final class SettleBattle
         $outcome = $profile->settleBattle(
             $game->id(),
             $result,
-            'won' === $result ? $island->xpWin : $island->xpLoss,
-            'won' === $result ? $island->lootWin : $island->lootLoss,
+            'won' === $result ? $rewards->xpWin : $rewards->xpLoss,
+            'won' === $result ? $rewards->lootWin : $rewards->lootLoss,
             array_map(static fn (Ship $ship) => $ship->length, $sunk),
             $this->sunkEnemyShipCount($game),
             $sunkVariants,
@@ -92,8 +103,8 @@ final class SettleBattle
             'rank' => $profile->rank()->value,
             'rankUp' => $outcome['xp'] > 0 && $profile->rank() !== $rankBefore,
             'loot' => $outcome['loot']->toArray(),
-            // łup leży w magazynie wyspy bitwy; ładunek ponad pojemność po stratach przepadł
-            'stockpile' => $profile->stockpile($islandId)->toArray(),
+            // łup leży w magazynie wyspy bitwy (strażnik: w ładowni, null); ładunek ponad pojemność po stratach przepadł
+            'stockpile' => null !== $island ? $profile->stockpile($islandId)->toArray() : null,
             'cargo' => $profile->cargo()->toArray(),
             'cargoLost' => $outcome['cargoLost']->toArray(),
             'lostShips' => $outcome['lost'],
@@ -101,11 +112,13 @@ final class SettleBattle
             // wygrana postawiła banderę na wyspie
             'captured' => $outcome['captured'],
             // zdobycie wyspy ze złożem uruchamia wydobycie: urobek na tik (odbita wyspa z tartakiem — podwojony)
-            'depositStarted' => $outcome['captured'] && $island->hasDeposit() ? $profile->depositYield($island, $world->theme())->toArray() : null,
+            'depositStarted' => $outcome['captured'] && null !== $island && $island->hasDeposit() ? $profile->depositYield($island, $world->theme())->toArray() : null,
             // obrona przed kontratakiem: czy bandera została i co przepadło z magazynu
             'defense' => null !== $outcome['defense']
                 ? ['held' => $outcome['defense']['held'], 'stockpileLost' => $outcome['defense']['stockpileLost']->toArray()]
                 : null,
+            // wygrana ze strażnikiem otworzyła bramę akwenu na stałe
+            'gateOpened' => $outcome['gateOpened'],
         ];
     }
 

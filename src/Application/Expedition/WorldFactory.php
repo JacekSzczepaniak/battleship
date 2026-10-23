@@ -7,7 +7,7 @@ use App\Domain\Expedition\Sea;
 use App\Domain\Expedition\SeaGraph;
 use App\Domain\Expedition\WorldMap;
 
-/** Buduje mapę akwenu, w którym stoi flota kapitana: seed profilu + wyspy, złoża i motyw akwenu z grafu świata. */
+/** Buduje mapę akwenu, w którym stoi flota kapitana: seed profilu + wyspy, złoża, motyw i bramy akwenu z grafu świata. */
 final class WorldFactory
 {
     public function __construct(private SeaGraph $seas)
@@ -23,6 +23,12 @@ final class WorldFactory
 
     public function worldFor(CaptainProfile $profile): WorldMap
     {
-        return $this->seaFor($profile)->map($profile->worldSeed());
+        return $this->mapOf($this->seaFor($profile), $profile);
+    }
+
+    /** Mapa dowolnego akwenu dla kapitana (np. akwenu docelowego bramy). */
+    public function mapOf(Sea $sea, CaptainProfile $profile): WorldMap
+    {
+        return $sea->map($profile->worldSeed(), $this->seas->passagesFrom($sea->id));
     }
 }

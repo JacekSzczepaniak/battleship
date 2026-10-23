@@ -2,7 +2,7 @@
 
 namespace App\Domain\Expedition;
 
-/** Świat wyprawy jako graf akwenów (Epic I): węzły to akweny, krawędzie to przejścia. */
+/** Świat wyprawy jako graf akwenów (Epic I): węzły to akweny, krawędzie to przejścia przez bramy. */
 interface SeaGraph
 {
     /** @return list<Sea> akweny w kolejności progresji; pierwszy to start */
@@ -15,4 +15,10 @@ interface SeaGraph
 
     /** @return list<SeaPassage> przejścia wychodzące z akwenu */
     public function passagesFrom(string $seaId): array;
+
+    /** Przejście z akwenu przez daną bramę; null = brama nie leży na tym akwenie. */
+    public function passage(string $fromSeaId, string $gateId): ?SeaPassage;
+
+    /** Brama o danym id (z dowolnego akwenu); null = nieznana. */
+    public function gate(string $gateId): ?SeaGate;
 }

@@ -3,12 +3,16 @@
 namespace App\Domain\Expedition;
 
 /**
- * Stały graf akwenów. Na razie jeden węzeł: Morze Rozbitków z katalogiem
- * wysp plastra A/B i motywem 20% / 1 / ×1, na którym gra działa jak przed
- * akwenami. Kolejne akweny i bramy dochodzą jako węzły i krawędzie (#107, #108).
+ * Stały graf akwenów: Morze Rozbitków (katalog wysp plastra A/B, motyw
+ * 20% / 1 / ×1, na którym gra działa jak przed akwenami) i za strzeżoną
+ * cieśniną Ocean Sztormów (40% / 1 / ×2, #107). Morze Mgieł za otwartym
+ * oceanem dochodzi w #108.
  */
 final class StaticSeaGraph implements SeaGraph
 {
+    public const STORM_OCEAN = 'ocean-sztormow';
+    public const GUARDED_STRAIT = 'strzezona-ciesnina';
+
     /** @var list<Sea> */
     private array $seas;
 
@@ -16,15 +20,25 @@ final class StaticSeaGraph implements SeaGraph
     private array $passages;
 
     /**
-     * @param list<Sea>|null   $seas     null = akweny gry; inne listy służą testom
-     * @param list<SeaPassage> $passages
+     * @param list<Sea>|null        $seas     null = akweny gry; inne listy służą testom
+     * @param list<SeaPassage>|null $passages null = bramy gry (tylko razem z akwenami gry)
      */
-    public function __construct(StaticIslandCatalog $shipwreckIslands, ?array $seas = null, array $passages = [])
+    public function __construct(StaticIslandCatalog $shipwreckIslands, ?array $seas = null, ?array $passages = null)
     {
-        $this->seas = $seas ?? [
-            new Sea(Sea::START, 'Morze Rozbitków', new SeaTheme(stormChance: 20, visibility: 1, depositMultiplier: 1), $shipwreckIslands),
-        ];
-        $this->passages = $passages;
+        if (null === $seas) {
+            $this->seas = [
+                new Sea(Sea::START, 'Morze Rozbitków', new SeaTheme(stormChance: 20, visibility: 1, depositMultiplier: 1), $shipwreckIslands),
+                new Sea(self::STORM_OCEAN, 'Ocean Sztormów', new SeaTheme(stormChance: 40, visibility: 1, depositMultiplier: 2), new StormOceanIslandCatalog()),
+            ];
+            $strait = self::guardedStrait();
+            $this->passages = $passages ?? [
+                new SeaPassage(Sea::START, self::STORM_OCEAN, $strait, SeaEdge::East),
+                new SeaPassage(self::STORM_OCEAN, Sea::START, $strait, SeaEdge::West),
+            ];
+        } else {
+            $this->seas = $seas;
+            $this->passages = $passages ?? [];
+        }
 
         if ([] === $this->seas) {
             throw new \InvalidArgumentException('Sea graph needs at least one sea');
@@ -38,11 +52,50 @@ final class StaticSeaGraph implements SeaGraph
         if (count($islandIds) !== count(array_unique($islandIds))) {
             throw new \InvalidArgumentException('Island ids must be unique across seas');
         }
+        $gates = [];
         foreach ($this->passages as $passage) {
             if (!in_array($passage->from, $seaIds, true) || !in_array($passage->to, $seaIds, true)) {
                 throw new \InvalidArgumentException('Sea passage connects an unknown sea');
             }
+            $key = "{$passage->from}:{$passage->gate->id}";
+            if (isset($gates[$key])) {
+                throw new \InvalidArgumentException('Sea gate listed twice on one sea');
+            }
+            $gates[$key] = $passage;
         }
+        // brama działa w obie strony: flota ląduje na sektorze bramy w akwenie docelowym
+        foreach ($this->passages as $passage) {
+            $back = $gates["{$passage->to}:{$passage->gate->id}"] ?? null;
+            if (null === $back || $back->to !== $passage->from || $back->gate !== $passage->gate) {
+                throw new \InvalidArgumentException('Sea gate needs a passage back');
+            }
+        }
+    }
+
+    /**
+     * Strzeżona cieśnina: od rangi porucznik, strażnik z flotą silniejszą niż
+     * garnizony Akwenu 1 (17 pól na planszy 12×12). Łup trafia do ładowni.
+     */
+    private static function guardedStrait(): SeaGate
+    {
+        return new SeaGate(self::GUARDED_STRAIT, 'Strzeżona cieśnina', new GuardianCondition(new Guardian(
+            name: 'Strażnik cieśniny',
+            description: 'Eskadra trzyma wschodnie wyjście z Morza Rozbitków. Dopóki pływa, nikt nie wyjdzie na Ocean Sztormów.',
+            requiredRank: Rank::Porucznik,
+            mode: 'fun',
+            fleet: [
+                ShipType::Lotniskowiec,
+                ShipType::Niszczyciel, ShipType::Niszczyciel,
+                ShipType::Kuter, ShipType::Kuter,
+                ShipType::Tratwa, ShipType::Tratwa, ShipType::Tratwa,
+            ],
+            xpWin: 200,
+            xpLoss: 50,
+            lootWin: new Resources(wood: 40, steel: 40, gold: 20),
+            lootLoss: new Resources(wood: 10),
+            boardWidth: 12,
+            boardHeight: 12,
+        )));
     }
 
     public function seas(): array
@@ -69,5 +122,27 @@ final class StaticSeaGraph implements SeaGraph
     public function passagesFrom(string $seaId): array
     {
         return array_values(array_filter($this->passages, static fn (SeaPassage $p) => $p->from === $seaId));
+    }
+
+    public function passage(string $fromSeaId, string $gateId): ?SeaPassage
+    {
+        foreach ($this->passagesFrom($fromSeaId) as $passage) {
+            if ($passage->gate->id === $gateId) {
+                return $passage;
+            }
+        }
+
+        return null;
+    }
+
+    public function gate(string $gateId): ?SeaGate
+    {
+        foreach ($this->passages as $passage) {
+            if ($passage->gate->id === $gateId) {
+                return $passage->gate;
+            }
+        }
+
+        return null;
     }
 }

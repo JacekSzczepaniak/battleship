@@ -6,6 +6,8 @@ use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\ProfileRepository;
+use App\Domain\Expedition\Sea;
+use App\Domain\Expedition\SeaGraph;
 use App\Domain\Expedition\ShipType;
 use App\Domain\Expedition\ShipVariant;
 use App\Domain\Expedition\TechBranch;
@@ -20,6 +22,7 @@ final class GetExpedition
         private ProfileRepository $profiles,
         private IslandCatalog $islands,
         private WorldFactory $worldFactory,
+        private SeaGraph $seas,
     ) {
     }
 
@@ -27,7 +30,8 @@ final class GetExpedition
      * Stan wyprawy: profil (XP, ranga, ładownia, liczba bander), flota, katalogi
      * typów statków (do UI stoczni) i budynków (do panelu osady), wyspy
      * z kłódkami, banderami, stoczniami, złożami i budynkami, kontratak
-     * w toku i ostatnie rozstrzygnięcie (#78) oraz drzewko badań (Epic G).
+     * w toku i ostatnie rozstrzygnięcie (#78), drzewko badań (Epic G) oraz bramy
+     * bieżącego akwenu z powodem blokady i strażnikiem (#107).
      *
      * @return array{profile: array<string,mixed>, fleet: list<array<string,mixed>>, shipTypes: list<array<string,mixed>>, buildingTypes: list<array<string,mixed>>, islands: list<array<string,mixed>>, world: array<string,mixed>, counterattack: array<string,mixed>, research: array<string,mixed>}
      */
@@ -163,6 +167,9 @@ final class GetExpedition
                 // sektory, na których kapitan był — tam sztorm już nie grozi
                 'visited' => $profile->visitedSectors(),
                 'atIsland' => $world->islandAt($position['x'], $position['y']),
+                'atGate' => $world->gateAt($position['x'], $position['y']),
+                // bramy akwenu (#107): sektor po odkryciu, cel, blokada i strażnik
+                'gates' => $this->gatesView($profile, $sea, $world),
                 // szansa z motywu akwenu; Mapy sztormowe (Epic G) ją połowią
                 'stormChance' => $profile->stormChance($theme),
                 // Żegluga dwusektorowa (Epic G) wydłuża rejs za 1 tik z 1 do 2 sektorów
@@ -173,6 +180,59 @@ final class GetExpedition
             'counterattack' => $this->counterattackView($profile, $world),
             'research' => $this->researchView($profile, $world),
         ];
+    }
+
+    /**
+     * Bramy wychodzące z akwenu floty. Sektor bramy widać dopiero po jego
+     * odkryciu, jak wyspy; blokada liczy się bez względu na obecność floty.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function gatesView(CaptainProfile $profile, Sea $sea, WorldMap $world): array
+    {
+        $position = $profile->position();
+        $gates = [];
+        foreach ($this->seas->passagesFrom($sea->id) as $passage) {
+            $gate = $passage->gate;
+            $target = $this->seas->sea($passage->to);
+            $pos = $world->gatePosition($gate->id);
+            $discovered = null !== $pos && $profile->isDiscovered($pos['x'], $pos['y']);
+            $blocker = $profile->gateBlocker($passage);
+            $guardian = $gate->guardian();
+            $stats = $profile->battleStats($gate->id);
+            $gates[] = [
+                'id' => $gate->id,
+                'name' => $gate->name,
+                'edge' => $passage->edge->value,
+                'to' => ['id' => $passage->to, 'name' => $target->name ?? $passage->to, 'theme' => $target?->theme->toArray()],
+                'discovered' => $discovered,
+                'position' => $discovered ? $pos : null,
+                'present' => $discovered && $pos === $position,
+                // null = otwarta; rank | guardian (#108 dołoży technology)
+                'blocker' => $blocker?->value,
+                'open' => null === $blocker,
+                'guardian' => null !== $guardian ? [
+                    'name' => $guardian->name,
+                    'description' => $guardian->description,
+                    'requiredRank' => $guardian->requiredRank->value,
+                    'unlocked' => $profile->rank()->atLeast($guardian->requiredRank),
+                    'defeated' => $profile->isGateOpen($gate->id),
+                    'mode' => $guardian->mode,
+                    'fleet' => array_map(static fn (ShipType $t) => $t->value, $guardian->fleet),
+                    'fleetCells' => $guardian->fleetCells(),
+                    'board' => ['w' => $guardian->boardWidth, 'h' => $guardian->boardHeight],
+                    'squadLimit' => $guardian->squadCellLimit(),
+                    'xpWin' => $guardian->xpWin,
+                    'xpLoss' => $guardian->xpLoss,
+                    'lootWin' => $guardian->lootWin->toArray(),
+                    'lootLoss' => $guardian->lootLoss->toArray(),
+                    'wins' => $stats['wins'],
+                    'losses' => $stats['losses'],
+                ] : null,
+            ];
+        }
+
+        return $gates;
     }
 
     /**

@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Anchor, Wrench } from 'lucide-vue-next';
 import { createGame, getGame } from '../api/gameApi';
-import { RANK_LABELS, SHIP_LABELS, startIslandBattle, type RankName } from '../api/expeditionApi';
+import { RANK_LABELS, SHIP_LABELS, startGuardianBattle, startIslandBattle, type RankName } from '../api/expeditionApi';
 import { setCurrentBattle } from '../lib/expeditionSession';
 import { getBattleReport, type BattleReport } from '../lib/battleSession';
 import { shipName } from '../lib/ships';
@@ -36,6 +36,12 @@ const description = computed(() => {
             : 'Tym razem morze było po stronie wroga. Trening bez stawki — nic nie przepada.';
     }
     const damaged = r.expedition.settle.damagedShips.length;
+    if (r.expedition.kind === 'guardian') {
+        return won.value
+            ? `${r.expedition.islandName} poszedł na dno — cieśnina stoi otworem w obie strony.`
+                + (damaged ? ' Jednostki zatopione w boju trzeba wyremontować w stoczni.' : ' Cała flota przetrwała bitwę.')
+            : `${r.expedition.islandName} utrzymał cieśninę. Jednostki zatopione w tej bitwie przepadły — XP zostaje na zawsze, a próbę możesz powtórzyć.`;
+    }
     if (r.expedition.settle.defense) {
         return won.value
             ? `Kontratak odparty — bandera nad wyspą ${r.expedition.islandName} zostaje.`
@@ -143,9 +149,11 @@ async function repeat() {
     error.value = '';
     try {
         if (r.expedition) {
-            const { profileId, islandId, islandName } = r.expedition;
-            const game = await startIslandBattle(profileId, islandId);
-            setCurrentBattle({ profileId, gameId: game.id, islandId, islandName });
+            const { profileId, islandId, islandName, kind } = r.expedition;
+            const game = kind === 'guardian'
+                ? await startGuardianBattle(profileId, islandId)
+                : await startIslandBattle(profileId, islandId);
+            setCurrentBattle({ profileId, gameId: game.id, islandId, islandName, kind });
             await router.push({ name: 'place-fleet', params: { id: game.id } });
         } else {
             const game = await createGame(r.ruleset, r.board.w);
@@ -169,7 +177,7 @@ onMounted(load);
         <template v-else>
             <div class="left">
                 <div class="kicker outcome-kicker">
-                    {{ exp ? `${exp.settle.defense ? 'OBRONA' : 'BITWA'} · ${exp.islandName.toUpperCase()} · AKWEN I` : `BITWA TRENINGOWA · ${report.board.w}×${report.board.h}` }}
+                    {{ exp ? `${exp.kind === 'guardian' ? 'CIEŚNINA' : exp.settle.defense ? 'OBRONA' : 'BITWA'} · ${exp.islandName.toUpperCase()}${exp.seaName ? ` · ${exp.seaName.toUpperCase()}` : ''}` : `BITWA TRENINGOWA · ${report.board.w}×${report.board.h}` }}
                 </div>
                 <h1>{{ won ? 'ZWYCIĘSTWO' : 'PORAŻKA' }}</h1>
                 <p class="lead">{{ description }}</p>
@@ -214,8 +222,8 @@ onMounted(load);
 
                 <div class="actions">
                     <router-link class="btn btn-primary" :to="{ name: 'home' }"><Anchor :size="17" /> Do portu</router-link>
-                    <!-- wyspa pod banderą nie jest areną (#78): po zdobyciu i po obronie nie ma czego powtarzać -->
-                    <button v-if="!exp || (!exp.settle.captured && !exp.settle.defense)" class="btn btn-secondary" :disabled="busy" @click="repeat">{{ busy ? 'Stawianie żagli…' : 'Powtórz bitwę' }}</button>
+                    <!-- wyspa pod banderą nie jest areną (#78): po zdobyciu i po obronie nie ma czego powtarzać; strażnik walczy do pierwszej przegranej -->
+                    <button v-if="!exp || (!exp.settle.captured && !exp.settle.defense && !exp.settle.gateOpened)" class="btn btn-secondary" :disabled="busy" @click="repeat">{{ busy ? 'Stawianie żagli…' : 'Powtórz bitwę' }}</button>
                 </div>
                 <p v-if="error" class="err">{{ error }}</p>
             </div>
@@ -230,11 +238,14 @@ onMounted(load);
                     <div v-for="r in RESOURCES" :key="r.key" class="loot-tile" :class="{ none: exp.settle.loot[r.key] === 0 }">
                         <span class="loot-label"><span class="res-dot" :style="{ background: r.color }"></span> {{ r.label.toUpperCase() }}</span>
                         <b>+{{ exp.settle.loot[r.key] }}</b>
-                        <small>w magazynie: {{ exp.settle.stockpile[r.key] }}</small>
+                        <small v-if="exp.settle.stockpile">w magazynie: {{ exp.settle.stockpile[r.key] }}</small>
+                        <small v-else>w ładowni: {{ exp.settle.cargo[r.key] }}</small>
                     </div>
                 </div>
                 <template v-if="exp">
-                    <p class="muted loot-note">Łup czeka w magazynie wyspy {{ exp.islandName }} — załadujesz go w porcie (1 tik).</p>
+                    <p v-if="exp.kind === 'guardian'" class="muted loot-note">Łup strażnika trafił do ładowni — przy cieśninie nie ma magazynu, więc to, co się nie mieści, idzie za burtę.</p>
+                    <p v-else class="muted loot-note">Łup czeka w magazynie wyspy {{ exp.islandName }} — załadujesz go w porcie (1 tik).</p>
+                    <p v-if="exp.settle.gateOpened" class="captured">🌀 Cieśnina otwarta na stałe, w obie strony — przepłyniesz ją z sektora bramy za 1 tik.</p>
                     <p v-if="exp.settle.captured" class="captured">🚩 {{ exp.islandName }} pod Twoją banderą.</p>
                     <p v-if="exp.settle.defense?.held" class="captured">🛡️ Wyspa obroniona: {{ exp.islandName }} — bandera zostaje, następny kontratak najwcześniej po 8 tikach spokoju.</p>
                     <p v-if="exp.settle.defense && !exp.settle.defense.held" class="island-lost">
@@ -261,7 +272,7 @@ onMounted(load);
                     </li>
                 </ul>
                 <p v-if="exp && !isEmpty(exp.settle.cargoLost)" class="cargo-lost">
-                    Za burtą: {{ formatResources(exp.settle.cargoLost) }} — ładunek ponad pojemność floty po stratach.
+                    Za burtą: {{ formatResources(exp.settle.cargoLost) }} — {{ exp.kind === 'guardian' ? 'łup i ładunek ponad pojemność floty' : 'ładunek ponad pojemność floty po stratach' }}.
                 </p>
                 <router-link
                     v-if="exp"

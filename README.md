@@ -172,11 +172,13 @@ Wszystkie ścieżki pod `/api`, JSON. Pełna lista: `docker compose exec app php
 | `POST` | `/games/{id}/sonar` | skan sonarem (krzyż o promieniu 3, gracz 4 po Sonarze dalekiego zasięgu), nie kończy tury |
 | `POST` | `/games/{id}/air-raid` | nalot na obszar |
 | `POST` | `/profiles` | nowy profil kapitana |
-| `GET` | `/profiles/{id}/expedition` | profil, flota, typy statków i budynków, wyspy bieżącego akwenu (bandera, budynki), świat (akwen i jego motyw), kontratak, drzewko badań |
+| `GET` | `/profiles/{id}/expedition` | profil, flota, typy statków i budynków, wyspy bieżącego akwenu (bandera, budynki), świat (akwen i jego motyw, bramy z powodem blokady i strażnikiem), kontratak, drzewko badań |
 | `POST` | `/profiles/{id}/sail` | rejs za 1 tik: o jeden sektor, z Żeglugą dwusektorową także o dwa |
 | `POST` | `/profiles/{id}/islands/{islandId}/battle` | bitwa o wyspę albo obrona wyspy pod banderą (kapitan musi stać na wyspie) |
 | `POST` | `/profiles/{id}/islands/{islandId}/buildings` | budynek osady (`type`) na posiadanej wyspie |
 | `POST` | `/profiles/{id}/islands/{islandId}/research` | start badania (`technology`) w uczelni wyspy, na której stoi kapitan |
+| `POST` | `/profiles/{id}/gates/{gateId}/battle` | bitwa ze strażnikiem bramy (flota na sektorze bramy, ranga strażnika); wygrana otwiera bramę |
+| `POST` | `/profiles/{id}/gates/{gateId}/pass` | przejście przez otwartą bramę na sektor bramy drugiego akwenu, za 1 tik |
 | `POST` | `/profiles/{id}/battles/{gameId}/settle` | rozliczenie zakończonej bitwy |
 | `POST` | `/profiles/{id}/ships` | budowa statku w stoczni (`type`, `islandId`, opcjonalnie `variant` niszczyciela: `torpedowy`/`zwiadowczy`) |
 | `POST` | `/profiles/{id}/ships/{shipId}/repair` | remont statku |

@@ -33,10 +33,21 @@ final class Sea
         return self::START === $this->id ? $worldSeed : crc32("{$worldSeed}:{$this->id}") & 0x7FFFFFFF;
     }
 
-    /** Mapa akwenu dla danego seeda świata. */
-    public function map(int $worldSeed): WorldMap
+    /**
+     * Mapa akwenu dla danego seeda świata, z sektorami bram wychodzących
+     * z akwenu (przejścia z innych akwenów są pomijane).
+     *
+     * @param list<SeaPassage> $passages
+     */
+    public function map(int $worldSeed, array $passages = []): WorldMap
     {
         $islands = $this->islands->all();
+        $gates = [];
+        foreach ($passages as $passage) {
+            if ($passage->from === $this->id) {
+                $gates[$passage->gate->id] = $passage->edge;
+            }
+        }
 
         return WorldMap::generate(
             $this->seed($worldSeed),
@@ -44,6 +55,7 @@ final class Sea
             $islands,
             $this->theme,
             $this->id,
+            $gates,
         );
     }
 }

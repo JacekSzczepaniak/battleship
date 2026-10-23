@@ -6,9 +6,11 @@ use App\Application\Expedition\BuildBuilding;
 use App\Application\Expedition\BuildShip;
 use App\Application\Expedition\CreateProfile;
 use App\Application\Expedition\GetExpedition;
+use App\Application\Expedition\PassGate;
 use App\Application\Expedition\RepairShip;
 use App\Application\Expedition\Sail;
 use App\Application\Expedition\SettleBattle;
+use App\Application\Expedition\StartGuardianBattle;
 use App\Application\Expedition\StartIslandBattle;
 use App\Application\Expedition\StartResearch;
 use App\Application\Expedition\TransferCargo;
@@ -18,6 +20,7 @@ use App\Domain\Expedition\Resources;
 use App\Domain\Expedition\ShipType;
 use App\Domain\Expedition\ShipVariant;
 use App\Domain\Expedition\Technology;
+use App\Domain\Game\Game;
 use App\Infrastructure\Http\Error\ApiException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -38,6 +41,8 @@ final class ExpeditionController
         private TransferCargo $transferCargo,
         private BuildBuilding $buildBuilding,
         private StartResearch $startResearch,
+        private StartGuardianBattle $startGuardianBattle,
+        private PassGate $passGate,
     ) {
     }
 
@@ -76,24 +81,24 @@ final class ExpeditionController
     public function startBattle(string $id, string $islandId, Request $request): JsonResponse
     {
         $this->assertUuid($id, 'profile');
-        // opcjonalny skład bitewny; brak = dobór domyślny w limicie pól wyspy
-        $shipIds = $this->jsonPayload($request)['shipIds'] ?? null;
-        if (null !== $shipIds && (!is_array($shipIds) || !array_is_list($shipIds) || [] !== array_filter($shipIds, static fn ($s) => !is_string($s)))) {
-            throw new ApiException('Invalid field: shipIds must be a list of ship ids', 'VALIDATION_ERROR', 400);
-        }
 
-        $game = $this->startIslandBattle->handle($id, $islandId, $shipIds);
+        return $this->gameCreated($this->startIslandBattle->handle($id, $islandId, $this->shipIds($request)));
+    }
 
-        // Ten sam kształt co POST /api/games — frontend wchodzi w zwykły flow gry
-        return new JsonResponse([
-            'id' => (string) $game->id(),
-            'status' => $game->status()->value,
-            'ruleset' => $game->ruleset()->name(),
-            'board' => [
-                'w' => $game->ruleset()->boardSize()->width,
-                'h' => $game->ruleset()->boardSize()->height,
-            ],
-        ], 201);
+    #[Route('/{id}/gates/{gateId}/battle', name: 'api_profiles_guardian_battle', methods: ['POST'])]
+    public function startGuardianBattle(string $id, string $gateId, Request $request): JsonResponse
+    {
+        $this->assertUuid($id, 'profile');
+
+        return $this->gameCreated($this->startGuardianBattle->handle($id, $gateId, $this->shipIds($request)));
+    }
+
+    #[Route('/{id}/gates/{gateId}/pass', name: 'api_profiles_pass_gate', methods: ['POST'])]
+    public function passGate(string $id, string $gateId): JsonResponse
+    {
+        $this->assertUuid($id, 'profile');
+
+        return new JsonResponse($this->passGate->handle($id, $gateId));
     }
 
     #[Route('/{id}/battles/{gameId}/settle', name: 'api_profiles_battle_settle', methods: ['POST'])]
@@ -206,6 +211,35 @@ final class ExpeditionController
         }
 
         return new JsonResponse($this->transferCargo->handle($id, $islandId, $direction, Resources::fromArray($amounts)));
+    }
+
+    /**
+     * Opcjonalny skład bitewny; brak = dobór domyślny w limicie pól planszy.
+     *
+     * @return list<string>|null
+     */
+    private function shipIds(Request $request): ?array
+    {
+        $shipIds = $this->jsonPayload($request)['shipIds'] ?? null;
+        if (null !== $shipIds && (!is_array($shipIds) || !array_is_list($shipIds) || [] !== array_filter($shipIds, static fn ($s) => !is_string($s)))) {
+            throw new ApiException('Invalid field: shipIds must be a list of ship ids', 'VALIDATION_ERROR', 400);
+        }
+
+        return $shipIds;
+    }
+
+    /** Ten sam kształt co POST /api/games — frontend wchodzi w zwykły flow gry. */
+    private function gameCreated(Game $game): JsonResponse
+    {
+        return new JsonResponse([
+            'id' => (string) $game->id(),
+            'status' => $game->status()->value,
+            'ruleset' => $game->ruleset()->name(),
+            'board' => [
+                'w' => $game->ruleset()->boardSize()->width,
+                'h' => $game->ruleset()->boardSize()->height,
+            ],
+        ], 201);
     }
 
     /** @return array<string,mixed> */

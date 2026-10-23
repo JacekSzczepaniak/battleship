@@ -89,6 +89,68 @@
                 <p v-if="seaMsg" class="sea-msg">{{ seaMsg }}</p>
             </section>
 
+            <!-- Bramy akwenu (#107): położenie, powód blokady, strażnik, przejście -->
+            <section v-for="gate in expedition.world.gates" :key="gate.id" class="card gate" :class="{ open: gate.open, here: gate.present }">
+                <div class="island-head">
+                    <h2>🌀 {{ gate.name }} → {{ gate.to.name }}</h2>
+                    <span class="flag-tag">{{ gateStatus(gate) }}</span>
+                </div>
+                <p class="muted">
+                    {{ gate.position ? `${gate.present ? '📍 flota na sektorze bramy' : `sektor bramy: ${sectorLabel(gate.position)}`}` : `położenie nieznane — ${EDGE_LABELS[gate.edge]} krawędź mapy` }}
+                    · za bramą: {{ themeText(gate.to.theme) }}
+                </p>
+                <template v-if="gate.guardian && !gate.guardian.defeated">
+                    <p class="desc">⚔️ <strong>{{ gate.guardian.name }}.</strong> {{ gate.guardian.description }}</p>
+                    <div class="island-meta">
+                        <span>🏆 +{{ gate.guardian.xpWin }} XP, {{ formatResources(gate.guardian.lootWin) }} do ładowni</span>
+                        <span class="muted">porażka: +{{ gate.guardian.xpLoss }} XP, {{ formatResources(gate.guardian.lootLoss, 'bez łupów') }}</span>
+                        <span class="muted">flota: {{ guardianFleet(gate.guardian) }} ({{ gate.guardian.fleetCells }} pól) · plansza {{ gate.guardian.board.w }}×{{ gate.guardian.board.h }} · bronie specjalne</span>
+                        <span v-if="gate.guardian.wins || gate.guardian.losses" class="muted">bilans: {{ gate.guardian.wins }}W / {{ gate.guardian.losses }}P</span>
+                    </div>
+                    <p class="muted">Łup trafia do ładowni — przy bramie nie ma magazynu, nadmiar ponad pojemność przepada.</p>
+                    <template v-if="gate.present && gate.blocker === 'guardian'">
+                        <div class="squad">
+                            <span :class="{ over: activeCells > gate.guardian.squadLimit }">
+                                skład: {{ squadCells(squadFor(gate.guardian)) }} / {{ gate.guardian.squadLimit }} pól
+                                <template v-if="activeCells > gate.guardian.squadLimit"> · flota ma {{ activeCells }} pól — część zostanie w porcie</template>
+                            </span>
+                            <button v-if="activeCells > gate.guardian.squadLimit || leavesShipsInPort(gate.guardian)" class="btn small" @click="togglePicker(gate.guardian)">
+                                {{ squadPick ? 'skład domyślny' : 'wybierz skład' }}
+                            </button>
+                            <ul v-if="squadPick" class="squad-pick">
+                                <li v-for="ship in activeShips" :key="ship.id">
+                                    <label :class="{ off: !squadPick.has(ship.id) && squadCells(squadFor(gate.guardian)) + ship.length > gate.guardian.squadLimit }">
+                                        <input
+                                            type="checkbox"
+                                            :checked="squadPick.has(ship.id)"
+                                            :disabled="!squadPick.has(ship.id) && squadCells(squadFor(gate.guardian)) + ship.length > gate.guardian.squadLimit"
+                                            @change="toggleShip(ship.id)"
+                                        />
+                                        {{ SHIP_ICONS[ship.type] }} {{ fleetShipLabel(ship) }} · {{ fieldsLabel(ship.length) }}
+                                    </label>
+                                </li>
+                            </ul>
+                            <span v-if="convoyBlocked(gate.guardian)" class="over">⚠️ konwój bez eskorty nie stanie do bitwy — dobierz kuter, niszczyciel albo lotniskowiec</span>
+                        </div>
+                        <button
+                            class="btn"
+                            :disabled="starting !== null || pendingBattle !== null || squadFor(gate.guardian).length === 0 || convoyBlocked(gate.guardian)"
+                            @click="onStartGuardian(gate)"
+                        >
+                            {{ starting === gate.id ? 'Stawianie żagli…' : '⚔️ Bitwa ze strażnikiem' }}
+                        </button>
+                    </template>
+                    <p v-else-if="gate.blocker === 'rank'" class="muted">🔒 Strażnik przyjmie bitwę od rangi: {{ rankLabel(gate.guardian.requiredRank) }}.</p>
+                    <p v-else class="muted">⛵ Dopłyń na sektor bramy, aby stanąć do bitwy ze strażnikiem.</p>
+                </template>
+                <template v-if="gate.open">
+                    <button v-if="gate.present" class="btn" :disabled="busy || pendingBattle !== null" @click="onPassGate(gate)">
+                        ⛵ Przepłyń na {{ gate.to.name }} (1 tik)
+                    </button>
+                    <p v-else class="muted">⛵ Brama otwarta — dopłyń na jej sektor, by przepłynąć za 1 tik.</p>
+                </template>
+            </section>
+
             <!-- Magazyny i złoża: podgląd odkrytych wysp; przeładunek tylko w porcie -->
             <section v-if="economy.length" class="card economy">
                 <h2>🏝️ Magazyny i złoża</h2>
@@ -200,7 +262,7 @@
 
             <!-- Trwająca bitwa -->
             <section v-if="pendingBattle" class="card pending">
-                ⚔️ Trwa bitwa o <strong>{{ pendingBattle.islandName }}</strong>.
+                ⚔️ Trwa bitwa {{ pendingBattle.kind === 'guardian' ? 'ze strażnikiem:' : 'o' }} <strong>{{ pendingBattle.islandName }}</strong>.
                 <router-link class="btn" :to="{ name: 'game', params: { id: pendingBattle.gameId } }">
                     Wróć do bitwy
                 </router-link>
@@ -296,10 +358,11 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
-    buildBuilding, buildShip, createProfile, getExpedition, repairShip, sail, settleBattle, startIslandBattle, startResearch, transferCargo,
+    buildBuilding, buildShip, createProfile, getExpedition, passGate, repairShip, sail, settleBattle, startGuardianBattle, startIslandBattle,
+    startResearch, transferCargo,
     BUILDING_LABELS, RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, SHIP_VARIANT_LABELS, TECH_LABELS, fleetShipLabel,
-    type BuildingTypeName, type TechnologyName, type ExpeditionDTO, type FleetShipDTO, type IslandDTO, type RankName, type ResourcesDTO, type ShipTypeDTO,
-    type ShipVariantDTO, type ShipVariantName,
+    type BuildingTypeName, type TechnologyName, type ExpeditionDTO, type FleetShipDTO, type GateDTO, type GuardianDTO, type IslandDTO,
+    type RankName, type ResourcesDTO, type SailResultDTO, type SeaThemeDTO, type ShipTypeDTO, type ShipVariantDTO, type ShipVariantName,
 } from '../api/expeditionApi';
 import { ApiError } from '../api/http';
 import {
@@ -307,7 +370,7 @@ import {
     setCurrentBattle, setProfileId, type CurrentBattle,
 } from '../lib/expeditionSession';
 import { defaultSquad, isUnescortedConvoy, squadCells } from '../lib/squad';
-import { VARIANTS, carriedWeapon, fieldsLabel } from '../lib/ships';
+import { VARIANTS, carriedWeapon, columnLabel, fieldsLabel } from '../lib/ships';
 import { depositLabel, depositState, economyIslands, whereToFind } from '../lib/economy';
 import CargoPanel from '../components/CargoPanel.vue';
 import SettlementPanel from '../components/SettlementPanel.vue';
@@ -360,12 +423,36 @@ const economy = computed<IslandDTO[]>(() => economyIslands(expedition.value?.isl
 const counterattack = computed(() => expedition.value?.counterattack ?? { pending: null, last: null });
 
 // motyw akwenu (Epic I): bazowy sztorm akwenu, promień odkrywania, mnożnik złóż
+function themeText(theme: SeaThemeDTO): string {
+    const visibility = theme.visibility === 0 ? 'tylko sektor floty' : `${theme.visibility} ${theme.visibility === 1 ? 'sektor' : 'sektory'} wokół floty`;
+    return `sztorm ${theme.stormChance}% · widoczność: ${visibility} · złoża ×${theme.depositMultiplier}`;
+}
+
 const seaThemeText = computed(() => {
     const theme = expedition.value?.world.sea.theme;
-    if (!theme) return '';
-    const visibility = theme.visibility === 0 ? 'tylko sektor floty' : `${theme.visibility} ${theme.visibility === 1 ? 'sektor' : 'sektory'} wokół floty`;
-    return `Motyw akwenu: sztorm ${theme.stormChance}% · widoczność: ${visibility} · złoża ×${theme.depositMultiplier}`;
+    return theme ? `Motyw akwenu: ${themeText(theme)}` : '';
 });
+
+// --- Bramy akwenów (#107) ---
+
+const EDGE_LABELS: Record<GateDTO['edge'], string> = { north: 'północna', east: 'wschodnia', south: 'południowa', west: 'zachodnia' };
+
+/** Sektor w notacji mapy: kolumna literą, wiersz od 1 (jak osie planszy). */
+function sectorLabel(pos: { x: number; y: number }): string {
+    return `${columnLabel(pos.x)}${pos.y + 1}`;
+}
+
+function gateStatus(gate: GateDTO): string {
+    if (gate.open) return '🔓 otwarta';
+    return gate.blocker === 'rank' && gate.guardian ? `🔒 od rangi ${rankLabel(gate.guardian.requiredRank)}` : '🔒 strzeżona';
+}
+
+/** „Lotniskowiec, 2× Niszczyciel, 2× Kuter, 3× Tratwa”. */
+function guardianFleet(guardian: GuardianDTO): string {
+    const counts = new Map<string, number>();
+    guardian.fleet.forEach(t => counts.set(SHIP_LABELS[t], (counts.get(SHIP_LABELS[t]) ?? 0) + 1));
+    return [...counts].map(([name, n]) => (n > 1 ? `${n}× ${name}` : name)).join(', ');
+}
 
 const discoveredIslands = computed<IslandDTO[]>(
     () => expedition.value?.islands.filter(i => i.discovered) ?? []
@@ -387,6 +474,9 @@ const seaCells = computed<SeaCell[]>(() => {
     const islandsByPos = new Map(
         exp.islands.filter(i => i.discovered && i.position).map(i => [`${i.position!.x}:${i.position!.y}`, i])
     );
+    const gatesByPos = new Map(
+        world.gates.filter(g => g.position).map(g => [`${g.position!.x}:${g.position!.y}`, g])
+    );
     const { x: px, y: py } = world.position;
     const pending = exp.counterattack.pending;
 
@@ -396,6 +486,7 @@ const seaCells = computed<SeaCell[]>(() => {
             const key = `${x}:${y}`;
             const discovered = fog.has(key);
             const island = islandsByPos.get(key) ?? null;
+            const gate = gatesByPos.get(key) ?? null;
             const isPlayer = x === px && y === py;
             // osiągalne w jednym rejsie: sąsiednie, z Żeglugą dwusektorową także odległe o 2
             const distance = Math.max(Math.abs(x - px), Math.abs(y - py));
@@ -405,14 +496,14 @@ const seaCells = computed<SeaCell[]>(() => {
 
             cells.push({
                 key, x, y, sailable,
-                cls: { fog: !discovered, water: discovered && !island, island: !!island, player: isPlayer, sailable, risk: stormRisk },
-                glyph: isPlayer ? '⛵' : island ? (island.unlocked ? '🏝️' : '🔒') : '',
-                badge: island ? (island.deposit ? '⛏' : island.shipyardLevel > 0 ? '🏗' : '') : '',
+                cls: { fog: !discovered, water: discovered && !island && !gate, island: !!island, gate: !!gate, player: isPlayer, sailable, risk: stormRisk },
+                glyph: isPlayer ? '⛵' : island ? (island.unlocked ? '🏝️' : '🔒') : gate ? '🌀' : '',
+                badge: island ? (island.deposit ? '⛏' : island.shipyardLevel > 0 ? '🏗' : '') : gate && !gate.open ? '🔒' : '',
                 flag: island?.owned ?? false,
-                name: island?.name ?? '',
+                name: island?.name ?? (gate ? `${gate.name} → ${gate.to.name}` : ''),
                 attacked: !!island && pending?.island === island.id,
                 title: [
-                    island ? island.name : discovered ? `${x}:${y}` : 'niezbadane wody',
+                    island ? island.name : gate ? `${gate.name} → ${gate.to.name} (${gateStatus(gate)})` : discovered ? `${x}:${y}` : 'niezbadane wody',
                     island?.owned ? 'pod Twoją banderą' : '',
                     island && pending?.island === island.id ? pendingLabel(pending) : '',
                     island && island.shipyardLevel > 0 ? `stocznia poz. ${island.shipyardLevel}` : '',
@@ -434,20 +525,43 @@ async function onSail(x: number, y: number) {
     error.value = '';
     try {
         const result = await sail(profileId, x, y);
-        const parts: string[] = [];
-        if (result.cartography > 0) parts.push(`+${result.cartography - result.cartographyLost} drewna za nowe mapy`);
-        if (result.cartographyLost > 0) parts.push(`ładownia pełna — ${result.cartographyLost} drewna przepadło`);
-        if (result.event?.effect === 'cargo-lost') {
-            const convoy = result.event.unescorted ? ' (konwój bez eskorty — podwójne straty)' : '';
-            parts.push(`🌩️ Sztorm! Fale zabrały ${formatResources(result.event.cargoLost!, 'nic — ładownia była pusta')}${convoy}`);
-        }
-        if (result.event?.effect === 'ship-damaged') {
-            parts.push(`🌩️ Sztorm! ${SHIP_LABELS[result.event.ship!]} uszkodzony — ładunek cały`);
-        }
-        seaMsg.value = parts.join(' · ');
+        seaMsg.value = voyageMessage(result).join(' · ');
         expedition.value = await getExpedition(profileId);
     } catch (e: any) {
         error.value = e?.message ?? 'Żegluga nie powiodła się';
+    } finally {
+        busy.value = false;
+    }
+}
+
+/** Kartografia i sztorm po wpłynięciu na sektor — rejsem albo przez bramę. */
+function voyageMessage(result: SailResultDTO): string[] {
+    const parts: string[] = [];
+    if (result.cartography > 0) parts.push(`+${result.cartography - result.cartographyLost} drewna za nowe mapy`);
+    if (result.cartographyLost > 0) parts.push(`ładownia pełna — ${result.cartographyLost} drewna przepadło`);
+    if (result.event?.effect === 'cargo-lost') {
+        const convoy = result.event.unescorted ? ' (konwój bez eskorty — podwójne straty)' : '';
+        parts.push(`🌩️ Sztorm! Fale zabrały ${formatResources(result.event.cargoLost!, 'nic — ładownia była pusta')}${convoy}`);
+    }
+    if (result.event?.effect === 'ship-damaged') {
+        parts.push(`🌩️ Sztorm! ${SHIP_LABELS[result.event.ship!]} uszkodzony — ładunek cały`);
+    }
+    return parts;
+}
+
+/** Przejście przez otwartą bramę: 1 tik, flota ląduje na sektorze bramy drugiego akwenu. */
+async function onPassGate(gate: GateDTO) {
+    const profileId = getProfileId();
+    if (!profileId) return;
+    busy.value = true;
+    error.value = '';
+    try {
+        const result = await passGate(profileId, gate.id);
+        seaMsg.value = [`⛵ ${gate.name} za rufą — witaj na akwenie ${result.sea.name}`, ...voyageMessage(result)].join(' · ');
+        squadPick.value = null;
+        expedition.value = await getExpedition(profileId);
+    } catch (e: any) {
+        error.value = e?.message ?? 'Przejście przez bramę nie powiodło się';
     } finally {
         busy.value = false;
     }
@@ -656,6 +770,9 @@ async function onCreateProfile() {
 
 // --- skład bitewny (#73): domyślny dobór albo ręczny wybór, gdy flota przekracza limit ---
 
+// cel bitwy z limitem pól składu: wyspa albo strażnik bramy (#107)
+type SquadTarget = { squadLimit: number };
+
 const squadPick = ref<Set<string> | null>(null);
 const activeShips = computed(() => (expedition.value?.fleet ?? []).filter(s => !s.damaged));
 const activeCells = computed(() => squadCells(activeShips.value));
@@ -664,22 +781,22 @@ const activeCells = computed(() => squadCells(activeShips.value));
 const unescortedConvoy = computed(() => isUnescortedConvoy(expedition.value?.fleet ?? []));
 
 /** Dobór domyślny zostawia w porcie statki spoza priorytetu (transportowiec), choć jest miejsce. */
-function leavesShipsInPort(island: IslandDTO): boolean {
+function leavesShipsInPort(island: SquadTarget): boolean {
     return defaultSquad(expedition.value?.fleet ?? [], island.squadLimit).length < activeShips.value.length;
 }
 
 /** Konwój bez eskorty nie atakuje — także gdy sprawne są same transportowce (dobór domyślny jest pusty). */
-function convoyBlocked(island: IslandDTO): boolean {
+function convoyBlocked(island: SquadTarget): boolean {
     const squad = squadFor(island);
     return isUnescortedConvoy(squad.length ? squad : activeShips.value);
 }
 
-function squadFor(island: IslandDTO): FleetShipDTO[] {
+function squadFor(island: SquadTarget): FleetShipDTO[] {
     if (squadPick.value) return activeShips.value.filter(s => squadPick.value!.has(s.id));
     return defaultSquad(expedition.value?.fleet ?? [], island.squadLimit);
 }
 
-function togglePicker(island: IslandDTO) {
+function togglePicker(island: SquadTarget) {
     squadPick.value = squadPick.value ? null : new Set(defaultSquad(expedition.value?.fleet ?? [], island.squadLimit).map(s => s.id));
 }
 
@@ -699,6 +816,22 @@ async function onStartBattle(island: IslandDTO) {
         const shipIds = squadPick.value ? [...squadPick.value] : undefined;
         const game = await startIslandBattle(profileId, island.id, shipIds);
         setCurrentBattle({ profileId, gameId: game.id, islandId: island.id, islandName: island.name });
+        await router.push({ name: 'place-fleet', params: { id: game.id } });
+    } catch (e: any) {
+        error.value = e?.message ?? 'Nie udało się rozpocząć bitwy';
+        starting.value = null;
+    }
+}
+
+async function onStartGuardian(gate: GateDTO) {
+    const profileId = getProfileId();
+    if (!profileId || !gate.guardian) return;
+    starting.value = gate.id;
+    error.value = '';
+    try {
+        const shipIds = squadPick.value ? [...squadPick.value] : undefined;
+        const game = await startGuardianBattle(profileId, gate.id, shipIds);
+        setCurrentBattle({ profileId, gameId: game.id, islandId: gate.id, islandName: gate.guardian.name, kind: 'guardian' });
         await router.push({ name: 'place-fleet', params: { id: game.id } });
     } catch (e: any) {
         error.value = e?.message ?? 'Nie udało się rozpocząć bitwy';
@@ -779,6 +912,12 @@ h2, h3 { font-family: var(--font-head); }
 .sea-cell.fog { background: #0a1b23; box-shadow: inset 0 0 0 1px #12303a; }
 .sea-cell.water { background: #0c2029; box-shadow: inset 0 0 0 1px #163540; }
 .sea-cell.island { background: #3b3220; box-shadow: inset 0 0 0 1px #6b5a35; }
+.sea-cell.gate { background: #1d2648; box-shadow: inset 0 0 0 1px #4a5ea8; }
+.sea-cell.gate:hover { z-index: 2; }
+.sea-cell.gate:hover .name { opacity: 1; }
+.gate { border-color: #4a5ea8; }
+.gate.open { border-color: var(--info); }
+.gate h2 { margin: 0; font-size: 1.05rem; }
 .sea-cell.player { background: #13404a; box-shadow: inset 0 0 0 2px var(--info); }
 .sea-cell.sailable:not(:disabled) { cursor: pointer; outline: 1px dashed var(--info); outline-offset: -3px; }
 .sea-cell.sailable.risk:not(:disabled) { outline-color: var(--warn); }

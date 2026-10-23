@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\CaptainProfile;
+use App\Domain\Expedition\GateBlock;
+use App\Domain\Expedition\GateCondition;
 use App\Domain\Expedition\Island;
 use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\Rank;
 use App\Domain\Expedition\Resources;
 use App\Domain\Expedition\Sea;
+use App\Domain\Expedition\SeaEdge;
+use App\Domain\Expedition\SeaGate;
 use App\Domain\Expedition\SeaPassage;
 use App\Domain\Expedition\SeaState;
 use App\Domain\Expedition\SeaTheme;
@@ -82,16 +86,15 @@ function seafarer(
     return [$profile, $world];
 }
 
-it('Morze Rozbitków to start grafu z motywem 20% / 1 / ×1 i bez przejść', function () {
+it('Morze Rozbitków to start grafu z motywem 20% / 1 / ×1', function () {
     $graph = new StaticSeaGraph(new StaticIslandCatalog());
     $start = $graph->start();
 
-    expect(array_map(static fn (Sea $s) => $s->id, $graph->seas()))->toBe([Sea::START])
+    expect($start->id)->toBe(Sea::START)
         ->and($start->name)->toBe('Morze Rozbitków')
         ->and($start->theme->toArray())->toBe(['stormChance' => 20, 'visibility' => 1, 'depositMultiplier' => 1])
         ->and($graph->sea(Sea::START))->toBe($start)
-        ->and($graph->sea('morze-mgiel'))->toBeNull()
-        ->and($graph->passagesFrom(Sea::START))->toBe([]);
+        ->and($graph->sea('morze-mgiel'))->toBeNull();
 });
 
 it('mapa Morza Rozbitków to dawna mapa świata z seeda profilu, więc stare profile nie tracą wysp', function () {
@@ -124,18 +127,28 @@ it('graf pilnuje unikalnych wysp i przejść do znanych akwenów; katalog świat
     $rozbitkow = new Sea(Sea::START, 'Morze Rozbitków', new SeaTheme(), $shipwreck);
     $ocean = new Sea('ocean-sztormow', 'Ocean Sztormów', new SeaTheme(40, 1, 2), seaIslands('rafa-sztormowa'));
 
-    $graph = new StaticSeaGraph($shipwreck, [$rozbitkow, $ocean], [new SeaPassage(Sea::START, 'ocean-sztormow')]);
+    $gate = new SeaGate('brama', 'Brama', new class implements GateCondition {
+        public function blocker(CaptainProfile $profile, string $gateId): ?GateBlock
+        {
+            return null;
+        }
+    });
+    $there = new SeaPassage(Sea::START, 'ocean-sztormow', $gate, SeaEdge::East);
+    $graph = new StaticSeaGraph($shipwreck, [$rozbitkow, $ocean], [$there, new SeaPassage('ocean-sztormow', Sea::START, $gate, SeaEdge::West)]);
     $world = new WorldIslandCatalog($graph);
 
-    expect($graph->passagesFrom(Sea::START))->toHaveCount(1)
-        ->and($graph->passagesFrom('ocean-sztormow'))->toBe([])
+    expect($graph->passagesFrom(Sea::START))->toBe([$there])
+        ->and($graph->passagesFrom('ocean-sztormow'))->toHaveCount(1)
         ->and($world->all())->toHaveCount(7)
         ->and($world->byId('rafa-sztormowa')?->id)->toBe('rafa-sztormowa')
         ->and($world->byId('mielizny')?->id)->toBe('mielizny')
         ->and(fn () => new StaticSeaGraph($shipwreck, [$rozbitkow, new Sea('kopia', 'Kopia', new SeaTheme(), seaIslands('mielizny'))]))
         ->toThrow(InvalidArgumentException::class, 'Island ids must be unique across seas')
-        ->and(fn () => new StaticSeaGraph($shipwreck, [$rozbitkow], [new SeaPassage(Sea::START, 'morze-mgiel')]))
-        ->toThrow(InvalidArgumentException::class, 'Sea passage connects an unknown sea');
+        ->and(fn () => new StaticSeaGraph($shipwreck, [$rozbitkow], [new SeaPassage(Sea::START, 'morze-mgiel', $gate, SeaEdge::East)]))
+        ->toThrow(InvalidArgumentException::class, 'Sea passage connects an unknown sea')
+        // brama działa w obie strony, więc przejście bez powrotnego jest błędem grafu
+        ->and(fn () => new StaticSeaGraph($shipwreck, [$rozbitkow, $ocean], [$there]))
+        ->toThrow(InvalidArgumentException::class, 'Sea gate needs a passage back');
 });
 
 it('widoczność 0 odkrywa tylko sektor floty: na starcie i po rejsie', function () {

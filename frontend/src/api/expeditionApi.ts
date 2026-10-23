@@ -191,6 +191,44 @@ export interface SeaDTO {
     theme: SeaThemeDTO;
 }
 
+// powód zamknięcia bramy (Domain/Expedition/GateBlock); null = brama otwarta
+export type GateBlockCode = 'rank' | 'guardian';
+
+// strażnik strzeżonej cieśniny (#107): stała flota wroga, nagrody jak za wyspę
+export interface GuardianDTO {
+    name: string;
+    description: string;
+    requiredRank: RankName;
+    unlocked: boolean;
+    // pokonany = brama otwarta na stałe, w obie strony
+    defeated: boolean;
+    mode: 'classic' | 'fun';
+    fleet: ShipTypeName[];
+    fleetCells: number;
+    board: { w: number; h: number };
+    squadLimit: number;
+    xpWin: number;
+    xpLoss: number;
+    lootWin: ResourcesDTO;
+    lootLoss: ResourcesDTO;
+    wins: number;
+    losses: number;
+}
+
+// brama wychodząca z akwenu floty; sektor widać po odkryciu, jak wyspy
+export interface GateDTO {
+    id: string;
+    name: string;
+    edge: 'north' | 'east' | 'south' | 'west';
+    to: SeaDTO;
+    discovered: boolean;
+    position: { x: number; y: number } | null;
+    present: boolean;
+    blocker: GateBlockCode | null;
+    open: boolean;
+    guardian: GuardianDTO | null;
+}
+
 export interface WorldDTO {
     sea: SeaDTO;
     width: number;
@@ -199,6 +237,9 @@ export interface WorldDTO {
     discovered: string[]; // sektory "x:y"
     visited: string[]; // sektory "x:y", na których kapitan był — tam sztorm nie grozi
     atIsland: string | null;
+    // brama na sektorze floty (#107)
+    atGate: string | null;
+    gates: GateDTO[];
     // szansa sztormu akwenu z Mapami sztormowymi (połowa) albo bez nich
     stormChance: number;
     // najdalszy sektor osiągalny w jednym rejsie (większa z różnic x i y); Żegluga dwusektorowa: 2
@@ -218,6 +259,13 @@ export interface SailResultDTO {
     cargo: ResourcesDTO;
     cargoCapacity: number;
     atIsland: string | null;
+    atGate: string | null;
+}
+
+// przejście przez bramę (#107): jak rejs, plus akwen docelowy i zegar
+export interface PassGateResultDTO extends SailResultDTO {
+    sea: SeaDTO;
+    tick: number;
 }
 
 // kontratak (#78): zapowiedź uderza po 12 tikach; obronę przyjmuje flota stojąca na wyspie celu
@@ -324,8 +372,8 @@ export interface SettleResultDTO {
     rank: RankName;
     rankUp: boolean;
     loot: ResourcesDTO;
-    // łup leży w magazynie wyspy bitwy; ładunek ponad pojemność po stratach przepadł
-    stockpile: ResourcesDTO;
+    // łup leży w magazynie wyspy bitwy (strażnik: null, łup w ładowni); ładunek ponad pojemność przepadł
+    stockpile: ResourcesDTO | null;
     cargo: ResourcesDTO;
     cargoLost: ResourcesDTO;
     lostShips: ShipTypeName[];
@@ -336,6 +384,8 @@ export interface SettleResultDTO {
     depositStarted: ResourcesDTO | null;
     // bitwa obronna (#78): czy bandera została i co przepadło z magazynu; null = bitwa o zdobycie
     defense: { held: boolean; stockpileLost: ResourcesDTO } | null;
+    // wygrana ze strażnikiem otworzyła bramę akwenu (#107)
+    gateOpened: boolean;
 }
 
 export async function createProfile(name: string): Promise<ProfileDTO> {
@@ -349,6 +399,16 @@ export async function getExpedition(profileId: string): Promise<ExpeditionDTO> {
 /** Start bitwy o wyspę; bez `shipIds` backend dobiera skład domyślny w limicie wyspy. */
 export async function startIslandBattle(profileId: string, islandId: string, shipIds?: string[]): Promise<CreateGameResponse> {
     return http.post<CreateGameResponse>(`/profiles/${profileId}/islands/${islandId}/battle`, shipIds ? { shipIds } : {});
+}
+
+/** Start bitwy ze strażnikiem bramy (#107); flota musi stać na sektorze bramy. */
+export async function startGuardianBattle(profileId: string, gateId: string, shipIds?: string[]): Promise<CreateGameResponse> {
+    return http.post<CreateGameResponse>(`/profiles/${profileId}/gates/${gateId}/battle`, shipIds ? { shipIds } : {});
+}
+
+/** Przejście przez otwartą bramę na drugi akwen; kosztuje tik. */
+export async function passGate(profileId: string, gateId: string): Promise<PassGateResultDTO> {
+    return http.post<PassGateResultDTO>(`/profiles/${profileId}/gates/${gateId}/pass`, {});
 }
 
 export async function settleBattle(profileId: string, gameId: string): Promise<SettleResultDTO> {

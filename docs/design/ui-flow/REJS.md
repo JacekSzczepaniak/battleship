@@ -42,7 +42,11 @@ Domyślna zakładka: **Wyspa**, gdy flota jest zadokowana; w przeciwnym razie Fl
    - **Przeładunek**: tabela `minmax(0,1fr) auto auto auto` — Surowiec | Wyspa | ← przenieś → | Statki. Kolumna środkowa: przycisk ‹ (na wyspę), pole liczbowe 48×30px, przycisk › (na statki). Nad tabelą „wolne w ładowni: 256”.
    - akcje zbiorcze: „Rozładuj wszystko na wyspę” (primary), „Załaduj ile się zmieści” (secondary)
    - podpowiedź (border dashed): stan magazynu + sugestia (np. budowa fortu)
-   - Do dodania analogicznie w tej zakładce, gdy wyspa ma: budynki, stocznię, rynek. Sekcje w kolejności: przeładunek → budynki → stocznia/rynek.
+   - bitwa, oblężenie albo obrona; na wyspie bez stoczni sekcja „Tratwa” (tratwę skleja się na każdej wyspie)
+   - Budynki, stocznia i rynek mają własne zakładki zaraz za zakładką wyspy, w kolejności: budynki → stocznia → rynek (#130).
+   - **Budynki** (badge „postawione/możliwe na wyspie”, tylko na wyspie pod banderą): postawione ze stanem (urobek złoża, poziom stoczni), do postawienia z kosztem i powodem blokady.
+   - **Stocznia** (badge „poz. N”, tylko na wyspie ze stocznią): budowa z wariantami, remont uszkodzonych, rozbudowa stoczni, zdobycz z abordażu do decyzji.
+   - Uczelnia nie ma zakładki: na wyspie z uczelnią zakładka Badania pokazuje „zacznij badanie tutaj”. Rynek dostanie zakładkę z Epikiem J (#57).
 2. **Flota** (badge = liczba jednostek): nagłówek „27 jednostek” + tag stanu („WSZYSTKIE SPRAWNE” lub liczba uszkodzonych). Lista **zgrupowana po typie**: `48px 1fr auto` — liczba „10×”, nazwa + rola (np. „nośnik · torpeda”), podgląd długości segmentami 12×8px. Nie pokazujemy 27 osobnych wierszy.
 3. **Badania** (badge „8/8”): opis zasad (jedno badanie naraz, koszt z magazynu wyspy z uczelnią + ładownia, czas w tikach). Poziomy: nagłówek + koszt w jednej linii, węzły w siatce 2 kolumn (nazwa, opis efektu, znacznik ✓ gdy ukończone). Stany węzła do zaimplementowania: zablokowany (opacity .5), dostępny (border #24505e + przycisk „Badaj”), w toku (pasek tików), ukończony (✓ #3fb6c4).
 4. **Dziennik**: lista `72px 1fr` — „TIK 835” (Plex Mono 11px #5f8089) + treść; najnowsze na górze.
@@ -51,7 +55,7 @@ Domyślna zakładka: **Wyspa**, gdy flota jest zadokowana; w przeciwnym razie Fl
 - Klik sektora w zasięgu → rejs, +1 tik, aktualizacja HUD, ewentualny wpis/baner (sztorm, spotkanie).
 - Dokowanie przy wyspie automatycznie przełącza panel na zakładkę Wyspa.
 - Przeładunek: ‹/› przenoszą wartość z pola (puste = 1); walidacja względem wolnej ładowni i zapasów; liczby w tabeli i pasku ładowni aktualizują się od razu.
-- Stan aktywnej zakładki trzymaj w URL hash (`#wyspa`, `#flota`, `#badania`, `#dziennik`), żeby przeładowanie strony go zachowało.
+- Stan aktywnej zakładki trzymaj w URL hash (`#wyspa`, `#budynki`, `#stocznia`, `#flota`, `#badania`, `#dziennik`), żeby przeładowanie strony go zachowało. Hash zakładki, której w tym miejscu nie ma (np. `#stocznia` przy wyspie bez stoczni), wraca do zakładki domyślnej; tak samo, gdy rejs zabierze otwartą zakładkę.
 - Responsywność: panel przechodzi pod mapę < ~1060px; mapa ma własny poziomy scroll.
 
 ## Stan (propozycja)

@@ -9,6 +9,7 @@ import {
     BUILDING_ICONS, BUILDING_LABELS,
     type BuildingBlockCode, type BuildingTypeDTO, type BuildingTypeName, type IslandDTO, type ResourcesDTO,
 } from '../api/expeditionApi';
+import { depositLabel } from '../lib/economy';
 import { formatResources, missing } from '../lib/resources';
 
 const props = defineProps<{
@@ -42,6 +43,17 @@ const SITES: Record<BuildingTypeName, string> = {
 const standing = computed(() => props.buildingTypes.filter(t => props.island.buildings.includes(t.type)));
 const options = computed(() => props.buildingTypes.filter(t => !props.island.buildings.includes(t.type)));
 
+/** Stan stojącego budynku w liczbach (#130): urobek złoża już z podwojeniem, poziom stoczni. */
+function standingState(t: BuildingTypeDTO): string {
+    switch (t.type) {
+        case 'tartak':
+        case 'kopalnia': return props.island.deposit ? `urobek złoża: ${depositLabel(props.island)}` : '';
+        case 'rozbudowa-stoczni': return `stocznia poziomu ${props.island.shipyardLevel}`;
+        case 'fort': return 'chroni wyspę przed utratą pod Twoją nieobecność';
+        case 'uczelnia': return 'badanie zaczniesz tutaj — zakładka Badania';
+    }
+}
+
 function blockLabel(t: BuildingTypeDTO): string | null {
     const code: BuildingBlockCode | null = props.island.buildBlockers[t.type];
     switch (code) {
@@ -63,6 +75,7 @@ function blockLabel(t: BuildingTypeDTO): string | null {
                 <span :class="island.owned ? 'on' : 'muted'">
                     {{ EFFECTS[t.type] }}{{ island.owned ? '' : ' — nieczynny bez bandery' }}
                 </span>
+                <span v-if="island.owned && standingState(t)" class="state">{{ standingState(t) }}</span>
             </li>
         </ul>
         <p v-else class="muted">Na wyspie nie stoi jeszcze żaden budynek.</p>
@@ -95,6 +108,7 @@ function blockLabel(t: BuildingTypeDTO): string | null {
 .on { flex: 1 1 12rem; color: var(--info); font-size: 12px; }
 .muted { color: var(--text-muted); font-size: 12px; margin: 0; }
 .buildings .muted { flex: 1 1 12rem; }
+.state { flex-basis: 100%; font: 500 11px var(--font-mono); color: var(--text-2); }
 .block { flex-basis: 100%; font: 500 11px var(--font-mono); color: var(--text-muted); }
 .btn { padding: 6px 10px; font: 600 11px var(--font-mono); border-radius: 8px; background: var(--bg-card); color: var(--text); border: 1px solid var(--line-btn); cursor: pointer; }
 .btn:hover:not([disabled]) { border-color: var(--info); }

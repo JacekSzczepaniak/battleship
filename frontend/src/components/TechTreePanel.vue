@@ -19,6 +19,8 @@ const props = defineProps<{
     research: ResearchDTO;
     // magazyn wyspy + ładownia — tym płaci się za badanie; null = kapitan na morzu
     available: ResourcesDTO | null;
+    // nazwa wyspy floty, gdy stoi na niej czynna uczelnia (#130); null = badania nie ruszą stąd
+    academyHere: string | null;
     busy: boolean;
 }>();
 
@@ -100,7 +102,8 @@ function percent(progress: number, ticks: number): number {
             </template>
             <template v-else>
                 <h3 class="title">Żadne badanie nie trwa</h3>
-                <p class="status">Zaczniesz je w uczelni na wyspie pod Twoją banderą, stojąc tam z flotą.</p>
+                <p v-if="academyHere" class="status here">🎓 Uczelnia na wyspie {{ academyHere }} — zacznij badanie tutaj: wybierz technologię poniżej.</p>
+                <p v-else class="status">Zaczniesz je w uczelni na wyspie pod Twoją banderą, stojąc tam z flotą.</p>
             </template>
             <p class="rules">Naraz trwa jedno badanie. Koszt pobierany z magazynu wyspy z uczelnią, resztę dopłaca ładownia. Czas liczy się w tikach pod banderą wyspy.</p>
         </div>
@@ -168,6 +171,7 @@ function percent(progress: number, ticks: number): number {
 .tech { display: flex; flex-direction: column; gap: 18px; }
 .title { margin: 0; font: 700 22px var(--font-head); }
 .status { margin: 4px 0 0; font: 400 13px var(--font-body); color: var(--text-2); }
+.status.here { color: var(--info); }
 .status.paused { color: var(--warn); }
 .rules { margin: 6px 0 0; font: 400 13px var(--font-body); color: var(--text-muted); line-height: 1.5; }
 .bar { display: block; height: 6px; margin-top: 8px; border-radius: 3px; background: var(--bg-card-off); border: 1px solid var(--line-card); overflow: hidden; }

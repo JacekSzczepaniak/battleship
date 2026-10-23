@@ -226,55 +226,19 @@
 
                             <div v-if="islandHint" class="hint-box">{{ islandHint }}</div>
 
-                            <div v-if="currentIsland.owned" class="block">
-                                <div class="kicker">Budynki</div>
-                                <SettlementPanel
-                                    :island="currentIsland"
-                                    :building-types="expedition.buildingTypes"
-                                    :available="addResources(currentIsland.stockpile, expedition.profile.cargo)"
-                                    :busy="busy"
-                                    @build="onBuildBuilding"
-                                />
-                            </div>
-
-                            <div id="stocznia" class="block">
-                                <div class="kicker">
-                                    Stocznia
-                                    <template v-if="currentIsland.shipyardLevel > 0">· poziom {{ currentIsland.shipyardLevel }}{{ currentIsland.owned && currentIsland.buildings.includes('rozbudowa-stoczni') ? ', z rozbudową' : '' }}</template>
-                                </div>
-                                <p v-if="currentIsland.shipyardLevel === 0" class="muted">Bez stoczni — tratwę skleisz z desek na każdej wyspie.</p>
+                            <!-- wyspa bez stoczni (#130): zakładki Stocznia nie ma, a tratwę skleisz na każdej wyspie -->
+                            <div v-if="currentIsland.shipyardLevel === 0" class="block">
+                                <div class="kicker">Tratwa</div>
+                                <p class="muted">Bez stoczni — tratwę skleisz z desek na każdej wyspie. Pozostałe statki zbudujesz w stoczni.</p>
                                 <ul class="ships">
-                                    <li v-for="t in expedition.shipTypes" :key="t.type" class="ship">
-                                        <span class="ship-name">{{ SHIP_ICONS[t.type] }} {{ SHIP_LABELS[t.type] }} <span class="muted">({{ t.length }}-masztowiec · ładownia {{ t.cargoCapacity }}{{ t.armed ? '' : ' · bez broni' }})</span></span>
-                                        <!-- wariant wybiera się przy budowie i zostaje na stałe (#99); kuter i lotniskowiec
-                                             mają obok wariantów statek podstawowy (defaultVariant null, #121) -->
-                                        <button
-                                            v-if="!t.defaultVariant"
-                                            class="btn btn-small btn-secondary"
-                                            :disabled="busy || buildBlock(t) !== null"
-                                            :title="buildBlock(t) ?? ''"
-                                            @click="onBuild(t)"
-                                        >
-                                            Buduj{{ t.variants.length && t.armed ? ` · ${carriedWeapon(t.length)}` : '' }} ({{ formatResources(t.buildCost) }})
-                                        </button>
-                                        <button
-                                            v-for="v in buildableVariants(t)"
-                                            :key="v.variant"
-                                            class="btn btn-small btn-secondary"
-                                            :disabled="busy || buildBlock(t, v) !== null"
-                                            :title="buildBlock(t, v) ?? `nośnik: ${carriedWeapon(t.length, VARIANTS[v.variant].w)} · wariant stały`"
-                                            @click="onBuild(t, v.variant)"
-                                        >
-                                            Buduj {{ SHIP_VARIANT_LABELS[v.variant] }} · {{ carriedWeapon(t.length, VARIANTS[v.variant].w) }} ({{ formatResources(t.buildCost) }})
+                                    <li v-for="t in raftTypes" :key="t.type" class="ship">
+                                        <span class="ship-name">{{ SHIP_ICONS[t.type] }} {{ SHIP_LABELS[t.type] }} <span class="muted">({{ t.length }}-masztowiec{{ t.armed ? '' : ' · bez broni' }})</span></span>
+                                        <button class="btn btn-small btn-secondary" :disabled="busy || buildBlock(t) !== null" :title="buildBlock(t) ?? ''" @click="onBuild(t)">
+                                            Buduj ({{ formatResources(t.buildCost) }})
                                         </button>
                                         <span v-if="buildBlock(t)" class="why">{{ buildBlock(t) }}</span>
-                                        <span v-for="v in lockedVariants(t)" :key="v.variant" class="why">
-                                            <template v-if="v.unlock === 'boarding'">{{ SHIP_VARIANT_NAMES[v.variant] }}: tylko z abordażu — zdobądź go u wroga i zbadaj konstrukcję</template>
-                                            <template v-else>{{ SHIP_VARIANT_LABELS[v.variant] }}: po zbadaniu „{{ TECH_LABELS[v.requiredTechnology!] }}”</template>
-                                        </span>
                                     </li>
                                 </ul>
-                                <p class="muted">Remont uszkodzonych statków: zakładka Flota.</p>
                             </div>
                         </template>
 
@@ -401,6 +365,116 @@
                         </component>
                     </div>
 
+                    <!-- BUDYNKI (#130): tylko na wyspie pod banderą -->
+                    <div v-else-if="activeTab === 'budynki' && currentIsland" class="tab-body" role="tabpanel">
+                        <div class="block">
+                            <div class="kicker">Budynki · {{ currentIsland.name }}</div>
+                            <SettlementPanel
+                                :island="currentIsland"
+                                :building-types="expedition.buildingTypes"
+                                :available="addResources(currentIsland.stockpile, expedition.profile.cargo)"
+                                :busy="busy"
+                                @build="onBuildBuilding"
+                            />
+                        </div>
+                    </div>
+
+                    <!-- STOCZNIA (#130): tylko na wyspie ze stocznią — budowa, remont, rozbudowa, zdobycz -->
+                    <div v-else-if="activeTab === 'stocznia' && currentIsland" class="tab-body" role="tabpanel">
+                        <div class="block">
+                            <div class="kicker">
+                                Stocznia · {{ currentIsland.name }} · poziom {{ currentIsland.shipyardLevel }}{{ hasShipyardUpgrade ? ', z rozbudową' : '' }}
+                            </div>
+                            <ul class="ships">
+                                <li v-for="t in expedition.shipTypes" :key="t.type" class="ship">
+                                    <span class="ship-name">{{ SHIP_ICONS[t.type] }} {{ SHIP_LABELS[t.type] }} <span class="muted">({{ t.length }}-masztowiec · ładownia {{ t.cargoCapacity }}{{ t.armed ? '' : ' · bez broni' }})</span></span>
+                                    <!-- wariant wybiera się przy budowie i zostaje na stałe (#99); kuter i lotniskowiec
+                                         mają obok wariantów statek podstawowy (defaultVariant null, #121) -->
+                                    <button
+                                        v-if="!t.defaultVariant"
+                                        class="btn btn-small btn-secondary"
+                                        :disabled="busy || buildBlock(t) !== null"
+                                        :title="buildBlock(t) ?? ''"
+                                        @click="onBuild(t)"
+                                    >
+                                        Buduj{{ t.variants.length && t.armed ? ` · ${carriedWeapon(t.length)}` : '' }} ({{ formatResources(t.buildCost) }})
+                                    </button>
+                                    <button
+                                        v-for="v in buildableVariants(t)"
+                                        :key="v.variant"
+                                        class="btn btn-small btn-secondary"
+                                        :disabled="busy || buildBlock(t, v) !== null"
+                                        :title="buildBlock(t, v) ?? `nośnik: ${carriedWeapon(t.length, VARIANTS[v.variant].w)} · wariant stały`"
+                                        @click="onBuild(t, v.variant)"
+                                    >
+                                        Buduj {{ SHIP_VARIANT_LABELS[v.variant] }} · {{ carriedWeapon(t.length, VARIANTS[v.variant].w) }} ({{ formatResources(t.buildCost) }})
+                                    </button>
+                                    <span v-if="buildBlock(t)" class="why">{{ buildBlock(t) }}</span>
+                                    <span v-for="v in lockedVariants(t)" :key="v.variant" class="why">
+                                        <template v-if="v.unlock === 'boarding'">{{ SHIP_VARIANT_NAMES[v.variant] }}: tylko z abordażu — zdobądź go u wroga i zbadaj konstrukcję</template>
+                                        <template v-else>{{ SHIP_VARIANT_LABELS[v.variant] }}: po zbadaniu „{{ TECH_LABELS[v.requiredTechnology!] }}”</template>
+                                    </span>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="block">
+                            <div class="kicker">Remont</div>
+                            <ul v-if="damagedGroups.length" class="ships">
+                                <li v-for="g in damagedGroups" :key="g.key" class="ship">
+                                    <span class="ship-name">{{ SHIP_ICONS[g.ships[0].type] }} {{ g.label }} <span class="muted">(uszkodzone: {{ g.ships.length }})</span></span>
+                                    <button
+                                        class="btn btn-small btn-secondary"
+                                        :disabled="busy || repairBlock(g.ships[0]) !== null"
+                                        :title="repairBlock(g.ships[0]) ?? ''"
+                                        @click="onRepair(g.ships[0])"
+                                    >
+                                        Remont 1 szt. ({{ formatResources(g.ships[0].repairCost) }})
+                                    </button>
+                                    <span v-if="repairBlock(g.ships[0])" class="why">{{ repairBlock(g.ships[0]) }}</span>
+                                </li>
+                            </ul>
+                            <p v-else class="muted">Cała flota sprawna.</p>
+                        </div>
+
+                        <div class="block">
+                            <div class="kicker">Rozbudowa stoczni</div>
+                            <p v-if="hasShipyardUpgrade" class="muted">{{ BUILDING_ICONS['rozbudowa-stoczni'] }} Stoi — stocznia ma poziom {{ currentIsland.shipyardLevel }}<template v-if="!currentIsland.owned">, ale bez bandery rozbudowa nie działa</template>.</p>
+                            <div v-else class="ship">
+                                <span class="ship-name">{{ BUILDING_ICONS['rozbudowa-stoczni'] }} {{ BUILDING_LABELS['rozbudowa-stoczni'] }} <span class="muted">(poziom stoczni +1)</span></span>
+                                <button
+                                    v-if="upgradeType"
+                                    class="btn btn-small btn-secondary"
+                                    :disabled="busy || upgradeBlock !== null"
+                                    :title="upgradeBlock ?? ''"
+                                    @click="onBuildBuilding('rozbudowa-stoczni')"
+                                >
+                                    Buduj ({{ formatResources(upgradeType.buildCost) }})
+                                </button>
+                                <span v-if="upgradeBlock" class="why">{{ upgradeBlock }}</span>
+                            </div>
+                        </div>
+
+                        <div v-if="expedition.prizes.length" class="block">
+                            <div class="kicker">Zdobycz z abordażu</div>
+                            <ul class="ships">
+                                <li v-for="prize in expedition.prizes" :key="prize.id" class="ship">
+                                    <span class="ship-name">⚓ {{ fleetShipLabel(prize) }}</span>
+                                    <button
+                                        v-for="option in prizeOptions(prize)"
+                                        :key="option.decision"
+                                        class="btn btn-small"
+                                        :class="option.primary ? 'btn-primary' : 'btn-secondary'"
+                                        :disabled="busy"
+                                        :title="option.hint"
+                                        @click="onDecidePrize(prize, option.decision)"
+                                    >{{ option.label }}</button>
+                                    <span class="why">Dołączony statek trafia do floty uszkodzony — wyremontujesz go w sekcji Remont.</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
                     <!-- FLOTA -->
                     <div v-else-if="activeTab === 'flota'" class="tab-body" role="tabpanel">
                         <FleetPanel
@@ -418,6 +492,7 @@
                         <TechTreePanel
                             :research="expedition.research"
                             :available="currentIsland ? addResources(currentIsland.stockpile, expedition.profile.cargo) : null"
+                            :academy-here="academyHere"
                             :busy="busy"
                             @research="onStartResearch"
                         />
@@ -441,12 +516,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
     buildBuilding, buildShip, createProfile, decidePrize, getExpedition, passGate, repairShip, sail, settleBattle, startGuardianBattle, startIslandBattle, startSiege,
     startResearch, transferCargo,
-    RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, SHIP_VARIANT_LABELS, SHIP_VARIANT_NAMES, TECH_LABELS, fleetShipLabel,
+    BUILDING_ICONS, BUILDING_LABELS, RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, SHIP_VARIANT_LABELS, SHIP_VARIANT_NAMES, TECH_LABELS, fleetShipLabel,
     type BuildingTypeName, type TechnologyName, type ExpeditionDTO, type FleetShipDTO, type GateDTO, type GuardianDTO, type IslandDTO,
     type PrizeDTO, type PrizeDecisionName, type RankName, type ResourcesDTO, type SailResultDTO, type SeaThemeDTO, type ShipTypeDTO, type ShipVariantDTO, type ShipVariantName,
 } from '../api/expeditionApi';
@@ -505,17 +580,16 @@ const cargoSegments = computed(() => {
 
 // --- Panel z zakładkami (#111): aktywna zakładka w hashu adresu ---
 
-type TabId = 'wyspa' | 'flota' | 'badania' | 'dziennik';
-const TAB_IDS: TabId[] = ['wyspa', 'flota', 'badania', 'dziennik'];
+type TabId = 'wyspa' | 'budynki' | 'stocznia' | 'flota' | 'badania' | 'dziennik';
+const TAB_IDS: TabId[] = ['wyspa', 'budynki', 'stocznia', 'flota', 'badania', 'dziennik'];
 
 const activeTab = ref<TabId>('flota');
 const panelEl = ref<HTMLElement | null>(null);
 
-/** Zakładka z hashu; stary link „#stocznia” (port, wynik bitwy) prowadzi do wyspy. */
+/** Zakładka z hashu, o ile jest w tym miejscu: „#stocznia” z innej wyspy (port, wynik bitwy) odpada. */
 function tabFromHash(hash: string): TabId | null {
     const id = hash.replace(/^#/, '');
-    if (id === 'stocznia') return 'wyspa';
-    return (TAB_IDS as string[]).includes(id) ? id as TabId : null;
+    return (TAB_IDS as string[]).includes(id) && tabs.value.some(t => t.id === id) ? id as TabId : null;
 }
 
 function setTab(id: TabId) {
@@ -538,9 +612,13 @@ const researchDone = computed(() => expedition.value?.research.technologies.filt
 
 const tabs = computed(() => {
     const exp = expedition.value;
+    const island = currentIsland.value;
     const current = exp?.research.current ?? null;
     return [
-        { id: 'wyspa' as TabId, label: currentIsland.value?.name ?? currentGate.value?.name ?? 'Akwen', badge: '', live: false },
+        { id: 'wyspa' as TabId, label: island?.name ?? currentGate.value?.name ?? 'Akwen', badge: '', live: false },
+        // #130: budynki pod banderą (postawione/możliwe na tej wyspie), stocznia tam, gdzie jest
+        ...(island?.owned ? [{ id: 'budynki' as TabId, label: 'Budynki', badge: `${island.buildings.length}/${buildingSlots.value}`, live: false }] : []),
+        ...(island && island.shipyardLevel > 0 ? [{ id: 'stocznia' as TabId, label: 'Stocznia', badge: `poz. ${island.shipyardLevel}`, live: false }] : []),
         { id: 'flota' as TabId, label: 'Flota', badge: String(exp?.fleet.length ?? ''), live: false },
         { id: 'badania' as TabId, label: 'Badania', badge: `${researchDone.value}/${exp?.research.technologies.length ?? 0}`, live: !!current && !current.paused },
         { id: 'dziennik' as TabId, label: 'Dziennik', badge: '', live: false },
@@ -749,6 +827,54 @@ function buildableVariants(t: ShipTypeDTO): ShipVariantDTO[] {
     return t.variants.filter(v => v.unlocked || v.unlock !== 'boarding');
 }
 
+// --- zakładki Budynki i Stocznia (#130) ---
+
+/** Typy budynków, które mogą stanąć na tej wyspie (bez tych, którym nie pasuje miejsce). */
+const buildingSlots = computed(() => {
+    const island = currentIsland.value;
+    return island ? (expedition.value?.buildingTypes ?? []).filter(t => island.buildBlockers[t.type] !== 'site').length : 0;
+});
+
+/** Na wyspie bez stoczni zostaje tratwa (requiredShipyardLevel 0). */
+const raftTypes = computed(() => (expedition.value?.shipTypes ?? []).filter(t => t.requiredShipyardLevel === 0));
+
+const hasShipyardUpgrade = computed(() => currentIsland.value?.buildings.includes('rozbudowa-stoczni') ?? false);
+const upgradeType = computed(() => expedition.value?.buildingTypes.find(t => t.type === 'rozbudowa-stoczni') ?? null);
+
+/** Powód blokady rozbudowy stoczni (kody jak w SettlementPanel); null = można budować. */
+const upgradeBlock = computed<string | null>(() => {
+    const island = currentIsland.value;
+    const type = upgradeType.value;
+    const profile = expedition.value?.profile;
+    if (!island || !type || !profile) return 'wczytywanie…';
+    switch (island.buildBlockers['rozbudowa-stoczni']) {
+        case null: return null;
+        case 'not-owned': return 'rozbudowa wymaga Twojej bandery na wyspie';
+        case 'already-built': return 'już stoi';
+        case 'site': return 'stocznia ma już najwyższy poziom';
+        case 'not-present': return 'dopłyń na wyspę';
+        case 'resources': return withSources(addResources(island.stockpile, profile.cargo), type.buildCost);
+    }
+});
+
+/** Uszkodzone statki zgrupowane po typie i wariancie, jak w zakładce Flota. */
+const damagedGroups = computed(() => {
+    const byKey = new Map<string, { key: string; label: string; ships: FleetShipDTO[] }>();
+    for (const ship of expedition.value?.fleet ?? []) {
+        if (!ship.damaged) continue;
+        const key = `${ship.type}:${ship.variant ?? ''}`;
+        if (!byKey.has(key)) byKey.set(key, { key, label: fleetShipLabel(ship), ships: [] });
+        byKey.get(key)!.ships.push(ship);
+    }
+    return [...byKey.values()];
+});
+
+/** Badania ruszą z tej wyspy: uczelnia stoi, a wyspa jest pod banderą. */
+const academyHere = computed(() => {
+    const island = currentIsland.value;
+    return island?.owned && island.buildings.includes('uczelnia') ? island.name : null;
+});
+
 /** Akcja w porcie: wywołanie API i świeży stan wyprawy (HUD, dziennik, baner). */
 async function inPort(action: (profileId: string, island: IslandDTO) => Promise<unknown>, failure: string) {
     const profileId = getProfileId();
@@ -827,6 +953,11 @@ async function onDecidePrize(prize: PrizeDTO, decision: PrizeDecisionName) {
 function onRepair(ship: FleetShipDTO) {
     return inPort((profileId, island) => repairShip(profileId, island.id, ship.id), 'Remont nie powiódł się');
 }
+// watch po definicjach zakładek: getter liczy się od razu przy rejestracji.
+// Rejs, utrata bandery albo zmiana wyspy zabiera zakładkę Budynki lub Stocznia — wróć do domyślnej
+watch(() => tabs.value.map(t => t.id).join(), () => {
+    if (expedition.value && !tabs.value.some(t => t.id === activeTab.value)) setTab(defaultTab());
+});
 
 onMounted(load);
 
@@ -841,13 +972,8 @@ async function load() {
         }
         await settlePendingBattle(profileId);
         expedition.value = await getExpedition(profileId);
-        const hash = route.hash;
-        setTab(tabFromHash(hash) ?? defaultTab());
-        // wejście z portu „Stocznia” (#stocznia) — przewiń do sekcji po wyrenderowaniu
-        if (hash === '#stocznia') {
-            await nextTick();
-            document.getElementById('stocznia')?.scrollIntoView({ block: 'start' });
-        }
+        // wejście z portu „Stocznia” (#stocznia) otwiera zakładkę stoczni, o ile flota przy niej stoi
+        setTab(tabFromHash(route.hash) ?? defaultTab());
     } catch (e: any) {
         // profil zniknął (np. wyczyszczona baza) — zacznij od nowa
         if (e instanceof ApiError && e.status === 404) {

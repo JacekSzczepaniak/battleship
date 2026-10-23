@@ -14,7 +14,7 @@ import type { BattleActionName, MoveDirection, PlayerFleetItem, TorpedoDirection
 const {
     gameId, status, finished, turn, loading, shooting, error, disabled, attack, endTurn, moveShip, moveUsed, width, height,
     ruleset, energy, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells, aliveCarriers,
-    noteMarks, toggleNote,
+    noteMarks, toggleNote, fort,
     shotsCount, hitsCount, opponentHitsCount, enemySunkLengths, playerSunkLengths, enemyTotal, playerTotal,
     allowedShips, opponentShips, opponentVariants, playerFleet,
     log, toast, toastType,
@@ -25,6 +25,8 @@ const router = useRouter();
 const battle = getCurrentBattle();
 const expeditionBattle = computed(() => battle !== null && battle.gameId === gameId.value);
 const gameOver = computed(() => finished.value || status.value === 'won' || status.value === 'lost');
+// oblężenie fortu (#119): licznik zniszczonych dział zamiast zatopień
+const gunsDestroyed = computed(() => (fort.value ? fort.value.guns.total - fort.value.guns.left : 0));
 
 // bonus pełnej bandery (#79): obrona tej wyspy przy wszystkich wyspach pod banderą
 const fullFlagDefense = ref(false);
@@ -365,16 +367,23 @@ const enemyCells = computed<string[][]>(() => {
     const sunk = new Set(sunkCells.value.map(([x, y]) => `${x}:${y}`));
     const sonar = new Map(sonarMarks.value.map(c => [`${c.x}:${c.y}`, c.occupied]));
 
+    // fort: rodzaj odsłoniętej konstrukcji zastępuje trafienie/zatopienie
+    // (mur nie pulsuje jak trafiony statek — nie ma czego dobijać)
+    const fortKinds = new Map((fort.value?.revealed ?? []).map(c => [`${c.x}:${c.y}`, c.kind]));
+    const blast = new Set((fort.value?.explosion ?? []).map(([x, y]) => `${x}:${y}`));
+
     return enemyFogGrid.value.map((row, y) => row.map((cell, x) => {
         const key = `${x}:${y}`;
         let cls = 'fog';
-        if (sunk.has(key)) cls = 'sunk';
+        if (fortKinds.has(key)) cls += ` fort-${fortKinds.get(key)}`;
+        else if (sunk.has(key)) cls = 'sunk';
         else if (cell === 'hit') cls += ' hit';
         else if (cell === 'miss') cls += ' miss';
         else {
             if (sonar.has(key)) cls += sonar.get(key) ? ' sonar-ship' : ' sonar-water';
             if (noteMarks.value.has(key)) cls += ' note';
         }
+        if (blast.has(key)) cls += ' blast';
         // torpeda: kursor stoi na własnej wyrzutni, tor rysujemy na wodach wroga
         if (previewCells.value.has(key)) cls += ' preview';
         if (ls && ls.x === x && ls.y === y) cls += ' anim';
@@ -441,7 +450,7 @@ const turnLabel = computed(() => {
 
 // warianty statków wroga (lustro składu gracza, #54 D6): pokazane obok jego broni
 const enemyVariants = computed(() => {
-    if (ruleset.value !== 'fun') return [];
+    if (ruleset.value !== 'fun' || fort.value) return [];
     return Object.entries(opponentVariants.value).flatMap(([len, loadouts]) => {
         const counts = new Map<string, { name: string; weapon: string; count: number }>();
         for (const w of loadouts) {
@@ -456,7 +465,8 @@ const enemyVariants = computed(() => {
 
 const aiArsenal = computed(() => {
     const w = opponentWeapons.value;
-    if (ruleset.value !== 'fun' || !w) return [];
+    // fort nie ma broni specjalnych (#119)
+    if (ruleset.value !== 'fun' || !w || fort.value) return [];
     return [
         { icon: Radar, label: 'sonar', left: w.sonar.limit - w.sonar.used, limit: w.sonar.limit },
         { icon: Rocket, label: 'torpeda', left: w.torpedo.limit - w.torpedo.used, limit: w.torpedo.limit },
@@ -504,6 +514,7 @@ async function finalize() {
         enemySunk: [...enemySunkLengths.value],
         enemyTotal: enemyTotal.value,
         playerSunk: [...playerSunkLengths.value],
+        fort: fort.value ? { destroyed: gunsDestroyed.value, total: fort.value.guns.total } : null,
         expedition: null,
     };
 
@@ -554,13 +565,17 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
         <!-- HUD -->
         <header class="hud">
             <div class="hud-turn">
-                <div class="kicker">{{ expeditionBattle && battle ? `BITWA · ${battle.islandName.toUpperCase()}` : 'BITWA TRENINGOWA' }}</div>
+                <div class="kicker">{{ expeditionBattle && battle ? `BITWA · ${battle.islandName.toUpperCase()}` : fort ? 'OBLĘŻENIE · TRENING' : 'BITWA TRENINGOWA' }}</div>
                 <div class="turn-line">
                     OSTRZELANO {{ fieldsLabel(shotsCount).toUpperCase() }} · <span :class="{ mine: turn === 'player' && !gameOver }">{{ turnLabel }}</span>
                 </div>
             </div>
             <span class="sep"></span>
-            <div class="hud-block">
+            <div v-if="fort" class="hud-block" title="wygrana po zniszczeniu wszystkich dział; mury się nie liczą">
+                <div class="kicker">DZIAŁA FORTU</div>
+                <div class="hud-val">{{ gunsDestroyed }} / {{ fort.guns.total }}</div>
+            </div>
+            <div v-else class="hud-block">
                 <div class="kicker">ZATOPIONO</div>
                 <div class="hud-val">{{ enemySunkLengths.length }} / {{ enemyTotal }}</div>
             </div>
@@ -578,7 +593,13 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
                     </div>
                 </div>
             </template>
-            <div v-if="aiArsenal.length" class="hud-right">
+            <div v-if="fort" class="hud-right">
+                <span class="kicker">FORT</span>
+                <span class="ai-pill" :class="{ empty: fort.guns.left === 0 }" title="fort strzela, dopóki ma choć jedno działo; bez broni specjalnych i energii">
+                    <Crosshair :size="13" /> {{ fort.guns.left > 0 ? '1 salwa na turę' : 'zamilkł' }}
+                </span>
+            </div>
+            <div v-else-if="aiArsenal.length" class="hud-right">
                 <span class="kicker">ARSENAŁ WROGA</span>
                 <span v-for="a in aiArsenal" :key="a.label" class="ai-pill" :class="{ empty: a.left === 0 }" :title="a.label">
                     <component :is="a.icon" :size="13" /> {{ a.left }}/{{ a.limit }}
@@ -621,8 +642,9 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
             <!-- wody wroga -->
             <div class="waters">
                 <div class="waters-head">
-                    <span class="kicker enemy">WODY WROGA</span>
-                    <span class="kicker">zatopiono {{ enemySunkLengths.length }}/{{ enemyTotal }}</span>
+                    <span class="kicker enemy">{{ fort ? 'FORT' : 'WODY WROGA' }}</span>
+                    <span v-if="fort" class="kicker">działa {{ gunsDestroyed }}/{{ fort.guns.total }}</span>
+                    <span v-else class="kicker">zatopiono {{ enemySunkLengths.length }}/{{ enemyTotal }}</span>
                 </div>
                 <div class="board-box" :class="{ locked: disabled }">
                     <SeaGrid
@@ -635,6 +657,12 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
                     />
                 </div>
                 <p class="foot">{{ enemyHint }}</p>
+                <div v-if="fort" class="fort-legend" aria-label="legenda fortu">
+                    <span><i class="sw fort-gun"></i> działo</span>
+                    <span><i class="sw fort-wall"></i> mur</span>
+                    <span><i class="sw fort-magazine"></i> magazyn prochu</span>
+                    <span><i class="sw blast"></i> eksplozja</span>
+                </div>
             </div>
 
             <!-- dziennik -->
@@ -685,7 +713,12 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
                 </ol>
                 <p v-if="toast" class="toast" :class="toastType">{{ toast }}</p>
                 <p v-if="error" class="err small">{{ error }}</p>
-                <div v-if="energy" class="note">
+                <div v-if="fort" class="note">
+                    Oblężenie: zniszcz wszystkie działa fortu. Trafiony mur tylko pochłania strzał,
+                    a trafiony magazyn prochu wybucha i trafia pola 3×3 wokół siebie. Fort oddaje
+                    jedną salwę na turę, dopóki ma choć jedno działo.
+                </div>
+                <div v-else-if="energy" class="note">
                     Masz {{ energy.max }}⚡ na turę. Salwa, torpeda i nalot kosztują energię i kończą turę;
                     sonar i ruch statku (raz na turę) tylko zużywają energię. „Zakończ turę” oddaje ruch
                     bez ataku, a po ruchu wroga energia wraca.
@@ -773,6 +806,14 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
 .board-box { padding: 14px; border-radius: 14px; background: var(--bg-panel); border: 1px solid var(--line); transition: opacity .2s; }
 .board-box.locked { opacity: .85; }
 .foot { margin: 0; font: 500 11px var(--font-mono); color: var(--text-muted); text-align: center; max-width: 480px; }
+.fort-legend { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; font: 500 11px var(--font-mono); color: var(--text-muted); }
+.fort-legend span { display: inline-flex; align-items: center; gap: 6px; }
+/* próbki legendy: te same klasy co komórki planszy fortu (SeaGrid) */
+.fort-legend .sw { position: relative; width: 16px; height: 16px; border-radius: 3px; display: inline-block; }
+.fort-legend .sw.fort-gun { background: #24130e; box-shadow: inset 0 0 0 1.5px var(--danger); }
+.fort-legend .sw.fort-wall { background: repeating-linear-gradient(0deg, #4a5257 0 3px, #2e3438 3px 4px); box-shadow: inset 0 0 0 1px #6b767c; }
+.fort-legend .sw.fort-magazine { background: #3b2d0e; box-shadow: inset 0 0 0 1.5px var(--warn); }
+.fort-legend .sw.blast { background: #23160f; outline: 1.5px dashed #e8843caa; outline-offset: -3px; }
 
 .log { border-left: 1px solid var(--line); background: var(--bg-panel-a); padding: 22px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 .entries { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; max-height: 420px; }

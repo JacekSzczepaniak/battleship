@@ -202,6 +202,23 @@ nie działa. Pełne oblężenie fortu z własną planszą to Epic H.
    działa nadbrzeżne, **magazyn prochu** = trafienie wywołuje eksplozję
    łańcuchową). Ta sama mechanika obsługuje bramy-cieśniny.
 
+✅ (#119) Silnik oblężenia, na razie jako bitwa treningowa „oblężenie”.
+Forty na twierdzach i dwie fazy zdobycia to #120.
+- **Plansza fortu 10×10:** 4 działa po jednym polu, 3 odcinki muru po 2–3
+  pola i 1 magazyn prochu. Liczby są w jednym miejscu (`FortRules`, D3).
+- **Układ** jest deterministyczny z seeda (D4). Konstrukcje mieszczą się na
+  planszy i się nie nakładają, ale w odróżnieniu od statków mogą się stykać.
+  Magazyn zawsze stoi przy murze, więc eksplozja 3×3 ma co trafić.
+- **Wygrana** przychodzi dopiero po zniszczeniu ostatniego działa. Trafiony mur
+  się odsłania i pochłania strzał, ale nie liczy się do wygranej.
+- **Magazyn prochu:** trafienie wywołuje eksplozję 3×3 wokół magazynu. Trafia
+  wszystko na tych polach, także działa i mury, a puste pola liczą się jako
+  pudła. Eksplozja nie ma osobnego stanu, bo wynika z trafienia magazynu.
+- **Fort strzela** jedną zwykłą salwą na turę, dopóki ma choć jedno działo.
+  Nie ma broni specjalnych ani energii.
+- **Gracz** ma pełny arsenał, energię i ruch statku. Sonar widzi mur jak
+  statek, a torpeda i nalot go trafiają, więc mury działają jak przynęta.
+
 **Zdobyta wyspa przestaje być areną powtarzalnych bitew** ✅ (Epic E): pierwsza
 wygrana stawia banderę. Posiadana wyspa ma pracujące złoże, a jej magazyn jest
 stawką kontrataku. Zatoka Rozbitka to bezpieczna przystań: da się ją zdobyć,

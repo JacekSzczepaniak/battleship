@@ -3,7 +3,7 @@ import { useRoute } from 'vue-router';
 import {
     getGame, fireShot, fireTorpedo, sonarPing, sendAirRaid, endTurn as apiEndTurn, moveShip as apiMoveShip,
     type GameViewDTO, type MoveDirection, type ShotResultDTO, type EnergyState, type RulesetName, type WeaponsState,
-    type TorpedoDirection, type TurnOutcomeDTO, type SonarCell, type PlayerFleetItem, type CellShotResult, type Loadout,
+    type TorpedoDirection, type TurnOutcomeDTO, type SonarCell, type PlayerFleetItem, type CellShotResult, type Loadout, type FortView,
 } from '../api/gameApi.ts';
 import { carriedWeapons, cellLabel, fieldsLabel, shipName } from '../lib/ships';
 
@@ -77,6 +77,8 @@ export function useGame() {
     // Notatki gracza a'la saper: „tu nic nie może być" — szkic po stronie klienta,
     // nie kosztuje tury, klucze "x:y"
     const noteMarks = ref<Set<string>>(new Set());
+    // bitwa oblężnicza (#119): fort zamiast floty wroga; null = zwykła bitwa
+    const fort = ref<FortView | null>(null);
 
     // Dziennik bitwy — po stronie klienta (po przeładowaniu zaczyna się od nowa)
     const log = ref<LogEntry[]>([]);
@@ -168,6 +170,7 @@ export function useGame() {
         opponentShips.value = dto.opponentShips ?? dto.allowedShips ?? {};
         opponentVariants.value = dto.opponentVariants && !Array.isArray(dto.opponentVariants) ? dto.opponentVariants : {};
         shotsTotal.value = dto.shotsCount ?? 0;
+        fort.value = dto.fort ?? null;
     }
 
     function isShipSunk(s: PlayerFleetItem): boolean {
@@ -271,7 +274,9 @@ export function useGame() {
                 ? `Wczytano trwającą bitwę — oddano już ${g.shotsCount} strzałów.`
                 : attackerFirst
                     ? 'Napastnik otworzył ogień pierwszy — teraz Twoja salwa.'
-                    : 'Flota na pozycjach. Wróg czeka we mgle — oddaj pierwszą salwę.');
+                    : g.fort
+                        ? `Flota pod fortem. Zniszcz ${g.fort.guns.total} działa nadbrzeżne — mury tylko pochłaniają strzały, magazyn prochu wybucha.`
+                        : 'Flota na pozycjach. Wróg czeka we mgle — oddaj pierwszą salwę.');
         } catch (e: any) {
             error.value = e?.message ?? 'Start failed';
             try { console.warn('[useGame.start] ERROR', e); } catch {}
@@ -285,14 +290,36 @@ export function useGame() {
         if (!gameId.value) return;
         const enemyBefore = enemySunkLengths.value.length;
         const ownBefore = playerSunkLengths.value.length;
+        const fortBefore = fort.value;
         const g = await getGame(gameId.value);
         applyProjection(g);
-        for (const l of enemySunkLengths.value.slice(enemyBefore)) {
-            pushLog('TY', `Zatopiono jednostkę wroga: ${shipName(l).toLowerCase()} (${fieldsLabel(l)}).`);
+        if (fort.value) {
+            logFort(fortBefore, fort.value);
+        } else {
+            for (const l of enemySunkLengths.value.slice(enemyBefore)) {
+                pushLog('TY', `Zatopiono jednostkę wroga: ${shipName(l).toLowerCase()} (${fieldsLabel(l)}).`);
+            }
         }
         const ownSunk = playerSunkLengths.value;
         if (ownSunk.length > ownBefore) {
             pushLog('WRÓG', `Stracono: ${ownSunk.slice(ownBefore).map(l => shipName(l).toLowerCase()).join(', ')}.`);
+        }
+    }
+
+    /** Dziennik oblężenia: eksplozja magazynu, odsłonięte mury, zniszczone działa. */
+    function logFort(before: FortView | null, now: FortView) {
+        if (!before) return;
+        if (now.explosion && !before.explosion) {
+            pushLog('TY', 'Magazyn prochu wybuchł! Eksplozja trafiła pola 3×3 wokół niego.');
+        }
+        const seen = new Set(before.revealed.map(c => `${c.x}:${c.y}`));
+        const walls = now.revealed.filter(c => c.kind === 'wall' && !seen.has(`${c.x}:${c.y}`)).length;
+        if (walls > 0) pushLog('TY', `Mur pochłonął ${walls === 1 ? 'trafienie' : `${walls} trafienia`} — nie liczy się do zwycięstwa.`);
+        const destroyed = before.guns.left - now.guns.left;
+        if (destroyed > 0) {
+            pushLog('TY', now.guns.left === 0
+                ? 'Ostatnie działo zniszczone — fort zamilkł!'
+                : `${destroyed === 1 ? 'Działo zniszczone' : `Zniszczone działa: ${destroyed}`} · fortowi zostało ${now.guns.left}/${now.guns.total}.`);
         }
     }
 
@@ -490,6 +517,8 @@ export function useGame() {
         ruleset, energy, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells, aliveCarriers,
         // notatki (saper-style)
         noteMarks, toggleNote,
+        // oblężenie fortu (#119)
+        fort,
         // stats
         shotsCount, shotsTotal, hitsCount, missesCount, duplicatesCount, opponentHitsCount,
         enemySunkLengths, playerSunkLengths, enemyTotal, playerTotal, allowedShips, opponentShips, opponentVariants, playerFleet,

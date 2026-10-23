@@ -292,7 +292,9 @@ const primary = computed<Primary>(() => {
     return {
         kind: 'training',
         label: 'Nowa bitwa',
-        hint: `trening ${prefs.size}×${prefs.size} · ${prefs.ruleset === 'fun' ? 'bronie specjalne' : 'klasyczna'} · bez XP`,
+        hint: prefs.siege
+            ? 'trening · oblężenie fortu 10×10 · bez XP'
+            : `trening ${prefs.size}×${prefs.size} · ${prefs.ruleset === 'fun' ? 'bronie specjalne' : 'klasyczna'} · bez XP`,
     };
 });
 
@@ -330,7 +332,7 @@ async function startTraining() {
     error.value = '';
     try {
         const prefs = getTrainingPrefs();
-        const game = await createGame(prefs.ruleset, prefs.size);
+        const game = await createGame(prefs.ruleset, prefs.size, prefs.siege);
         await router.push({ name: 'place-fleet', params: { id: game.id } });
     } catch (e: any) {
         error.value = e?.message ?? 'Nie udało się utworzyć gry';

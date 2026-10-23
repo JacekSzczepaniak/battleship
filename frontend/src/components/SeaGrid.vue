@@ -4,6 +4,7 @@
       podłoże:  water | fog
       treść:    ship | hit | sunk | miss
       nakładki: preview | preview-ok | preview-bad | launch | sonar-ship | sonar-water | note | anim
+      fort (#119, odsłonięte konstrukcje): fort-gun | fort-wall | fort-magazine; nakładka: blast
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -151,6 +152,41 @@ const gridStyle = computed(() => ({
     height: 7px;
     box-shadow: inset 0 0 0 1.6px #5f8089;
 }
+
+/*
+    Fort (#119): odsłonięta konstrukcja zamiast trafienia. Działo (jedno pole,
+    trafienie = zniszczenie) — wylot lufy przekreślony; mur — kamień, bez pulsu,
+    bo nie ma czego dobijać; magazyn — złoty romb. Eksplozja: przerywana obwódka.
+*/
+.cell.fort-gun { background: #24130e; box-shadow: inset 0 0 0 1.5px var(--danger); }
+.cell.fort-gun::after {
+    width: calc(var(--cell) * .42);
+    height: calc(var(--cell) * .42);
+    background: #3a1d12;
+    box-shadow: 0 0 0 2px var(--danger);
+}
+.cell.fort-gun::before {
+    width: calc(var(--cell) * .7);
+    height: 2.5px;
+    border-radius: 2px;
+    background: var(--danger);
+    transform: translate(-50%, -50%) rotate(-45deg);
+    z-index: 1;
+}
+.cell.fort-wall {
+    background: repeating-linear-gradient(0deg, #4a5257 0 calc(var(--cell) / 4 - 1px), #2e3438 calc(var(--cell) / 4 - 1px) calc(var(--cell) / 4));
+    box-shadow: inset 0 0 0 1px #6b767c;
+}
+.cell.fort-magazine { background: #3b2d0e; box-shadow: inset 0 0 0 1.5px var(--warn), 0 0 12px #d8ae4c55; }
+.cell.fort-magazine::after {
+    width: calc(var(--cell) * .38);
+    height: calc(var(--cell) * .38);
+    border-radius: 2px;
+    background: var(--warn);
+    transform: translate(-50%, -50%) rotate(45deg);
+}
+.cell.blast { outline: 1.5px dashed #e8843caa; outline-offset: -4px; }
+.cell.blast.miss { background: #23160f; }
 
 /* zwiad i notatki */
 .cell.sonar-ship { box-shadow: inset 0 0 0 2px var(--info); background: #0f3640; }

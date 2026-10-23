@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Domain\Expedition\BattleKind;
 use App\Domain\Expedition\CaptainProfile;
+use App\Domain\Expedition\LogEntry;
+use App\Domain\Expedition\LogEvent;
 use App\Domain\Expedition\Resources;
 use App\Domain\Expedition\StaticIslandCatalog;
 use App\Domain\Expedition\WorldMap;
@@ -152,7 +154,12 @@ it('nieobecność do końca okna odbiera wyspę i połowę magazynu, bez strat w
             'stockpileLost' => ['wood' => 10, 'steel' => 3, 'gold' => 1],
         ])
         ->and($profile->stockpile('wyspa-sygnalowa'))->toEqual(new Resources(11, 4, 2))
-        ->and(fleetState($profile))->toBe($fleet);
+        ->and(fleetState($profile))->toBe($fleet)
+        // dziennik (#111): zapowiedź i utrata w tikach zdarzeń, nie w tiku odczytu
+        ->and(array_map(static fn (LogEntry $e) => [$e->tick, $e->event, $e->data], $profile->log()))->toBe([
+            [$counterattack['announcedAt'], LogEvent::CounterattackAnnounced, ['island' => 'wyspa-sygnalowa', 'strikeAt' => $counterattack['strikeAt']]],
+            [$counterattack['strikeAt'], LogEvent::IslandLost, ['island' => 'wyspa-sygnalowa', 'absent' => true, 'stockpileLost' => ['wood' => 10, 'steel' => 3, 'gold' => 1]]],
+        ]);
 });
 
 it('utrata wyspy zatrzymuje złoże — urobek liczy się do tiku uderzenia', function () {
@@ -196,6 +203,7 @@ it('rozpoczęta obrona wstrzymuje termin, a wygrana zostawia banderę i zaczyna 
         ->and($profile->stockpile('wyspa-sygnalowa'))->toEqual(new Resources(20, 10, 5))
         ->and($profile->counterattack())->toBeNull()
         ->and($profile->lastCounterattack()['held'] ?? null)->toBeTrue()
+        ->and(array_slice($profile->log(), -1)[0] ?? null)->toEqual(new LogEntry($settledAt, LogEvent::IslandDefended, ['island' => 'wyspa-sygnalowa']))
         ->and(awaitCounterattack($profile)['announcedAt'])->toBeGreaterThan($settledAt + 8);
 });
 

@@ -5,6 +5,7 @@ namespace App\Application\Expedition;
 use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\IslandCatalog;
+use App\Domain\Expedition\LogEntry;
 use App\Domain\Expedition\ProfileRepository;
 use App\Domain\Expedition\Sea;
 use App\Domain\Expedition\SeaGraph;
@@ -31,9 +32,10 @@ final class GetExpedition
      * typów statków (do UI stoczni) i budynków (do panelu osady), wyspy
      * z kłódkami, banderami, stoczniami, złożami i budynkami, kontratak
      * w toku i ostatnie rozstrzygnięcie (#78), drzewko badań (Epic G) oraz bramy
-     * bieżącego akwenu z powodem blokady i strażnikiem (#107).
+     * bieżącego akwenu z powodem blokady i strażnikiem (#107) oraz dziennik
+     * kapitana (#111).
      *
-     * @return array{profile: array<string,mixed>, fleet: list<array<string,mixed>>, shipTypes: list<array<string,mixed>>, buildingTypes: list<array<string,mixed>>, islands: list<array<string,mixed>>, world: array<string,mixed>, counterattack: array<string,mixed>, research: array<string,mixed>}
+     * @return array{profile: array<string,mixed>, fleet: list<array<string,mixed>>, shipTypes: list<array<string,mixed>>, buildingTypes: list<array<string,mixed>>, islands: list<array<string,mixed>>, world: array<string,mixed>, counterattack: array<string,mixed>, research: array<string,mixed>, log: list<array<string,mixed>>}
      */
     public function handle(string $profileId): array
     {
@@ -179,7 +181,30 @@ final class GetExpedition
             ],
             'counterattack' => $this->counterattackView($profile, $world),
             'research' => $this->researchView($profile, $world),
+            'log' => $this->logView($profile),
         ];
+    }
+
+    /**
+     * Dziennik kapitana od najnowszego wpisu: tik, rodzaj zdarzenia i jego
+     * dane, a do id wyspy, bramy i akwenów nazwy z katalogów (wyspa z innego
+     * akwenu też ma nazwę). Treść zdania składa UI.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function logView(CaptainProfile $profile): array
+    {
+        return array_map(function (LogEntry $entry) {
+            $data = $entry->data;
+            $names = array_filter([
+                'islandName' => isset($data['island']) ? $this->islandName((string) $data['island']) : null,
+                'gateName' => isset($data['gate']) ? ($this->seas->gate((string) $data['gate'])->name ?? (string) $data['gate']) : null,
+                'fromName' => isset($data['from']) ? ($this->seas->sea((string) $data['from'])->name ?? (string) $data['from']) : null,
+                'toName' => isset($data['to']) ? ($this->seas->sea((string) $data['to'])->name ?? (string) $data['to']) : null,
+            ], static fn ($v) => null !== $v);
+
+            return ['tick' => $entry->tick, 'event' => $entry->event->value] + $data + $names;
+        }, array_reverse($profile->log()));
     }
 
     /**

@@ -43,6 +43,9 @@ final class CaptainProfile
     private const COUNTERATTACK_CHANCE = 15;
     private const COUNTERATTACK_WARNING_TICKS = 12;
 
+    /** Dziennik kapitana (#111) trzyma tyle ostatnich wpisów. */
+    public const LOG_LIMIT = 50;
+
     /** @var array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int}> klucz: gameId */
     private array $battles = [];
 
@@ -152,6 +155,14 @@ final class CaptainProfile
      * @var array<string, int> klucz: id bramy, wartość: tik otwarcia
      */
     private array $openedGates = [];
+
+    /**
+     * Dziennik kapitana (#111): ostatnie ważne zdarzenia w kolejności tików,
+     * najstarsze pierwsze, najwyżej LOG_LIMIT wpisów.
+     *
+     * @var list<LogEntry>
+     */
+    private array $log = [];
 
     /** Licznik ruchów — wejście do deterministycznych rzutów eventów podróży. */
     private int $moveCount = 0;
@@ -431,6 +442,7 @@ final class CaptainProfile
 
         $ship = OwnedShip::build($type, $variant);
         $this->fleet[] = $ship;
+        $this->record($this->tick, LogEvent::ShipBuilt, ['ship' => $type->value, 'variant' => $ship->variant?->value, 'island' => $islandId]);
 
         return $ship;
     }
@@ -527,6 +539,7 @@ final class CaptainProfile
 
         $this->pay($island->id, $type->buildCost());
         $this->buildings[$island->id][] = $type;
+        $this->record($this->tick, LogEvent::BuildingBuilt, ['building' => $type->value, 'island' => $island->id]);
     }
 
     /**
@@ -693,6 +706,7 @@ final class CaptainProfile
             }
         }
         $this->researched[] = $this->research['technology'];
+        $this->record($doneAt, LogEvent::ResearchCompleted, ['technology' => $this->research['technology']->value, 'island' => $this->research['island']]);
         $this->research = null;
     }
 
@@ -801,6 +815,7 @@ final class CaptainProfile
                 'strikeAt' => $t + self::COUNTERATTACK_WARNING_TICKS,
                 'defense' => null,
             ];
+            $this->record($t, LogEvent::CounterattackAnnounced, ['island' => $this->counterattack['island'], 'strikeAt' => $this->counterattack['strikeAt']]);
         }
         $this->counterattackRolledTo = max($this->counterattackRolledTo, $this->tick);
     }
@@ -840,6 +855,13 @@ final class CaptainProfile
         }
 
         $this->lastCounterattack = ['island' => $islandId, 'tick' => $tick, 'held' => $held, 'absent' => $absent, 'plundered' => $plundered, 'stockpileLost' => $lost->toArray()];
+        if ($held) {
+            $this->record($tick, LogEvent::IslandDefended, ['island' => $islandId]);
+        } elseif ($plundered) {
+            $this->record($tick, LogEvent::IslandPlundered, ['island' => $islandId, 'stockpileLost' => $lost->toArray()]);
+        } else {
+            $this->record($tick, LogEvent::IslandLost, ['island' => $islandId, 'absent' => $absent, 'stockpileLost' => $lost->toArray()]);
+        }
     }
 
     /**
@@ -1009,6 +1031,9 @@ final class CaptainProfile
         // Nie „nieodkryty”: cel rejsu jest zawsze odkryty, bo przybycie odkrywa
         // całe sąsiedztwo (#68)
         $event = $this->isVisited($x, $y) ? null : $this->rollStorm($world->theme());
+        if (null !== $event) {
+            $this->record($this->tick, LogEvent::Storm, array_diff_key($event, ['type' => true]));
+        }
 
         $this->here()->moveTo($x, $y);
 
@@ -1142,6 +1167,7 @@ final class CaptainProfile
 
         ++$this->moveCount;
         ++$this->tick;
+        $this->record($this->tick, LogEvent::GatePassed, ['gate' => $passage->gate->id, 'from' => $passage->from, 'to' => $passage->to]);
         $this->sea = $passage->to;
         $outcome = $this->arrive($arrival['x'], $arrival['y'], $to);
         // urobek, badanie i kontrataki akwenu docelowego do bieżącego tiku
@@ -1286,6 +1312,7 @@ final class CaptainProfile
         $gateOpened = BattleKind::Guardian === $kind && 'won' === $result && !$this->isGateOpen($battle['island']);
         if ($gateOpened) {
             $this->openedGates[$battle['island']] = $this->tick;
+            $this->record($this->tick, LogEvent::GateOpened, ['gate' => $battle['island']]);
         }
         if ($captured) {
             // odbita wyspa wznawia badanie swojej uczelni od tiku zdobycia
@@ -1294,6 +1321,7 @@ final class CaptainProfile
             // złoże (jeśli wyspa je ma) rusza od tiku zdobycia
             $this->depositTicks[$battle['island']] = $this->tick;
             $this->counterattackCalmFrom = $this->tick;
+            $this->record($this->tick, LogEvent::IslandCaptured, ['island' => $battle['island']]);
         }
         if (BattleKind::Guardian !== $kind) {
             $this->stockpiles[$battle['island']] = $this->stockpile($battle['island'])->add($loot);
@@ -1447,6 +1475,32 @@ final class CaptainProfile
         return $sunk;
     }
 
+    // --- Dziennik kapitana (#111) ---
+
+    /** @return list<LogEntry> ostatnie zdarzenia, najstarsze pierwsze */
+    public function log(): array
+    {
+        return $this->log;
+    }
+
+    /**
+     * Dopisuje zdarzenie do dziennika. Kontrataki i badania liczą się leniwie,
+     * więc wpis może dotyczyć tiku wcześniejszego niż ostatni — trafia za
+     * wpisy z tego samego albo wcześniejszego tiku. Nadmiar ponad LOG_LIMIT
+     * odpada od najstarszych.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function record(int $tick, LogEvent $event, array $data = []): void
+    {
+        $at = count($this->log);
+        while ($at > 0 && $this->log[$at - 1]->tick > $tick) {
+            --$at;
+        }
+        array_splice($this->log, $at, 0, [new LogEntry($tick, $event, array_filter($data, static fn ($v) => null !== $v))]);
+        $this->log = array_slice($this->log, -self::LOG_LIMIT);
+    }
+
     // --- Snapshot (mapper persystencji) ---
 
     /** @return array<string, int> tik ostatniego naliczenia urobku złoża (klucz: id wyspy) */
@@ -1509,6 +1563,7 @@ final class CaptainProfile
      * @param string|null                                                                                                                $sea          akwen floty; null = profil sprzed akwenów: Morze Rozbitków
      * @param array<string, SeaState>                                                                                                    $seaStates    stan pozostałych akwenów (klucz: id akwenu); stan akwenu $sea dają $position, $discovered i $visited
      * @param array<string, int>                                                                                                         $openedGates  bramy otwarte na stałe: id bramy → tik otwarcia
+     * @param list<LogEntry>                                                                                                             $log          dziennik kapitana, najstarsze pierwsze; profil sprzed dziennika zaczyna od pustego
      */
     public static function fromSnapshot(
         ProfileId $id,
@@ -1534,6 +1589,7 @@ final class CaptainProfile
         ?string $sea = null,
         array $seaStates = [],
         array $openedGates = [],
+        array $log = [],
     ): self {
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
@@ -1555,6 +1611,8 @@ final class CaptainProfile
         $self->sea = $sea ?? Sea::START;
         $self->seaStates = $seaStates;
         $self->openedGates = $openedGates;
+        usort($log, static fn (LogEntry $a, LogEntry $b) => $a->tick <=> $b->tick);
+        $self->log = array_slice($log, -self::LOG_LIMIT);
         // profil sprzed odwiedzin: znamy tylko obecną pozycję, trasy z przeszłości nie
         $self->seaStates[$self->sea] = new SeaState(
             $position,

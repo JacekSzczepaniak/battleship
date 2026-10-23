@@ -33,14 +33,16 @@ final class SettleBattle
      * rozstrzyga kontratak (przegrana odbiera wyspę i połowę magazynu, #78).
      * Bitwa ze strażnikiem płaci wg strażnika bramy, a wygrana otwiera bramę;
      * łup ląduje w ładowni (#107). Udany abordaż zostawia zdobyty statek do
-     * decyzji kapitana (#118). Zatopione statki: wygrana → do remontu,
+     * decyzji kapitana (#118). Na twierdzy wygrana potyczka płaci jak porażka
+     * i oblega wyspę, a pełną stawkę i banderę daje wygrane oblężenie (#120).
+     * Zatopione statki: wygrana → do remontu,
      * przegrana → stracone.
      *
      * @return array{result:string, awarded:int, xp:int, rank:string, rankUp:bool,
      *     loot:array{wood:int, steel:int, gold:int},
      *     stockpile:array{wood:int, steel:int, gold:int}|null,
      *     cargo:array{wood:int, steel:int, gold:int}, cargoLost:array{wood:int, steel:int, gold:int},
-     *     lostShips:list<string>, damagedShips:list<string>, captured:bool,
+     *     lostShips:list<string>, damagedShips:list<string>, captured:bool, besieged:bool, kind:string,
      *     depositStarted:array{wood:int, steel:int, gold:int}|null,
      *     defense:array{held:bool, stockpileLost:array{wood:int, steel:int, gold:int}}|null, gateOpened:bool,
      *     prize:array{id:string, type:string, variant:?string, tick:int}|null}
@@ -65,7 +67,8 @@ final class SettleBattle
         // bitwa ze strażnikiem: w rejestrze zamiast wyspy stoi brama
         $guardian = null;
         $island = null;
-        if (BattleKind::Guardian === $profile->battleKindFor($game->id())) {
+        $kind = $profile->battleKindFor($game->id());
+        if (BattleKind::Guardian === $kind) {
             $guardian = $this->seas->gate($islandId)?->guardian() ?? throw new \DomainException('Gate not found');
         } else {
             $island = $this->islands->byId($islandId) ?? throw new \DomainException('Island not found');
@@ -77,6 +80,8 @@ final class SettleBattle
         }
 
         $result = GameStatus::Lost === $game->status() ? 'lost' : 'won';
+        // wygrana potyczka na twierdzy płaci jak porażka: pełna stawka czeka na wygrane oblężenie (#120)
+        $fullReward = 'won' === $result && !(BattleKind::Capture === $kind && true === $island?->stronghold);
         $rankBefore = $profile->rank();
         // urobek złóż do bieżącego tiku liczy się przed łupem, który trafia do tego samego magazynu
         $world = $this->worldFactory->worldFor($profile);
@@ -94,8 +99,8 @@ final class SettleBattle
         $outcome = $profile->settleBattle(
             $game->id(),
             $result,
-            'won' === $result ? $rewards->xpWin : $rewards->xpLoss,
-            'won' === $result ? $rewards->lootWin : $rewards->lootLoss,
+            $fullReward ? $rewards->xpWin : $rewards->xpLoss,
+            $fullReward ? $rewards->lootWin : $rewards->lootLoss,
             array_map(static fn (Ship $ship) => $ship->length, $sunk),
             $this->sunkEnemyShipCount($game),
             $sunkVariants,
@@ -119,6 +124,10 @@ final class SettleBattle
             'damagedShips' => $outcome['damaged'],
             // wygrana postawiła banderę na wyspie
             'captured' => $outcome['captured'],
+            // wygrana potyczka obległa twierdzę — banderę da oblężenie (#120)
+            'besieged' => $outcome['besieged'],
+            // rodzaj bitwy: capture|defense|guardian|siege
+            'kind' => ($kind ?? BattleKind::Capture)->value,
             // zdobycie wyspy ze złożem uruchamia wydobycie: urobek na tik (odbita wyspa z tartakiem — podwojony)
             'depositStarted' => $outcome['captured'] && null !== $island && $island->hasDeposit() ? $profile->depositYield($island, $world->theme())->toArray() : null,
             // obrona przed kontratakiem: czy bandera została i co przepadło z magazynu
@@ -135,9 +144,14 @@ final class SettleBattle
     /**
      * Liczba statków wroga zatopionych przez gracza — ze snapshotu gry, tak jak
      * straty własne: statek jest zatopiony, gdy wszystkie jego pola trafił gracz.
+     * Mury fortu (#119) stoją na planszy jako statki, ale nimi nie są.
      */
     private function sunkEnemyShipCount(Game $game): int
     {
+        if (null !== $game->fort()) {
+            return 0;
+        }
+
         $hits = [];
         foreach ($game->shotsWithResults() as $shot) {
             if (in_array($shot['result'], ['hit', 'sunk'], true)) {

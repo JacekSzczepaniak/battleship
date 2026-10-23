@@ -15,6 +15,12 @@ enum LogEvent: string
     /** Wygrana bitwa postawiła banderę na wyspie. */
     case IslandCaptured = 'island-captured';
 
+    /** Wygrana potyczka na twierdzy: wyspa oblężona, banderę da wygrane oblężenie (#120). */
+    case IslandBesieged = 'island-besieged';
+
+    /** Przegrane oblężenie: wyspa zostaje oblężona, można ponowić szturm (#120). */
+    case SiegeFailed = 'siege-failed';
+
     /** Kontratak odebrał wyspę: przegrana obrona albo uderzenie bez obrony. */
     case IslandLost = 'island-lost';
 

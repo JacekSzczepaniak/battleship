@@ -214,8 +214,29 @@ nie działa. Pełne oblężenie fortu z własną planszą to Epic H.
    działa nadbrzeżne, **magazyn prochu** = trafienie wywołuje eksplozję
    łańcuchową). Ta sama mechanika obsługuje bramy-cieśniny.
 
-✅ (#119) Silnik oblężenia, na razie jako bitwa treningowa „oblężenie”.
-Forty na twierdzach i dwie fazy zdobycia to #120.
+✅ (#119) Silnik oblężenia, także jako bitwa treningowa „oblężenie”.
+
+✅ (#120) **Forty na trzech twierdzach:** Twierdza Admiralicji, Bastion Fal
+i Cytadela Mgieł, czyli najwyższa wyspa każdego akwenu (D5). Twierdzę zdobywa
+się w dwóch fazach, a obie wymagają floty przy wyspie:
+- **potyczka** z flotą strażniczą jak na każdej wyspie (abordaż działa).
+  Wygrana płaci jak porażka (XP i łup za przegraną) i **oblega** wyspę,
+  ale nie stawia bandery. Oblężonej wyspy nie atakuje się drugi raz.
+  Przegrana potyczka niczego nie zapamiętuje,
+- **oblężenie** fortu zaczyna się osobną akcją „Rozpocznij oblężenie”. Plansza
+  fortu 10×10, więc skład mieści się w 20 polach. Każda próba to nowy układ
+  fortu (seed świata, wyspy i numeru próby). Abordażu nie ma, bo fort nie jest
+  statkiem, a mury nie liczą się do zatopionych jednostek wroga,
+- **wygrane oblężenie** stawia banderę i płaci pełną stawkę wyspy (XP i łup
+  za wygraną), złoże rusza jak przy każdym zdobyciu,
+- **przegrane oblężenie** (D7): zatopione statki przepadają, XP i łup jak za
+  porażkę, a wyspa zostaje oblężona, więc szturm można ponawiać bez potyczki,
+- oblężona wyspa nie jest pod banderą, więc **kontratak** jej nie dotyczy.
+  Twierdza utracona w kontrataku wraca do stanu sprzed potyczki,
+- rejestr bitew ma rodzaj `siege` obok `capture`, `defense` i `guardian`;
+  dziennik notuje oblężenie i obroniony fort,
+- fort w strzeżonej cieśninie jest odłożony (D6). Stare profile się wczytują,
+  ale twierdze zdobyte przed #120 zostają pod banderą (profile można resetować).
 - **Plansza fortu 10×10:** 4 działa po jednym polu, 3 odcinki muru po 2–3
   pola i 1 magazyn prochu. Liczby są w jednym miejscu (`FortRules`, D3).
 - **Układ** jest deterministyczny z seeda (D4). Konstrukcje mieszczą się na

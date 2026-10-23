@@ -105,6 +105,8 @@ final class StaticIslandCatalog implements IslandCatalog
                 shipyardLevel: 0,
                 boardWidth: 10,
                 boardHeight: 10,
+                // fort: banderę daje dopiero wygrane oblężenie (#120)
+                stronghold: true,
             ),
         ];
     }

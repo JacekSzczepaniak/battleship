@@ -81,6 +81,11 @@ final class GetExpedition
                 'shipyardLevel' => $profile->shipyardLevel($island),
                 // bandera kapitana: pierwsza wygrana bitwa o wyspę ją zdobywa
                 'owned' => $isOwned,
+                // twierdza z fortem (#120): wygrana potyczka oblega wyspę, banderę daje oblężenie
+                'stronghold' => $island->stronghold,
+                'besieged' => $profile->isBesieged($island->id),
+                // skład oblężenia mieści się w limicie planszy fortu; null = wyspa bez fortu
+                'siegeSquadLimit' => $island->stronghold ? StartSiege::SQUAD_CELL_LIMIT : null,
                 // złoże: urobek na tik (z tartakiem/kopalnią), limit czekający w magazynie, czy pracuje (pod banderą)
                 'deposit' => $island->hasDeposit() ? [
                     'yield' => $profile->depositYield($island, $theme)->toArray(),

@@ -131,7 +131,9 @@
                                 <div class="tags">
                                     <span v-if="currentIsland.owned" class="tag own">Twoja osada</span>
                                     <span v-else-if="!currentIsland.unlocked" class="tag">🔒 od rangi {{ rankLabel(currentIsland.requiredRank) }}</span>
+                                    <span v-else-if="currentIsland.besieged" class="tag siege">🏰 Oblężona</span>
                                     <span v-else class="tag">Wyspa do zdobycia</span>
+                                    <span v-if="currentIsland.stronghold" class="tag">🏰 Twierdza z fortem</span>
                                     <span class="tag">Sektor {{ sectorLabel(currentIsland.position!) }} · zadokowano</span>
                                     <span class="tag">{{ currentIsland.mode === 'fun' ? 'bronie specjalne' : 'klasyczna bitwa' }}</span>
                                 </div>
@@ -141,42 +143,53 @@
 
                             <!-- Bitwa o wyspę albo obrona przed kontratakiem -->
                             <div class="block">
-                                <div class="kicker">{{ currentIsland.owned ? 'Obrona' : 'Bitwa' }}</div>
-                                <div v-if="!currentIsland.owned" class="meta">
+                                <div class="kicker">{{ currentIsland.owned ? 'Obrona' : currentIsland.besieged ? 'Oblężenie fortu' : currentIsland.stronghold ? 'Potyczka z flotą strażniczą' : 'Bitwa' }}</div>
+                                <!-- twierdza (#120): potyczka oblega wyspę, banderę i pełny łup daje oblężenie fortu -->
+                                <div v-if="currentIsland.besieged" class="meta">
+                                    <span>🏆 wygrane oblężenie: 🚩 bandera, +{{ currentIsland.xpWin }} XP, {{ formatResources(currentIsland.lootWin, 'bez łupów') }}</span>
+                                    <span class="muted">porażka: +{{ currentIsland.xpLoss }} XP, {{ formatResources(currentIsland.lootLoss, 'bez łupów') }} · zatopione statki przepadają, oblężenie trwa</span>
+                                    <span class="muted">plansza fortu 10×10 · zniszcz wszystkie działa · każdy szturm to nowy układ fortu<template v-if="currentIsland.wins || currentIsland.losses"> · bilans: {{ currentIsland.wins }}W / {{ currentIsland.losses }}P</template></span>
+                                </div>
+                                <div v-else-if="currentIsland.stronghold && !currentIsland.owned" class="meta">
+                                    <span>⚔️ wygrana potyczka obleże twierdzę: +{{ currentIsland.xpLoss }} XP, {{ formatResources(currentIsland.lootLoss, 'bez łupów') }}</span>
+                                    <span class="muted">🏰 banderę, +{{ currentIsland.xpWin }} XP i {{ formatResources(currentIsland.lootWin, 'bez łupów') }} da dopiero oblężenie fortu</span>
+                                    <span class="muted">porażka: +{{ currentIsland.xpLoss }} XP, {{ formatResources(currentIsland.lootLoss, 'bez łupów') }} · plansza {{ currentIsland.board.w }}×{{ currentIsland.board.h }}<template v-if="currentIsland.wins || currentIsland.losses"> · bilans: {{ currentIsland.wins }}W / {{ currentIsland.losses }}P</template></span>
+                                </div>
+                                <div v-else-if="!currentIsland.owned" class="meta">
                                     <span>🏆 +{{ currentIsland.xpWin }} XP, {{ formatResources(currentIsland.lootWin, 'bez łupów') }}</span>
                                     <span class="muted">porażka: +{{ currentIsland.xpLoss }} XP, {{ formatResources(currentIsland.lootLoss, 'bez łupów') }}</span>
                                     <span class="muted">plansza {{ currentIsland.board.w }}×{{ currentIsland.board.h }}<template v-if="currentIsland.wins || currentIsland.losses"> · bilans: {{ currentIsland.wins }}W / {{ currentIsland.losses }}P</template></span>
                                 </div>
                                 <div v-if="currentIsland.unlocked && (!currentIsland.owned || canDefend(currentIsland, counterattack.pending))" class="squad">
-                                    <span :class="{ over: activeCells > currentIsland.squadLimit }">
-                                        skład: {{ squadCells(squadFor(currentIsland)) }} / {{ currentIsland.squadLimit }} pól
-                                        <template v-if="activeCells > currentIsland.squadLimit"> · flota ma {{ activeCells }} pól — część zostanie w porcie</template>
-                                        <template v-else-if="!squadPick && leavesShipsInPort(currentIsland)"> · transportowiec płynie tylko wybrany ręcznie</template>
+                                    <span :class="{ over: activeCells > islandTarget!.squadLimit }">
+                                        skład: {{ squadCells(squadFor(islandTarget!)) }} / {{ islandTarget!.squadLimit }} pól
+                                        <template v-if="activeCells > islandTarget!.squadLimit"> · flota ma {{ activeCells }} pól — część zostanie w porcie</template>
+                                        <template v-else-if="!squadPick && leavesShipsInPort(islandTarget!)"> · transportowiec płynie tylko wybrany ręcznie</template>
                                     </span>
-                                    <button v-if="activeCells > currentIsland.squadLimit || leavesShipsInPort(currentIsland)" class="btn btn-small btn-secondary" @click="togglePicker(currentIsland)">
+                                    <button v-if="activeCells > islandTarget!.squadLimit || leavesShipsInPort(islandTarget!)" class="btn btn-small btn-secondary" @click="togglePicker(islandTarget!)">
                                         {{ squadPick ? 'skład domyślny' : 'wybierz skład' }}
                                     </button>
                                     <ul v-if="squadPick" class="squad-pick">
                                         <li v-for="ship in activeShips" :key="ship.id">
-                                            <label :class="{ off: !squadPick.has(ship.id) && squadCells(squadFor(currentIsland)) + ship.length > currentIsland.squadLimit }">
+                                            <label :class="{ off: !squadPick.has(ship.id) && squadCells(squadFor(islandTarget!)) + ship.length > islandTarget!.squadLimit }">
                                                 <input
                                                     type="checkbox"
                                                     :checked="squadPick.has(ship.id)"
-                                                    :disabled="!squadPick.has(ship.id) && squadCells(squadFor(currentIsland)) + ship.length > currentIsland.squadLimit"
+                                                    :disabled="!squadPick.has(ship.id) && squadCells(squadFor(islandTarget!)) + ship.length > islandTarget!.squadLimit"
                                                     @change="toggleShip(ship.id)"
                                                 />
                                                 {{ SHIP_ICONS[ship.type] }} {{ fleetShipLabel(ship) }} · {{ fieldsLabel(ship.length) }}
                                             </label>
                                         </li>
                                     </ul>
-                                    <span v-if="convoyBlocked(currentIsland)" class="over">⚠️ konwój bez eskorty nie zaatakuje wyspy — dobierz kuter, niszczyciel albo lotniskowiec</span>
+                                    <span v-if="convoyBlocked(islandTarget!)" class="over">⚠️ konwój bez eskorty nie zaatakuje wyspy — dobierz kuter, niszczyciel albo lotniskowiec</span>
                                 </div>
                                 <!-- wyspa pod banderą nie jest areną: bitwa tylko w obronie przed kontratakiem (#78) -->
                                 <template v-if="currentIsland.owned">
                                     <button
                                         v-if="canDefend(currentIsland, counterattack.pending)"
                                         class="btn btn-primary act"
-                                        :disabled="starting !== null || pendingBattle !== null || squadFor(currentIsland).length === 0 || convoyBlocked(currentIsland)"
+                                        :disabled="starting !== null || pendingBattle !== null || squadFor(islandTarget!).length === 0 || convoyBlocked(islandTarget!)"
                                         @click="onStartBattle(currentIsland)"
                                     >
                                         {{ starting === currentIsland.id ? 'Stawianie żagli…' : `🛡️ Broń wyspy — uderzenie za ${ticksLabel(counterattack.pending!.ticksLeft)}` }}
@@ -185,12 +198,20 @@
                                     <p v-else class="muted">🚩 Wyspa pod Twoją banderą — walczysz tu tylko w obronie przed kontratakiem.</p>
                                 </template>
                                 <button
+                                    v-else-if="currentIsland.unlocked && currentIsland.besieged"
+                                    class="btn btn-primary act"
+                                    :disabled="starting !== null || pendingBattle !== null || squadFor(islandTarget!).length === 0 || convoyBlocked(islandTarget!)"
+                                    @click="onStartSiege(currentIsland)"
+                                >
+                                    {{ starting === currentIsland.id ? 'Stawianie żagli…' : '🏰 Rozpocznij oblężenie' }}
+                                </button>
+                                <button
                                     v-else-if="currentIsland.unlocked"
                                     class="btn btn-primary act"
-                                    :disabled="starting !== null || pendingBattle !== null || squadFor(currentIsland).length === 0 || convoyBlocked(currentIsland)"
+                                    :disabled="starting !== null || pendingBattle !== null || squadFor(islandTarget!).length === 0 || convoyBlocked(islandTarget!)"
                                     @click="onStartBattle(currentIsland)"
                                 >
-                                    {{ starting === currentIsland.id ? 'Stawianie żagli…' : '⚔️ Bitwa' }}
+                                    {{ starting === currentIsland.id ? 'Stawianie żagli…' : currentIsland.stronghold ? '⚔️ Potyczka' : '⚔️ Bitwa' }}
                                 </button>
                                 <p v-else class="muted">Wymaga rangi: {{ rankLabel(currentIsland.requiredRank) }}</p>
                             </div>
@@ -423,7 +444,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
-    buildBuilding, buildShip, createProfile, decidePrize, getExpedition, passGate, repairShip, sail, settleBattle, startGuardianBattle, startIslandBattle,
+    buildBuilding, buildShip, createProfile, decidePrize, getExpedition, passGate, repairShip, sail, settleBattle, startGuardianBattle, startIslandBattle, startSiege,
     startResearch, transferCargo,
     RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, SHIP_VARIANT_LABELS, TECH_LABELS, fleetShipLabel,
     type BuildingTypeName, type TechnologyName, type ExpeditionDTO, type FleetShipDTO, type GateDTO, type GuardianDTO, type IslandDTO,
@@ -547,6 +568,13 @@ function rankAtLeast(rank: RankName, required: RankName): boolean {
 const currentIsland = computed<IslandDTO | null>(
     () => expedition.value?.islands.find(i => i.present) ?? null
 );
+
+/** Cel składu bitewnego na wyspie floty: oblężenie liczy pola w limicie planszy fortu (#120). */
+const islandTarget = computed<IslandDTO | null>(() => {
+    const island = currentIsland.value;
+    if (!island?.besieged || island.siegeSquadLimit === null) return island;
+    return { ...island, squadLimit: island.siegeSquadLimit };
+});
 
 /** Brama na sektorze floty (#107). */
 const currentGate = computed<GateDTO | null>(
@@ -917,6 +945,22 @@ async function onStartBattle(island: IslandDTO) {
     }
 }
 
+async function onStartSiege(island: IslandDTO) {
+    const profileId = getProfileId();
+    if (!profileId) return;
+    starting.value = island.id;
+    error.value = '';
+    try {
+        const shipIds = squadPick.value ? [...squadPick.value] : undefined;
+        const game = await startSiege(profileId, island.id, shipIds);
+        setCurrentBattle({ profileId, gameId: game.id, islandId: island.id, islandName: island.name, kind: 'siege' });
+        await router.push({ name: 'place-fleet', params: { id: game.id } });
+    } catch (e: any) {
+        error.value = e?.message ?? 'Nie udało się rozpocząć oblężenia';
+        starting.value = null;
+    }
+}
+
 async function onStartGuardian(gate: GateDTO) {
     const profileId = getProfileId();
     if (!profileId || !gate.guardian) return;
@@ -998,6 +1042,7 @@ h2, h3 { font-family: var(--font-head); }
 .tags { display: flex; gap: 8px; flex-wrap: wrap; }
 .tag { padding: 4px 10px; border-radius: 999px; background: var(--bg-card); border: 1px solid var(--line-btn); font: 600 10px var(--font-mono); color: var(--text-muted); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
 .tag.own { background: #3a2516; border-color: #7a4a2a; color: var(--accent-light); }
+.tag.siege { border-color: var(--warn); color: var(--warn); }
 .tag.open { border-color: var(--info); color: var(--info); }
 .place-name { margin: 10px 0 0; font: 700 28px var(--font-head); }
 .desc { margin: 6px 0 0; color: var(--text-desc); font-size: 14px; }

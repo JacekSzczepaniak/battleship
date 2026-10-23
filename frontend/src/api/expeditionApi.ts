@@ -158,6 +158,11 @@ export interface IslandDTO {
     shipyardLevel: number;
     // bandera kapitana: pierwsza wygrana bitwa o wyspę ją zdobywa
     owned: boolean;
+    // twierdza z fortem (#120): wygrana potyczka oblega wyspę, banderę daje wygrane oblężenie
+    stronghold: boolean;
+    besieged: boolean;
+    // skład oblężenia mieści się w limicie planszy fortu; null = wyspa bez fortu
+    siegeSquadLimit: number | null;
     // złoże: urobek na tik trafia do magazynu wyspy (do limitu), dopóki wyspa jest pod banderą;
     // tartak i kopalnia podwajają urobek i limit
     deposit: { yield: ResourcesDTO; cap: ResourcesDTO; active: boolean } | null;
@@ -373,10 +378,13 @@ export interface ResearchDTO {
 }
 
 // dziennik kapitana (#111): rodzaj zdarzenia (Domain/Expedition/LogEvent) z danymi; treść składa lib/eventLog
+// rodzaj bitwy w rejestrze profilu (Domain/Expedition/BattleKind)
+export type BattleKindName = 'capture' | 'defense' | 'guardian' | 'siege';
+
 export type LogEventName =
     | 'storm' | 'island-captured' | 'island-lost' | 'island-defended' | 'island-plundered' | 'counterattack-announced'
     | 'research-completed' | 'ship-built' | 'building-built' | 'gate-opened' | 'gate-passed'
-    | 'ship-boarded' | 'prize-decided';
+    | 'ship-boarded' | 'prize-decided' | 'island-besieged' | 'siege-failed';
 
 export interface LogEntryDTO {
     tick: number;
@@ -464,6 +472,9 @@ export interface SettleResultDTO {
     damagedShips: ShipTypeName[];
     // wygrana postawiła banderę na wyspie
     captured: boolean;
+    // wygrana potyczka obległa twierdzę — banderę da oblężenie (#120)
+    besieged: boolean;
+    kind: BattleKindName;
     // zdobycie wyspy ze złożem: urobek na tik; null = złoże nie ruszyło teraz
     depositStarted: ResourcesDTO | null;
     // bitwa obronna (#78): czy bandera została i co przepadło z magazynu; null = bitwa o zdobycie
@@ -490,6 +501,11 @@ export async function startIslandBattle(profileId: string, islandId: string, shi
 /** Start bitwy ze strażnikiem bramy (#107); flota musi stać na sektorze bramy. */
 export async function startGuardianBattle(profileId: string, gateId: string, shipIds?: string[]): Promise<CreateGameResponse> {
     return http.post<CreateGameResponse>(`/profiles/${profileId}/gates/${gateId}/battle`, shipIds ? { shipIds } : {});
+}
+
+/** Start oblężenia fortu oblężonej twierdzy (#120); flota musi stać przy wyspie. */
+export async function startSiege(profileId: string, islandId: string, shipIds?: string[]): Promise<CreateGameResponse> {
+    return http.post<CreateGameResponse>(`/profiles/${profileId}/islands/${islandId}/siege`, shipIds ? { shipIds } : {});
 }
 
 /** Przejście przez otwartą bramę na drugi akwen; kosztuje tik. */

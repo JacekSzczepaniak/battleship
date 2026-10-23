@@ -31,6 +31,8 @@ final class StartIslandBattle
      * banderze role się odwracają: pierwszy strzał obrońcy, napastnik bez
      * największego statku (#79). Technologie gracza (Epic G) wchodzą do reguł
      * gry przy jej starcie — badanie ukończone w trakcie bitwy jej nie zmienia.
+     * Na twierdzy to potyczka z flotą: wygrana oblega wyspę, a fort zdobywa się
+     * osobną akcją (StartSiege, #120).
      *
      * @param list<string>|null $shipIds skład bitewny; null = dobór domyślny
      */
@@ -82,7 +84,7 @@ final class StartIslandBattle
         $shipIds = array_map(static fn ($s) => $s->id, $squad);
         $defense
             ? $profile->startDefense($island->id, $game->id(), $shipIds)
-            : $profile->startBattle($island->id, $game->id(), $shipIds);
+            : $profile->startBattle($island->id, $game->id(), $shipIds, $island->stronghold);
         $this->profiles->save($profile);
 
         return $game;

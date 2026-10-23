@@ -14,6 +14,7 @@ use App\Application\Expedition\SettleBattle;
 use App\Application\Expedition\StartGuardianBattle;
 use App\Application\Expedition\StartIslandBattle;
 use App\Application\Expedition\StartResearch;
+use App\Application\Expedition\StartSiege;
 use App\Application\Expedition\TransferCargo;
 use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\OwnedShip;
@@ -46,6 +47,7 @@ final class ExpeditionController
         private StartResearch $startResearch,
         private StartGuardianBattle $startGuardianBattle,
         private PassGate $passGate,
+        private StartSiege $startSiege,
     ) {
     }
 
@@ -86,6 +88,14 @@ final class ExpeditionController
         $this->assertUuid($id, 'profile');
 
         return $this->gameCreated($this->startIslandBattle->handle($id, $islandId, $this->shipIds($request)));
+    }
+
+    #[Route('/{id}/islands/{islandId}/siege', name: 'api_profiles_island_siege', methods: ['POST'])]
+    public function startSiege(string $id, string $islandId, Request $request): JsonResponse
+    {
+        $this->assertUuid($id, 'profile');
+
+        return $this->gameCreated($this->startSiege->handle($id, $islandId, $this->shipIds($request)));
     }
 
     #[Route('/{id}/gates/{gateId}/battle', name: 'api_profiles_guardian_battle', methods: ['POST'])]

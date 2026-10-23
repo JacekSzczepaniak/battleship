@@ -68,6 +68,8 @@ final class ProfileSnapshotMapper
             ], $profile->log()),
             // statki zdobyte abordażem, czekające na decyzję (#118)
             'prizes' => array_map(static fn (Prize $prize) => $prize->toArray(), $profile->prizes()),
+            // twierdze oblężone po wygranej potyczce: id wyspy → tik (#120)
+            'besieged' => $profile->besiegedIslands(),
         ];
     }
 
@@ -92,6 +94,10 @@ final class ProfileSnapshotMapper
             }
             if (isset($battle['enemySunk'])) {
                 $entry['enemySunk'] = max(0, (int) $battle['enemySunk']);
+            }
+            // potyczka na twierdzy (#120): wygrana oblega wyspę zamiast stawiać banderę
+            if (!empty($battle['stronghold'])) {
+                $entry['stronghold'] = true;
             }
             $battles[(string) $gameId] = $entry;
         }
@@ -158,6 +164,8 @@ final class ProfileSnapshotMapper
             log: $this->logFrom($state),
             // brak klucza = profil sprzed abordażu, bez zdobyczy
             prizes: $this->prizesFrom($state),
+            // brak klucza = profil sprzed oblężeń, żadna twierdza nie jest oblężona
+            besieged: array_map('intval', (array) ($state['besieged'] ?? [])),
         );
     }
 

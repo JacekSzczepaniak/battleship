@@ -10,7 +10,8 @@ export interface CurrentBattle {
     // bitwa ze strażnikiem (#107): islandId = id bramy, islandName = nazwa strażnika
     islandId: string;
     islandName: string;
-    kind?: 'guardian';
+    // oblężenie fortu twierdzy (#120); brak = bitwa o wyspę albo obrona
+    kind?: 'guardian' | 'siege';
 }
 
 export function getProfileId(): string | null {

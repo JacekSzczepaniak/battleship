@@ -46,8 +46,17 @@ final class CaptainProfile
     /** Dziennik kapitana (#111) trzyma tyle ostatnich wpisów. */
     public const LOG_LIMIT = 50;
 
-    /** @var array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int}> klucz: gameId */
+    /** @var array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int, stronghold?: bool}> klucz: gameId */
     private array $battles = [];
+
+    /**
+     * Twierdze po wygranej potyczce, czekające na oblężenie (#120): id wyspy →
+     * tik potyczki. Przegrane oblężenie stanu nie zdejmuje, wygrane zamienia go
+     * w banderę.
+     *
+     * @var array<string, int>
+     */
+    private array $besieged = [];
 
     /** @var list<OwnedShip> */
     private array $fleet = [];
@@ -1202,15 +1211,61 @@ final class CaptainProfile
      * Rejestruje rozpoczętą bitwę o wyspę (jedna gra = jedna bitwa). Bitwa
      * kosztuje tik od razu przy starcie — porzucona też zajęła czas. Wyspa
      * pod banderą nie jest areną: walczy się tam tylko w obronie (#78).
+     * Na twierdzy to potyczka z flotą strażniczą: wygrana oblega wyspę, więc
+     * oblężonej nie atakuje się drugi raz (#120).
      *
-     * @param list<string> $shipIds statki, które wypłynęły (do rozliczenia strat)
+     * @param list<string> $shipIds    statki, które wypłynęły (do rozliczenia strat)
+     * @param bool         $stronghold wyspa z fortem — wygrana nie stawia bandery, tylko oblega
      */
-    public function startBattle(string $islandId, GameId $gameId, array $shipIds = []): void
+    public function startBattle(string $islandId, GameId $gameId, array $shipIds = [], bool $stronghold = false): void
     {
         if ($this->ownsIsland($islandId)) {
             throw new \DomainException('Island already captured');
         }
+        if ($this->isBesieged($islandId)) {
+            throw new \DomainException('Island already besieged');
+        }
         $this->registerBattle($islandId, $gameId, BattleKind::Capture, $shipIds);
+        if ($stronghold) {
+            $this->battles[(string) $gameId]['stronghold'] = true;
+        }
+    }
+
+    /**
+     * Rejestruje oblężenie fortu oblężonej twierdzy (#120). Oblężenie zaczyna
+     * się osobną akcją po wygranej potyczce i można je powtarzać aż do zdobycia.
+     *
+     * @param list<string> $shipIds statki, które wypłynęły (do rozliczenia strat)
+     */
+    public function startSiege(string $islandId, GameId $gameId, array $shipIds = []): void
+    {
+        if ($this->ownsIsland($islandId)) {
+            throw new \DomainException('Island already captured');
+        }
+        if (!$this->isBesieged($islandId)) {
+            throw new \DomainException('Island not besieged');
+        }
+        $this->registerBattle($islandId, $gameId, BattleKind::Siege, $shipIds);
+    }
+
+    public function isBesieged(string $islandId): bool
+    {
+        return isset($this->besieged[$islandId]);
+    }
+
+    /** @return array<string, int> oblężone twierdze: id wyspy → tik wygranej potyczki */
+    public function besiegedIslands(): array
+    {
+        return $this->besieged;
+    }
+
+    /** Liczba rozpoczętych oblężeń wyspy — numer kolejnej próby daje nowy układ fortu. */
+    public function siegeAttempts(string $islandId): int
+    {
+        return count(array_filter(
+            $this->battles,
+            static fn (array $battle) => $battle['island'] === $islandId && BattleKind::Siege === self::battleKind($battle),
+        ));
     }
 
     /**
@@ -1286,7 +1341,8 @@ final class CaptainProfile
      * wygrana zostawia banderę, przegrana odbiera wyspę i połowę magazynu
      * (przed łupem za porażkę). Wygrana ze strażnikiem otwiera bramę na stałe;
      * jego łup trafia do ładowni, bo przy bramie nie ma magazynu — nadmiar
-     * przepada. Straty dotykają floty —
+     * przepada. Wygrana potyczka na twierdzy oblega wyspę, a banderę stawia
+     * wygrane oblężenie; przegrane zostawia oblężenie (#120). Straty dotykają floty —
      * zatopione statki po wygranej wymagają remontu, po przegranej są stracone;
      * ładunek ponad nową pojemność przepada. Idempotentne: druga próba zwraca zera.
      *
@@ -1296,7 +1352,7 @@ final class CaptainProfile
      *                                                bez wpisu stratę ponosi dowolny statek tej długości
      * @param ShipType|null           $boardedType    typ statku wroga zdobytego abordażem (#118); po wygranej czeka na decyzję
      *
-     * @return array{xp:int, loot:Resources, lost:list<string>, damaged:list<string>, cargoLost:Resources, captured:bool, defense: array{held:bool, stockpileLost:Resources}|null, gateOpened:bool, prize:?Prize}
+     * @return array{xp:int, loot:Resources, lost:list<string>, damaged:list<string>, cargoLost:Resources, captured:bool, besieged:bool, defense: array{held:bool, stockpileLost:Resources}|null, gateOpened:bool, prize:?Prize}
      */
     public function settleBattle(GameId $gameId, string $result, int $xpAward, ?Resources $loot = null, array $sunkLengths = [], int $enemyShipsSunk = 0, array $sunkVariants = [], ?ShipType $boardedType = null, ?ShipVariant $boardedVariant = null): array
     {
@@ -1314,7 +1370,7 @@ final class CaptainProfile
         $key = (string) $gameId;
         $battle = $this->battles[$key] ?? throw new \DomainException('Battle not registered for this profile');
         if ($battle['settled']) {
-            return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => [], 'cargoLost' => Resources::none(), 'captured' => false, 'defense' => null, 'gateOpened' => false, 'prize' => null];
+            return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => [], 'cargoLost' => Resources::none(), 'captured' => false, 'besieged' => false, 'defense' => null, 'gateOpened' => false, 'prize' => null];
         }
 
         $battle['settled'] = true;
@@ -1325,17 +1381,31 @@ final class CaptainProfile
         $this->xp += $xpAward;
         // każdy rodzaj bitwy rozstrzyga, co jego wynik robi z banderą (i z bramą)
         $kind = self::battleKind($battle);
+        $won = 'won' === $result;
+        $free = !$this->ownsIsland($battle['island']);
+        $stronghold = $battle['stronghold'] ?? false;
         [$captured, $defense] = match ($kind) {
-            BattleKind::Capture => ['won' === $result && !$this->ownsIsland($battle['island']), null],
-            BattleKind::Defense => [false, $this->settleDefense($key, 'won' === $result)],
+            BattleKind::Capture => [$won && $free && !$stronghold, null],
+            BattleKind::Defense => [false, $this->settleDefense($key, $won)],
             BattleKind::Guardian => [false, null],
+            BattleKind::Siege => [$won && $free, null],
         };
+        // potyczka na twierdzy oblega wyspę (#120)
+        $besieged = BattleKind::Capture === $kind && $won && $free && $stronghold && !$this->isBesieged($battle['island']);
+        if ($besieged) {
+            $this->besieged[$battle['island']] = $this->tick;
+            $this->record($this->tick, LogEvent::IslandBesieged, ['island' => $battle['island']]);
+        }
+        if (BattleKind::Siege === $kind && !$won) {
+            $this->record($this->tick, LogEvent::SiegeFailed, ['island' => $battle['island']]);
+        }
         $gateOpened = BattleKind::Guardian === $kind && 'won' === $result && !$this->isGateOpen($battle['island']);
         if ($gateOpened) {
             $this->openedGates[$battle['island']] = $this->tick;
             $this->record($this->tick, LogEvent::GateOpened, ['gate' => $battle['island']]);
         }
         if ($captured) {
+            unset($this->besieged[$battle['island']]);
             // odbita wyspa wznawia badanie swojej uczelni od tiku zdobycia
             $this->accrueResearch($this->tick, null);
             $this->ownedIslands[$battle['island']] = $this->tick;
@@ -1365,7 +1435,7 @@ final class CaptainProfile
             $this->record($this->tick, LogEvent::ShipBoarded, ['ship' => $boardedType->value, 'variant' => $boardedVariant?->value, $place => $battle['island']]);
         }
 
-        return ['xp' => $xpAward, 'loot' => $loot, 'lost' => $lost, 'damaged' => $damaged, 'cargoLost' => $cargoLost, 'captured' => $captured, 'defense' => $defense, 'gateOpened' => $gateOpened, 'prize' => $prize];
+        return ['xp' => $xpAward, 'loot' => $loot, 'lost' => $lost, 'damaged' => $damaged, 'cargoLost' => $cargoLost, 'captured' => $captured, 'besieged' => $besieged, 'defense' => $defense, 'gateOpened' => $gateOpened, 'prize' => $prize];
     }
 
     // --- Zdobyte statki (#118) ---
@@ -1614,33 +1684,34 @@ final class CaptainProfile
         return $this->unplacedResources;
     }
 
-    /** @return array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int}> */
+    /** @return array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int, stronghold?: bool}> */
     public function battles(): array
     {
         return $this->battles;
     }
 
     /**
-     * @param array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int}> $battles
-     * @param list<OwnedShip>|null                                                                                                       $fleet        null = profil sprzed ekonomii — dostaje flotę startową
-     * @param Resources|null                                                                                                             $cargo        null = profil sprzed ładowni (patrz $unplaced) albo sprzed ekonomii — drewno startowe do magazynu wyspy
-     * @param int|null                                                                                                                   $worldSeed    null = seed wyprowadzony z id (stabilny dla starych profili)
-     * @param array{x:int,y:int}|null                                                                                                    $position     pozycja na akwenie $sea; null = start ustali ensureWorldState
-     * @param list<string>|null                                                                                                          $discovered   sektory "x:y" akwenu $sea
-     * @param int|null                                                                                                                   $tick         null = profil sprzed tiku: rejsy + zarejestrowane bitwy
-     * @param list<string>|null                                                                                                          $visited      sektory akwenu $sea; null = profil sprzed odwiedzin: tylko obecna pozycja
-     * @param array<string, Resources>                                                                                                   $stockpiles   magazyny wysp
-     * @param Resources|null                                                                                                             $unplaced     surowce czekające na magazyn wyspy (też jeden magazyn profilu sprzed ładowni) — rozłożone przy ensureWorldState()
-     * @param array<string, int>                                                                                                         $depositTicks tik ostatniego naliczenia urobku złoża (klucz: id wyspy)
-     * @param array<string, int>                                                                                                         $ownedIslands wyspy pod banderą: id wyspy → tik zdobycia
-     * @param array<string, list<BuildingType>>                                                                                          $buildings    budynki osady (klucz: id wyspy)
-     * @param list<Technology>                                                                                                           $researched   zbadane technologie
-     * @param array{technology: Technology, island: string, progress: int, countedTo: int}|null                                          $research     badanie w toku
-     * @param string|null                                                                                                                $sea          akwen floty; null = profil sprzed akwenów: Morze Rozbitków
-     * @param array<string, SeaState>                                                                                                    $seaStates    stan pozostałych akwenów (klucz: id akwenu); stan akwenu $sea dają $position, $discovered i $visited
-     * @param array<string, int>                                                                                                         $openedGates  bramy otwarte na stałe: id bramy → tik otwarcia
-     * @param list<LogEntry>                                                                                                             $log          dziennik kapitana, najstarsze pierwsze; profil sprzed dziennika zaczyna od pustego
-     * @param list<Prize>                                                                                                                $prizes       statki zdobyte abordażem, czekające na decyzję (#118)
+     * @param array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int, stronghold?: bool}> $battles
+     * @param list<OwnedShip>|null                                                                                                                          $fleet        null = profil sprzed ekonomii — dostaje flotę startową
+     * @param Resources|null                                                                                                                                $cargo        null = profil sprzed ładowni (patrz $unplaced) albo sprzed ekonomii — drewno startowe do magazynu wyspy
+     * @param int|null                                                                                                                                      $worldSeed    null = seed wyprowadzony z id (stabilny dla starych profili)
+     * @param array{x:int,y:int}|null                                                                                                                       $position     pozycja na akwenie $sea; null = start ustali ensureWorldState
+     * @param list<string>|null                                                                                                                             $discovered   sektory "x:y" akwenu $sea
+     * @param int|null                                                                                                                                      $tick         null = profil sprzed tiku: rejsy + zarejestrowane bitwy
+     * @param list<string>|null                                                                                                                             $visited      sektory akwenu $sea; null = profil sprzed odwiedzin: tylko obecna pozycja
+     * @param array<string, Resources>                                                                                                                      $stockpiles   magazyny wysp
+     * @param Resources|null                                                                                                                                $unplaced     surowce czekające na magazyn wyspy (też jeden magazyn profilu sprzed ładowni) — rozłożone przy ensureWorldState()
+     * @param array<string, int>                                                                                                                            $depositTicks tik ostatniego naliczenia urobku złoża (klucz: id wyspy)
+     * @param array<string, int>                                                                                                                            $ownedIslands wyspy pod banderą: id wyspy → tik zdobycia
+     * @param array<string, list<BuildingType>>                                                                                                             $buildings    budynki osady (klucz: id wyspy)
+     * @param list<Technology>                                                                                                                              $researched   zbadane technologie
+     * @param array{technology: Technology, island: string, progress: int, countedTo: int}|null                                                             $research     badanie w toku
+     * @param string|null                                                                                                                                   $sea          akwen floty; null = profil sprzed akwenów: Morze Rozbitków
+     * @param array<string, SeaState>                                                                                                                       $seaStates    stan pozostałych akwenów (klucz: id akwenu); stan akwenu $sea dają $position, $discovered i $visited
+     * @param array<string, int>                                                                                                                            $openedGates  bramy otwarte na stałe: id bramy → tik otwarcia
+     * @param list<LogEntry>                                                                                                                                $log          dziennik kapitana, najstarsze pierwsze; profil sprzed dziennika zaczyna od pustego
+     * @param list<Prize>                                                                                                                                   $prizes       statki zdobyte abordażem, czekające na decyzję (#118)
+     * @param array<string, int>                                                                                                                            $besieged     oblężone twierdze: id wyspy → tik wygranej potyczki (#120)
      */
     public static function fromSnapshot(
         ProfileId $id,
@@ -1668,6 +1739,7 @@ final class CaptainProfile
         array $openedGates = [],
         array $log = [],
         array $prizes = [],
+        array $besieged = [],
     ): self {
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
@@ -1689,6 +1761,8 @@ final class CaptainProfile
         $self->sea = $sea ?? Sea::START;
         $self->seaStates = $seaStates;
         $self->openedGates = $openedGates;
+        // zdobyta twierdza nie bywa oblężona
+        $self->besieged = array_diff_key($besieged, $ownedIslands);
         foreach ($prizes as $prize) {
             $self->prizes[$prize->id] = $prize;
         }

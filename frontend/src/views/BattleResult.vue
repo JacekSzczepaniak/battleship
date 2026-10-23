@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Anchor, Wrench } from 'lucide-vue-next';
 import { createGame, getGame } from '../api/gameApi';
-import { RANK_LABELS, SHIP_LABELS, fleetShipLabel, startGuardianBattle, startIslandBattle, type RankName } from '../api/expeditionApi';
+import { RANK_LABELS, SHIP_LABELS, fleetShipLabel, startGuardianBattle, startIslandBattle, startSiege, type RankName } from '../api/expeditionApi';
 import { setCurrentBattle } from '../lib/expeditionSession';
 import { getBattleReport, type BattleReport } from '../lib/battleSession';
 import { shipName } from '../lib/ships';
@@ -47,6 +47,16 @@ const description = computed(() => {
                 + (damaged ? ' Jednostki zatopione w boju trzeba wyremontować w stoczni.' : ' Cała flota przetrwała bitwę.')
             : `${r.expedition.islandName} utrzymał cieśninę. Jednostki zatopione w tej bitwie przepadły — XP zostaje na zawsze, a próbę możesz powtórzyć.`;
     }
+    if (r.expedition.settle.kind === 'siege') {
+        return won.value
+            ? `Działa fortu zamilkły — ${r.expedition.islandName} uznaje Twoją banderę.`
+                + (damaged ? ' Jednostki zatopione w boju wracają do portu na remont.' : ' Cała flota wraca bez szwanku.')
+            : `Fort się obronił. Jednostki zatopione w tej bitwie przepadły, ale ${r.expedition.islandName} pozostaje oblężona — szturm możesz ponowić bez walki z flotą.`;
+    }
+    if (r.expedition.settle.besieged) {
+        return `Flota strażnicza rozbita — ${r.expedition.islandName} jest oblężona. Banderę i pełny łup da dopiero zdobycie fortu.`
+            + (damaged ? ' Jednostki zatopione w boju wracają do portu na remont.' : ' Cała flota wraca bez szwanku.');
+    }
     if (r.expedition.settle.defense) {
         return won.value
             ? `Kontratak odparty — bandera nad wyspą ${r.expedition.islandName} zostaje.`
@@ -57,6 +67,13 @@ const description = computed(() => {
         ? `Flota wroga poszła na dno — ${r.expedition.islandName} uznaje Twoją banderę.`
             + (damaged ? ' Jednostki zatopione w boju wracają do portu na remont.' : ' Cała flota wraca bez szwanku.')
         : `Wróg utrzymał wody wyspy ${r.expedition.islandName}. Jednostki zatopione w tej bitwie przepadły — XP zostaje na zawsze.`;
+});
+
+const repeatLabel = computed(() => {
+    const s = exp.value?.settle;
+    if (s?.besieged) return 'Rozpocznij oblężenie';
+    if (s?.kind === 'siege') return 'Ponów oblężenie';
+    return 'Powtórz bitwę';
 });
 
 // postęp rangi: stara część + animowany przyrost (względem progu następnej rangi)
@@ -165,8 +182,12 @@ async function repeat() {
             const { profileId, islandId, islandName, kind } = r.expedition;
             const game = kind === 'guardian'
                 ? await startGuardianBattle(profileId, islandId)
-                : await startIslandBattle(profileId, islandId);
-            setCurrentBattle({ profileId, gameId: game.id, islandId, islandName, kind });
+                // po wygranej potyczce kolejnym krokiem jest oblężenie fortu (#120)
+                : kind === 'siege' || r.expedition.settle.besieged
+                    ? await startSiege(profileId, islandId)
+                    : await startIslandBattle(profileId, islandId);
+            const next = kind === 'guardian' ? kind : kind === 'siege' || r.expedition.settle.besieged ? 'siege' : undefined;
+            setCurrentBattle({ profileId, gameId: game.id, islandId, islandName, kind: next });
             await router.push({ name: 'place-fleet', params: { id: game.id } });
         } else {
             const game = await createGame(r.ruleset, r.board.w, !!r.fort);
@@ -190,7 +211,7 @@ onMounted(load);
         <template v-else>
             <div class="left">
                 <div class="kicker outcome-kicker">
-                    {{ exp ? `${exp.kind === 'guardian' ? 'CIEŚNINA' : exp.settle.defense ? 'OBRONA' : 'BITWA'} · ${exp.islandName.toUpperCase()}${exp.seaName ? ` · ${exp.seaName.toUpperCase()}` : ''}` : `${report.fort ? 'OBLĘŻENIE · TRENING' : 'BITWA TRENINGOWA'} · ${report.board.w}×${report.board.h}` }}
+                    {{ exp ? `${exp.kind === 'guardian' ? 'CIEŚNINA' : exp.settle.kind === 'siege' ? 'OBLĘŻENIE' : exp.settle.defense ? 'OBRONA' : 'BITWA'} · ${exp.islandName.toUpperCase()}${exp.seaName ? ` · ${exp.seaName.toUpperCase()}` : ''}` : `${report.fort ? 'OBLĘŻENIE · TRENING' : 'BITWA TRENINGOWA'} · ${report.board.w}×${report.board.h}` }}
                 </div>
                 <h1>{{ won ? 'ZWYCIĘSTWO' : 'PORAŻKA' }}</h1>
                 <p class="lead">{{ description }}</p>
@@ -243,7 +264,7 @@ onMounted(load);
                 <div class="actions">
                     <router-link class="btn btn-primary" :to="{ name: 'home' }"><Anchor :size="17" /> Do portu</router-link>
                     <!-- wyspa pod banderą nie jest areną (#78): po zdobyciu i po obronie nie ma czego powtarzać; strażnik walczy do pierwszej przegranej -->
-                    <button v-if="!exp || (!exp.settle.captured && !exp.settle.defense && !exp.settle.gateOpened)" class="btn btn-secondary" :disabled="busy" @click="repeat">{{ busy ? 'Stawianie żagli…' : 'Powtórz bitwę' }}</button>
+                    <button v-if="!exp || (!exp.settle.captured && !exp.settle.defense && !exp.settle.gateOpened)" class="btn btn-secondary" :disabled="busy" @click="repeat">{{ busy ? 'Stawianie żagli…' : repeatLabel }}</button>
                 </div>
                 <p v-if="error" class="err">{{ error }}</p>
             </div>
@@ -268,6 +289,8 @@ onMounted(load);
                     <p v-if="exp.settle.gateOpened" class="captured">🌀 Cieśnina otwarta na stałe, w obie strony — przepłyniesz ją z sektora bramy za 1 tik.</p>
                     <p v-if="prize" class="captured">⚓ Zdobyty statek: {{ fleetShipLabel(prize) }} — czeka na Twoją decyzję na ekranie Rejs: wyremontuj i dołącz albo rozbierz.</p>
                     <p v-if="exp.settle.captured" class="captured">🚩 {{ exp.islandName }} pod Twoją banderą.</p>
+                    <p v-if="exp.settle.besieged" class="captured">🏰 {{ exp.islandName }} oblężona — potyczka zapamiętana. Rozpocznij oblężenie fortu, gdy flota będzie gotowa.</p>
+                    <p v-if="exp.settle.kind === 'siege' && !won" class="island-lost">🏰 Oblężenie trwa — szturm na fort możesz ponowić bez walki z flotą strażniczą.</p>
                     <p v-if="exp.settle.defense?.held" class="captured">🛡️ Wyspa obroniona: {{ exp.islandName }} — bandera zostaje, następny kontratak najwcześniej po 8 tikach spokoju.</p>
                     <p v-if="exp.settle.defense && !exp.settle.defense.held" class="island-lost">
                         🏴 Wyspa utracona: {{ exp.islandName }} — bandera zdjęta, z magazynu przepadło {{ formatResources(exp.settle.defense.stockpileLost, 'nic — magazyn był pusty') }}. Wyspę odbijesz zwykłą bitwą.

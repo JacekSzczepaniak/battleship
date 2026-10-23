@@ -27,8 +27,8 @@ export interface WeaponsState {
     torpedoDiagonal?: WeaponState;
 }
 
-// działania w turze i ich koszt energii (#59; ruch statku dojdzie w #60)
-export type BattleActionName = 'shot' | 'sonar' | 'torpedo' | 'airRaid';
+// działania w turze i ich koszt energii (#59; ruch statku z #60)
+export type BattleActionName = 'shot' | 'sonar' | 'torpedo' | 'airRaid' | 'move';
 
 // energia gracza w bieżącej turze; null = bitwa bez energii (classic)
 export interface EnergyState {
@@ -52,6 +52,8 @@ export interface GameViewDTO {
     weapons: WeaponsState;
     opponentWeapons?: WeaponsState;
     energy?: EnergyState | null;
+    // ruch statku wykorzystany w tej turze (#60)
+    moveUsed?: boolean;
     mode: 'standard' | 'nonstandard' | string;
     opponent: 'mock' | 'ai' | 'pvp' | string;
     turn: 'player' | 'opponent' | 'none';
@@ -140,4 +142,19 @@ export async function sendAirRaid(id: string, x: number, y: number): Promise<Wea
 // „Zakończ turę” (#59): tura przechodzi do AI bez ataku; tylko w trybie z energią
 export async function endTurn(id: string): Promise<TurnOutcomeDTO> {
     return http.post<TurnOutcomeDTO>(`/games/${id}/end-turn`, {});
+}
+
+// --- ruch statku (#60): 1⚡, raz na turę, nie kończy tury ---
+
+export type MoveDirection = 'N' | 'E' | 'S' | 'W';
+
+export interface MoveShipResponse {
+    ship: { x: number; y: number; o: 'H' | 'V'; l: number };
+    moveUsed: boolean;
+    energy: EnergyState | null;
+}
+
+// (x, y) = dowolne pole własnego statku
+export async function moveShip(id: string, x: number, y: number, direction: MoveDirection): Promise<MoveShipResponse> {
+    return http.post<MoveShipResponse>(`/games/${id}/move`, { x, y, direction });
 }

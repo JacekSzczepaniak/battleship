@@ -1,8 +1,8 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import {
-    getGame, fireShot, fireTorpedo, sonarPing, sendAirRaid, endTurn as apiEndTurn,
-    type GameViewDTO, type ShotResultDTO, type EnergyState, type RulesetName, type WeaponsState,
+    getGame, fireShot, fireTorpedo, sonarPing, sendAirRaid, endTurn as apiEndTurn, moveShip as apiMoveShip,
+    type GameViewDTO, type MoveDirection, type ShotResultDTO, type EnergyState, type RulesetName, type WeaponsState,
     type TorpedoDirection, type TurnOutcomeDTO, type SonarCell, type PlayerFleetItem, type CellShotResult, type Loadout,
 } from '../api/gameApi.ts';
 import { carriedWeapons, cellLabel, fieldsLabel, shipName } from '../lib/ships';
@@ -18,6 +18,17 @@ export interface LogEntry { id: number; side: LogSide; text: string }
 
 const TORPEDO_ARROWS: Record<TorpedoDirection, string> = {
     N: '↑', NE: '↗', E: '→', SE: '↘', S: '↓', SW: '↙', W: '←', NW: '↖',
+};
+
+// odrzucenia ruchu statku (#60) po kodzie z API
+const MOVE_ERRORS: Record<string, string> = {
+    SHIP_MOVE_DAMAGED: 'Trafiony statek nie manewruje.',
+    SHIP_MOVE_SHOT_CELL: 'Nie wpłyniesz na pole, w które strzelał wróg.',
+    SHIP_MOVE_OUT_OF_BOUNDS: 'Statek nie wypłynie poza planszę.',
+    SHIP_MOVE_TOUCH: 'Statki nie mogą się stykać.',
+    SHIP_MOVE_DIRECTION: 'Statek płynie tylko wzdłuż swojej osi.',
+    SHIP_ALREADY_MOVED: 'Ruch statku już wykorzystany w tej turze.',
+    NOT_ENOUGH_ENERGY: 'Brak energii na ruch.',
 };
 
 export function useGame() {
@@ -48,6 +59,8 @@ export function useGame() {
     const opponentWeapons = ref<WeaponsState | null>(null);
     // energia w turze (#59); null = bitwa bez energii
     const energy = ref<EnergyState | null>(null);
+    // ruch statku wykorzystany w tej turze (#60)
+    const moveUsed = ref<boolean>(false);
     const weaponMode = ref<WeaponMode>('shot');
     const torpedoDirection = ref<TorpedoDirection>('E');
     // Wyniki sonaru — tylko po stronie klienta (backend nie zapisuje skanów)
@@ -149,6 +162,7 @@ export function useGame() {
         weapons.value = dto.weapons ?? null;
         opponentWeapons.value = dto.opponentWeapons ?? null;
         energy.value = dto.energy ?? null;
+        moveUsed.value = dto.moveUsed ?? false;
         playerFleet.value = dto.playerFleet ?? [];
         allowedShips.value = dto.allowedShips ?? {};
         opponentShips.value = dto.opponentShips ?? dto.allowedShips ?? {};
@@ -419,6 +433,30 @@ export function useGame() {
         }
     }
 
+    /**
+     * Ruch statku o 1 pole (#60): statek wskazany dowolnym polem, 1⚡, nie kończy
+     * tury. Zwraca true po udanym ruchu (widok zamyka wtedy tryb ruchu).
+     */
+    async function moveShip(x: number, y: number, direction: MoveDirection): Promise<boolean> {
+        if (!canAct() || !energy.value) return false;
+        const ship = playerFleet.value.find(s => shipCellsOf(s).some(([cx, cy]) => cx === x && cy === y));
+        try {
+            shooting.value = true;
+            const res = await apiMoveShip(gameId.value, x, y, direction);
+            energy.value = res.energy;
+            moveUsed.value = res.moveUsed;
+            const name = ship ? shipName(ship.l, ship.w) : 'Statek';
+            pushLog('TY', `Manewr: ${name.toLowerCase()} ${TORPEDO_ARROWS[direction]} ${cellLabel(res.ship.x, res.ship.y)}. Ruch nie kończy tury.`);
+            await refresh();
+            return true;
+        } catch (e: any) {
+            showToast(MOVE_ERRORS[e?.details?.error?.code] ?? e?.message ?? 'Ruch się nie powiódł', 'warn', 2500);
+            return false;
+        } finally {
+            shooting.value = false;
+        }
+    }
+
     /** Jeden punkt wejścia dla kliknięcia w planszę przeciwnika — wg aktywnego trybu. */
     async function attack(x: number, y: number) {
         switch (weaponMode.value) {
@@ -447,7 +485,7 @@ export function useGame() {
 
     return {
         gameId, size, width, height, playerGrid, playerUnderFireOverlay, enemyFogGrid, turn, status, finished,
-        loading, shooting, error, start, refresh, shot, attack, endTurn, disabled,
+        loading, shooting, error, start, refresh, shot, attack, endTurn, moveShip, moveUsed, disabled,
         // tryb fun
         ruleset, energy, weapons, opponentWeapons, weaponMode, torpedoDirection, sonarMarks, launchableCells, aliveCarriers,
         // notatki (saper-style)

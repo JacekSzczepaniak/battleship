@@ -62,6 +62,71 @@ final class BoardSide
     }
 
     /**
+     * Ruch statku o 1 pole (#60): statek wskazany dowolnym swoim polem płynie
+     * wzdłuż swojej osi (tratwa w dowolną z 4 stron). Rusza się tylko statek
+     * bez trafienia — trafienia nie zmieniają więc pozycji. Nie wolno wpłynąć
+     * na pole, w które strzelano w tę stronę, ani wyjść poza planszę czy stanąć
+     * na styk z innym statkiem. Statek zachowuje miejsce we flocie i wyposażenie.
+     */
+    public function moveShip(Coordinate $cell, Direction $direction): Ship
+    {
+        $ships = $this->board?->ships() ?? [];
+        $index = null;
+        foreach ($ships as $i => $ship) {
+            if (in_array($this->keyOf($cell), $this->cellKeys($ship), true)) {
+                $index = $i;
+                break;
+            }
+        }
+        if (null === $index) {
+            throw new \DomainException('No own ship at this cell');
+        }
+
+        $ship = $ships[$index];
+        foreach ($this->cellKeys($ship) as $cellKey) {
+            if (isset($this->hits[$cellKey])) {
+                throw new \DomainException('Damaged ship cannot move');
+            }
+        }
+
+        $alongAxis = match ($direction) {
+            Direction::E, Direction::W => 1 === $ship->length || Orientation::H === $ship->orientation,
+            Direction::N, Direction::S => 1 === $ship->length || Orientation::V === $ship->orientation,
+            default => false,
+        };
+        if (!$alongAxis) {
+            throw new \DomainException('Ship can only move along its axis');
+        }
+
+        [$dx, $dy] = $direction->vector();
+        $x = $ship->start->x + $dx;
+        $y = $ship->start->y + $dy;
+        $endX = $x + (Orientation::H === $ship->orientation ? $ship->length - 1 : 0);
+        $endY = $y + (Orientation::V === $ship->orientation ? $ship->length - 1 : 0);
+        if ($x < 0 || $y < 0 || $endX >= $this->size->width || $endY >= $this->size->height) {
+            throw new \DomainException('Ship move out of board bounds');
+        }
+
+        $moved = new Ship(new Coordinate($x, $y), $ship->orientation, $ship->length, $ship->loadout);
+        foreach ($this->cellKeys($moved) as $cellKey) {
+            if (isset($this->shotsTaken[$cellKey])) {
+                throw new \DomainException('Ship cannot move onto a cell already shot');
+            }
+        }
+
+        $ships[$index] = $moved;
+        $board = new Board($this->size);
+        try {
+            $board->placeMany($ships);
+        } catch (\DomainException) {
+            throw new \DomainException('Ship move would touch another ship');
+        }
+        $this->board = $board;
+
+        return $moved;
+    }
+
+    /**
      * Przyjmuje strzał w tę stronę i zwraca wynik.
      * Po zatopieniu ostatniego statku allShipsHit() zaczyna zwracać true.
      */

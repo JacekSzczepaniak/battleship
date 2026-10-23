@@ -21,7 +21,8 @@ wyspa:  wydobycie → transport → stocznia/osada → technologia
 
 Bitwa (classic/fun, bronie specjalne z nośników: sonar=kuter, torpeda=
 niszczyciel, nalot=lotniskowiec, wyposażenie per statek; zatopiony nośnik
-odbiera broń; w trybie fun energia 3⚡ na turę i „Zakończ turę”, #59) · profil
+odbiera broń; w trybie fun energia 3⚡ na turę i „Zakończ turę”, #59, oraz ruch
+statku o 1 pole, #60) · profil
 kapitana (XP nigdy nie maleje, 9 rang od rozbitka do admirała — progi
 w Filarze VIII; licznik zatopionych jednostek wroga) · flota jako majątek
 (budowa/remont, stocznie, wygrana→remont / przegrana→strata; uszkodzony
@@ -39,7 +40,7 @@ statku) · trzy akweny połączone strzeżoną cieśniną i otwartym oceanem
 bitwy: port → rozstawianie → bitwa → wynik oraz ekran Rejs z mapą zawsze
 widoczną, panelem z zakładkami i dziennikiem kapitana (#111)
 (projekt: `docs/design/ui-flow/`). Elementy projektu UI bez pokrycia
-w silniku czekają w zadaniach: ruch statku w bitwie (#60), trzy surowce w UI (#49), abordaż (#55), mapa akwenu jako
+w silniku czekają w zadaniach: trzy surowce w UI (#49), abordaż (#55), mapa akwenu jako
 łup (#56). Szczegóły: git log + testy, uruchomienie: `README.md`.
 
 ## Rdzeń — bitwa: energia i tura ✅
@@ -52,10 +53,10 @@ bez energii: jedna salwa, potem ruch AI.
 - **Pula:** 3⚡ na turę, ta sama dla obu stron, odnawiana, gdy strona
   dostaje turę (energia gracza wraca po ruchu przeciwnika). Pula jest
   stała; wzrost z rangą albo technologią odłożony do Epica K (#58).
-- **Koszty:** salwa 1, sonar 1, torpeda 2, nalot 3, od #60 ruch statku 1.
+- **Koszty:** salwa 1, sonar 1, torpeda 2, nalot 3, ruch statku 1.
   Koszt widać na karcie broni, a bez energii działanie jest odrzucane.
-- **Atak kończy turę:** salwa, torpeda i nalot oddają turę. Sonar (od #60
-  także ruch) tylko zużywa energię, więc można skanować kilka razy w turze,
+- **Atak kończy turę:** salwa, torpeda i nalot oddają turę. Sonar i ruch
+  statku tylko zużywają energię, więc można skanować kilka razy w turze,
   póki starcza energii i limitu użyć. Przykładowe tury: sonar + sonar +
   salwa, sonar + torpeda, sam nalot.
 - **„Zakończ turę”** oddaje turę bez ataku, np. po samych skanach.
@@ -64,6 +65,25 @@ bez energii: jedna salwa, potem ruch AI.
 - **AI płaci tą samą energią:** najpierw sonar, gdy ma sens, potem jeden
   atak, na który go jeszcze stać. Po sonarze zostają 2⚡, więc nalot AI
   wypada tylko w turze bez skanu.
+
+### Ruch statku ✅
+
+„Przesuń flotę ⚡1” (#60, decyzje z 23.10.2026) — tylko w trybie z energią.
+
+- **Koszt i limit:** 1⚡, najwyżej raz na turę; ruch nie kończy tury.
+- **Kierunek:** o 1 pole wzdłuż osi statku, do przodu albo do tyłu; tratwa
+  (1 pole) w dowolną z 4 stron.
+- **Tylko statek bez trafienia.** Trafienia nigdy nie zmieniają pozycji, więc
+  cele AI z trybu hunt/target zostają aktualne.
+- **Nie na pole ostrzelane przez wroga** (salwa, torpeda, nalot — pudło albo
+  trafienie). Inaczej statek schowany na pudle byłby dla AI niewidzialny, bo
+  AI nie strzela drugi raz w to samo pole. Pole odkryte sonarem wroga ruchu
+  nie blokuje: sonar nie strzela.
+- **Walidacja jak przy rozstawianiu:** granice planszy i zakaz stykania się
+  statków. Statek zabiera wyposażenie ze sobą.
+- **AI się nie rusza** i nie dostaje informacji o ruchu gracza.
+- **Do obserwacji:** czy ruch nie jest za silny przy nieruchomym AI; jeśli
+  tak — ruch AI albo wyższy koszt.
 
 ## Filar I — Świat: łańcuch akwenów ✅
 

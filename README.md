@@ -146,8 +146,9 @@ FireShotController
 ```
 
 Każda salwa, torpeda i nalot oddaje ruch AI; sonar turę zostawia. W trybie `fun` działania kosztują
-energię (#59): 3⚡ na turę, salwa 1, sonar 1, torpeda 2, nalot 3; pula wraca po ruchu AI, a
-`POST /games/{id}/end-turn` oddaje turę bez ataku. Bez energii akcja kończy się `409 NOT_ENOUGH_ENERGY`.
+energię (#59): 3⚡ na turę, salwa 1, sonar 1, torpeda 2, nalot 3, ruch statku 1; pula wraca po ruchu
+AI, a `POST /games/{id}/end-turn` oddaje turę bez ataku. Ruch statku (#60) jest raz na turę i nie kończy
+tury. Bez energii akcja kończy się `409 NOT_ENOUGH_ENERGY`.
 Tryb `classic` jest bez energii (`energy: null`). Po zakończonej bitwie o wyspę
 `POST /api/profiles/{id}/battles/{gameId}/settle` rozlicza XP, materiały i straty floty ze stanu
 gry — idempotentnie (drugie wywołanie zwraca zera). Pierwsza wygrana o wyspę stawia na niej banderę
@@ -167,13 +168,14 @@ Wszystkie ścieżki pod `/api`, JSON. Pełna lista: `docker compose exec app php
 | metoda | ścieżka | co robi |
 |---|---|---|
 | `POST` | `/games` | nowa gra: `mode` (`classic`/`fun`), `width`, `height`, opcjonalnie `ships` i `variants` (`{"3": [{"sonar": 2}]}`) |
-| `GET` | `/games/{id}` | projekcja gry: plansze, mgła wroga, bronie (`used`/`limit`, sonar też `radius`), warianty obu stron (`variants`/`opponentVariants`), tura, energia gracza (`energy`: `left`/`max`/`costs`, `null` w classic) |
+| `GET` | `/games/{id}` | projekcja gry: plansze, mgła wroga, bronie (`used`/`limit`, sonar też `radius`), warianty obu stron (`variants`/`opponentVariants`), tura, energia gracza (`energy`: `left`/`max`/`costs`, `null` w classic), ruch statku w tej turze (`moveUsed`) |
 | `POST` | `/games/{id}/fleet` | rozstawienie floty gracza; statek z wariantem niesie `w` (`{"sonar": 2}`) |
 | `POST` | `/games/{id}/shots` | salwa w pole `x`, `y` |
 | `GET` | `/games/{id}/shots` | strzały gracza z wynikami |
 | `POST` | `/games/{id}/torpedo` | torpeda z własnego niszczyciela (`x`, `y`, `direction`) |
 | `POST` | `/games/{id}/sonar` | skan sonarem (krzyż o promieniu 3, gracz 4 po Sonarze dalekiego zasięgu), 1⚡, nie kończy tury |
 | `POST` | `/games/{id}/air-raid` | nalot na obszar |
+| `POST` | `/games/{id}/move` | ruch statku o 1 pole (`x`, `y` = dowolne pole statku, `direction` `N`/`E`/`S`/`W`), 1⚡, raz na turę, nie kończy tury; tylko `fun` (w classic `422 SHIP_MOVE_NOT_AVAILABLE`); odrzucenia: `422 SHIP_MOVE_*`, drugi ruch `409 SHIP_ALREADY_MOVED` |
 | `POST` | `/games/{id}/end-turn` | „Zakończ turę” bez ataku (tylko `fun`; w classic `422 END_TURN_NOT_AVAILABLE`) |
 | `POST` | `/profiles` | nowy profil kapitana |
 | `GET` | `/profiles/{id}/expedition` | profil, flota, typy statków i budynków, wyspy bieżącego akwenu (bandera, budynki), świat (akwen i jego motyw, bramy z powodem blokady i strażnikiem), kontratak, drzewko badań, dziennik kapitana (50 ostatnich zdarzeń, od najnowszego) |

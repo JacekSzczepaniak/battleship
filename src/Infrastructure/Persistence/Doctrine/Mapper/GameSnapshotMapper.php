@@ -68,6 +68,8 @@ final class GameSnapshotMapper
             'weapons' => $this->weaponUsesOrNull($game),
             // Energia zużyta w bieżącej turze (#59) — tylko, gdy coś zużyto
             'energySpent' => [] !== array_filter($game->energySpent()) ? $game->energySpent() : null,
+            // ruch statku wykorzystany w bieżącej turze (#60) — tylko, gdy był
+            'moved' => $game->playerMovedThisTurn() ? true : null,
             // Iteration 1 meta
             'mode' => $game->mode(),
             'opponent' => $game->opponent(),
@@ -168,6 +170,11 @@ final class GameSnapshotMapper
         // energia zużyta w turze (#59); brak = pełna pula (snapshoty sprzed energii)
         if (!empty($state['energySpent']) && is_array($state['energySpent'])) {
             $game->setEnergySpentFromSnapshot($state['energySpent']);
+        }
+
+        // ruch statku w turze (#60); brak = ruch dostępny
+        if (true === ($state['moved'] ?? null)) {
+            $game->setPlayerMovedFromSnapshot(true);
         }
 
         return $game;

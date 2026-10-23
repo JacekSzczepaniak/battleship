@@ -123,3 +123,13 @@ Brak obrazów. Ikony jednostek/broni to tymczasowe znaki tekstowe (✈ ◆ ▮ �
 ## Files
 - `Statki - UI Flow.dc.html` — wszystkie 4 ekrany + generator plansz (klasa `Component` na dole pliku)
 - `support.js` — runtime potrzebny tylko do podglądu HTML w przeglądarce
+- `REJS.md` — handoff ekranu Rejs (`/expedition`): mapa akwenu zawsze widoczna, panel z zakładkami Wyspa / Flota / Badania / Dziennik, baner ostatniego zdarzenia (projekt z 23.10.2026)
+- `Rejs.dc.html` — referencja HTML ekranu Rejs (otwiera się obok `support.js`)
+
+## Ekran Rejs w grze (#111)
+Wdrożony według `REJS.md`, z regułami gry ważniejszymi niż projekt (decyzja 23.10.2026):
+- zasięg rejsu na mapie liczy się jak w grze — większa z różnic x i y (#98), nie odległość Manhattan,
+- nazwy technologii zostają z gry (Pojemne ładownie, Mapy sztormowe…), opisy efektów zgodne z kodem,
+- rynku w zakładce Wyspa nie ma (Epic J, #57), styl zostaje ciemny, morski — bez design systemu „Organic”.
+
+Uzupełnienia ponad projekt: pierwsza zakładka (`#wyspa`) pokazuje miejsce floty — wyspę w porcie, bramę akwenu na jej sektorze albo przegląd akwenu na pełnym morzu (wyspy, magazyny, złoża, bramy z powodem blokady). Dziennik i baner czytają dziennik kapitana z backendu (`log` w `GET /profiles/{id}/expedition`, 50 ostatnich wpisów). Przeładunek ‹ › przenosi od razu — każde przeniesienie to 1 tik.

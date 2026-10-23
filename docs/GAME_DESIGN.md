@@ -34,7 +34,8 @@ wymagają obecności) · bandery na wyspach i kontrataki z bitwą obronną; peł
 bandera daje obrońcy pierwszy strzał i odbiera napastnikowi największy statek
 (Epic E) · drzewko technologii (Epic G: uczelnia, 8 technologii w 4
 gałęziach, niszczyciel zwiadowczy jako pierwszy wariant statku) · UI flow
-bitwy: port → rozstawianie → bitwa → wynik
+bitwy: port → rozstawianie → bitwa → wynik oraz ekran Rejs z mapą zawsze
+widoczną, panelem z zakładkami i dziennikiem kapitana (#111)
 (projekt: `docs/design/ui-flow/`). Elementy projektu UI bez pokrycia
 w silniku czekają w zadaniach: energia i „Zakończ turę” (#59), ruch statku
 w bitwie (#60), trzy surowce w UI (#49), abordaż (#55), mapa akwenu jako

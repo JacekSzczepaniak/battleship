@@ -12,7 +12,7 @@ enum Technology: string
     /** Magazyn złoża mieści 20 tików produkcji zamiast 10. */
     case Spichlerze = 'spichlerze';
 
-    /** Szansa sztormu przy pierwszym wpłynięciu: 10% zamiast 20%. */
+    /** Szansa sztormu przy pierwszym wpłynięciu: połowa szansy akwenu (Morze Rozbitków 10% zamiast 20%, Ocean Sztormów 20% zamiast 40%). */
     case MapySztormowe = 'mapy-sztormowe';
 
     /** Promień sonaru gracza w bitwach wyprawy: 4 zamiast 3. */
@@ -27,7 +27,7 @@ enum Technology: string
     /** Remont za połowę ceny, z zaokrągleniem w górę. */
     case DokRemontowy = 'dok-remontowy';
 
-    /** Złoże daje +1 jednostkę swojego surowca na tik, zanim tartak i kopalnia podwoją urobek. */
+    /** Złoże daje +1 jednostkę swojego surowca na tik, zanim mnożnik akwenu go pomnoży, a tartak i kopalnia podwoją urobek. */
     case LepszeNarzedzia = 'lepsze-narzedzia';
 
     /** Stocznia buduje niszczyciel w wariancie zwiadowczym: 2 sonary zamiast torpedy (ShipVariant). */

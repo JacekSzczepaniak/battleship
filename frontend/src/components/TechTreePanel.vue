@@ -1,16 +1,18 @@
 <!--
-    Drzewko technologii (Epic G): 4 gałęzie × 2 poziomy, badanie w toku
-    i start badania w uczelni wyspy, przy której stoi kapitan. Reguły
-    (jedno badanie naraz, poprzedni poziom, ranga, uczelnia pod banderą,
-    koszt) liczy backend — tu tylko opisujemy jego kod blokady.
+    Drzewko technologii (Epic G, układ z projektu Rejs #111): poziomy z kosztem,
+    w każdym węzły gałęzi w stanach zablokowany / dostępny / w toku / ukończony.
+    Start badania w uczelni wyspy, przy której stoi kapitan. Reguły (jedno
+    badanie naraz, poprzedni poziom, ranga, uczelnia pod banderą, koszt) liczy
+    backend — tu tylko opisujemy jego kod blokady.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import {
     RANK_LABELS, TECH_BRANCH_LABELS, TECH_LABELS,
-    type ResearchDTO, type ResourcesDTO, type TechBranchName, type TechLevelDTO, type TechnologyDTO, type TechnologyName,
+    type ResearchDTO, type ResourcesDTO, type TechLevelDTO, type TechnologyDTO, type TechnologyName,
 } from '../api/expeditionApi';
 import { formatResources, missing } from '../lib/resources';
+import { ticksLabel } from '../lib/counterattack';
 
 const props = defineProps<{
     research: ResearchDTO;
@@ -23,38 +25,34 @@ const emit = defineEmits<{
     research: [technology: TechnologyName];
 }>();
 
+// opis efektu = to, co technologia zmienia w CaptainProfile / bitwie (sprawdzone z kodem przy #111)
 const EFFECTS: Record<TechnologyName, string> = {
-    spichlerze: 'magazyn złoża mieści 20 tików produkcji zamiast 10',
-    'mapy-sztormowe': 'sztorm przy pierwszym wpłynięciu: 10% zamiast 20%',
-    'sonar-dalekiego-zasiegu': 'sonar w bitwach wyprawy: krzyż o promieniu 4 zamiast 3',
-    'zegluga-dwusektorowa': 'rejs o 2 sektory za 1 tik',
-    'pojemne-ladownie': 'ładownia każdego statku +50% (w dół)',
-    'dok-remontowy': 'remont za połowę ceny (w górę)',
-    'lepsze-narzedzia': 'złoże +1 na tik; tartak i kopalnia podwajają powiększony urobek',
-    'niszczyciel-zwiadowczy': 'stocznia buduje niszczyciel zwiadowczy: 2 sonary zamiast torpedy',
+    spichlerze: 'Magazyn złoża mieści 20 tików produkcji zamiast 10.',
+    'mapy-sztormowe': 'Połowa szansy sztormu akwenu przy pierwszym wpłynięciu: Morze Rozbitków 10% zamiast 20%, Ocean Sztormów 20% zamiast 40%.',
+    'sonar-dalekiego-zasiegu': 'Sonar w bitwach wyprawy: krzyż o promieniu 4 zamiast 3.',
+    'zegluga-dwusektorowa': 'Rejs o 2 sektory (także po skosie) za 1 tik.',
+    'pojemne-ladownie': 'Ładownia każdego statku +50% (w dół).',
+    'dok-remontowy': 'Remont za połowę ceny (w górę).',
+    'lepsze-narzedzia': 'Złoże +1 na tik swojego surowca, przed mnożnikiem akwenu (na Oceanie Sztormów +2); tartak i kopalnia podwajają powiększony urobek.',
+    'niszczyciel-zwiadowczy': 'Stocznia buduje niszczyciel zwiadowczy: 2 sonary zamiast torpedy.',
 };
 
 const current = computed(() => props.research.current);
+const done = computed(() => props.research.technologies.filter(t => t.state === 'researched').length);
+const complete = computed(() => props.research.technologies.length > 0 && done.value === props.research.technologies.length);
 
-function cell(branch: TechBranchName, level: number): TechnologyDTO | null {
-    return props.research.technologies.find(t => t.branch === branch && t.level === level) ?? null;
-}
-
-function levelOf(t: TechnologyDTO): TechLevelDTO {
-    return props.research.levels.find(l => l.level === t.level)!;
-}
+const levels = computed(() => props.research.levels.map(l => ({
+    level: l,
+    nodes: props.research.technologies.filter(t => t.level === l.level),
+})));
 
 function levelLabel(l: TechLevelDTO): string {
     const rank = l.requiredRank ? ` · od rangi ${RANK_LABELS[l.requiredRank]}` : '';
     return `${formatResources(l.cost)} · ${ticksLabel(l.ticks)}${rank}`;
 }
 
-function ticksLabel(n: number): string {
-    return n === 1 ? '1 tik' : n >= 2 && n <= 4 ? `${n} tiki` : `${n} tików`;
-}
-
 function blockLabel(t: TechnologyDTO): string | null {
-    const level = levelOf(t);
+    const level = props.research.levels.find(l => l.level === t.level)!;
     switch (t.blocker) {
         case null: return null;
         case 'researched': return 'zbadana';
@@ -71,77 +69,98 @@ function blockLabel(t: TechnologyDTO): string | null {
 function showButton(t: TechnologyDTO): boolean {
     return t.state === 'available' || ['no-academy', 'not-present', 'resources'].includes(t.blocker ?? '');
 }
+
+function percent(progress: number, ticks: number): number {
+    return ticks > 0 ? Math.round((progress / ticks) * 100) : 0;
+}
 </script>
 
 <template>
     <div class="tech">
-        <p v-if="current" class="progress" :class="{ paused: current.paused }">
-            <template v-if="current.paused">
-                ⏸️ {{ TECH_LABELS[current.technology] }} — badanie wstrzymane: {{ current.islandName }} bez Twojej bandery.
-                Odbij wyspę, by wznowić ({{ current.progress }}/{{ current.ticks }} tików).
+        <div>
+            <h3 v-if="complete" class="title">Drzewko ukończone</h3>
+            <template v-else-if="current">
+                <h3 class="title">{{ current.paused ? 'Badanie wstrzymane' : 'Badanie w toku' }}: {{ TECH_LABELS[current.technology] }}</h3>
+                <p class="status" :class="{ paused: current.paused }">
+                    <template v-if="current.paused">{{ current.islandName }} bez Twojej bandery — odbij wyspę, by wznowić ({{ current.progress }}/{{ current.ticks }} tików).</template>
+                    <template v-else>{{ current.progress }}/{{ current.ticks }} tików, koniec za {{ ticksLabel(current.ticksLeft) }} · uczelnia: {{ current.islandName }}</template>
+                </p>
+                <span class="bar" role="progressbar" :aria-valuenow="current.progress" :aria-valuemax="current.ticks">
+                    <span class="fill" :class="{ paused: current.paused }" :style="{ width: percent(current.progress, current.ticks) + '%' }"></span>
+                </span>
             </template>
             <template v-else>
-                ⏳ {{ TECH_LABELS[current.technology] }} — {{ current.progress }}/{{ current.ticks }} tików,
-                koniec za {{ ticksLabel(current.ticksLeft) }} (uczelnia: {{ current.islandName }})
+                <h3 class="title">Żadne badanie nie trwa</h3>
+                <p class="status">Zaczniesz je w uczelni na wyspie pod Twoją banderą, stojąc tam z flotą.</p>
             </template>
-            <span class="bar" role="progressbar"><span class="fill" :style="{ width: Math.round(current.progress / current.ticks * 100) + '%' }"></span></span>
-        </p>
-        <p v-else class="muted">Żadne badanie nie trwa. Zaczniesz je w uczelni na wyspie pod Twoją banderą, stojąc tam z flotą.</p>
-
-        <div class="grid" :style="{ gridTemplateColumns: `8rem repeat(${research.branches.length}, minmax(9rem, 1fr))` }">
-            <span></span>
-            <strong v-for="b in research.branches" :key="b" class="branch">{{ TECH_BRANCH_LABELS[b] }}</strong>
-            <template v-for="l in research.levels" :key="l.level">
-                <span class="level">
-                    <strong>Poziom {{ l.level }}</strong>
-                    <small class="muted">{{ levelLabel(l) }}</small>
-                </span>
-                <div v-for="b in research.branches" :key="`${b}-${l.level}`" class="node" :class="cell(b, l.level)?.state ?? 'empty'">
-                    <template v-if="cell(b, l.level)">
-                        <strong>{{ TECH_LABELS[cell(b, l.level)!.id] }}</strong>
-                        <small>{{ EFFECTS[cell(b, l.level)!.id] }}</small>
-                        <small v-if="cell(b, l.level)!.state === 'researched'" class="on">✅ zbadana — działa</small>
-                        <small v-else-if="cell(b, l.level)!.state === 'in-progress'" class="on">
-                            {{ current?.paused ? '⏸️ wstrzymane' : `⏳ za ${ticksLabel(cell(b, l.level)!.ticksLeft ?? 0)}` }}
-                        </small>
-                        <template v-else>
-                            <button
-                                v-if="showButton(cell(b, l.level)!)"
-                                class="btn small"
-                                :disabled="busy || cell(b, l.level)!.state !== 'available'"
-                                :title="blockLabel(cell(b, l.level)!) ?? ''"
-                                @click="emit('research', cell(b, l.level)!.id)"
-                            >
-                                Badaj
-                            </button>
-                            <small v-if="blockLabel(cell(b, l.level)!)" class="block">{{ blockLabel(cell(b, l.level)!) }}</small>
-                        </template>
-                    </template>
-                    <small v-else class="muted">—</small>
-                </div>
-            </template>
+            <p class="rules">Naraz trwa jedno badanie. Koszt pobierany z magazynu wyspy z uczelnią, resztę dopłaca ładownia. Czas liczy się w tikach pod banderą wyspy.</p>
         </div>
-        <p class="muted">Naraz trwa jedno badanie. Płaci magazyn wyspy z uczelnią, brakującą resztę ładownia; czas liczą tiki pod banderą tej wyspy.</p>
+
+        <section v-for="l in levels" :key="l.level.level" class="level">
+            <div class="level-head">
+                <span class="level-name">Poziom {{ l.level.level }}</span>
+                <span class="level-cost">{{ levelLabel(l.level) }}</span>
+            </div>
+            <div class="nodes">
+                <div v-for="t in l.nodes" :key="t.id" class="node" :class="t.state">
+                    <div class="node-head">
+                        <div>
+                            <div class="branch">{{ TECH_BRANCH_LABELS[t.branch] }}</div>
+                            <div class="node-name">{{ TECH_LABELS[t.id] }}</div>
+                        </div>
+                        <span v-if="t.state === 'researched'" class="check" title="zbadana — działa">✓</span>
+                    </div>
+                    <div class="desc">{{ EFFECTS[t.id] }}</div>
+                    <template v-if="t.state === 'in-progress' && current">
+                        <span class="bar small" role="progressbar" :aria-valuenow="current.progress" :aria-valuemax="current.ticks">
+                            <span class="fill" :class="{ paused: current.paused }" :style="{ width: percent(current.progress, current.ticks) + '%' }"></span>
+                        </span>
+                        <span class="hint on">{{ current.paused ? 'wstrzymane' : `${current.progress}/${current.ticks} · za ${ticksLabel(t.ticksLeft ?? 0)}` }}</span>
+                    </template>
+                    <template v-else-if="t.state !== 'researched'">
+                        <button
+                            v-if="showButton(t)"
+                            class="btn btn-small btn-secondary"
+                            :disabled="busy || t.state !== 'available'"
+                            :title="blockLabel(t) ?? ''"
+                            @click="emit('research', t.id)"
+                        >
+                            Badaj
+                        </button>
+                        <span v-if="blockLabel(t)" class="hint">{{ blockLabel(t) }}</span>
+                    </template>
+                </div>
+            </div>
+        </section>
     </div>
 </template>
 
 <style scoped>
-.tech { margin-top: 0.3rem; }
-.progress { margin: 0 0 0.6rem; display: flex; flex-wrap: wrap; gap: 0.3rem 0.6rem; align-items: center; }
-.progress.paused { color: var(--warn); }
-.bar { display: inline-block; width: 8rem; height: 6px; background: var(--bg-disabled); border-radius: 3px; overflow: hidden; }
+.tech { display: flex; flex-direction: column; gap: 18px; }
+.title { margin: 0; font: 700 22px var(--font-head); }
+.status { margin: 4px 0 0; font: 400 13px var(--font-body); color: var(--text-2); }
+.status.paused { color: var(--warn); }
+.rules { margin: 6px 0 0; font: 400 13px var(--font-body); color: var(--text-muted); line-height: 1.5; }
+.bar { display: block; height: 6px; margin-top: 8px; border-radius: 3px; background: var(--bg-card-off); border: 1px solid var(--line-card); overflow: hidden; }
+.bar.small { height: 5px; margin-top: 2px; }
 .fill { display: block; height: 100%; background: var(--info); }
-.grid { display: grid; gap: 0.4rem; overflow-x: auto; }
-.branch { font-size: 0.9rem; }
-.level { display: flex; flex-direction: column; gap: 0.15rem; }
-.node { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.4rem 0.5rem; border: 1px solid var(--line-btn); border-radius: 8px; font-size: 0.85rem; }
-.node.empty { border-style: dashed; opacity: 0.5; }
-.node.researched { border-color: var(--info); }
-.node.locked strong { opacity: 0.6; }
-.node .btn { align-self: flex-start; }
-.on { color: var(--info); }
-.block { color: var(--text-muted); }
-.btn { padding: 5px 10px; font: 700 12px var(--font-head); border-radius: 8px; background: var(--bg-card-active); color: var(--text); border: 1px solid var(--line-btn); cursor: pointer; }
-.btn[disabled] { background: var(--bg-disabled); color: var(--text-dim); cursor: not-allowed; }
-.muted { color: var(--text-muted); font-size: 0.85rem; }
+.fill.paused { background: var(--warn); }
+.level { display: flex; flex-direction: column; gap: 10px; }
+.level-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.level-name { font: 600 14px var(--font-head); }
+.level-cost { font: 500 11px var(--font-mono); color: var(--text-label); }
+.nodes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.node { display: flex; flex-direction: column; gap: 5px; padding: 12px 14px; border-radius: 12px; background: var(--bg-card); border: 1px solid var(--line-card); }
+.node.available { border-color: var(--line-btn); }
+.node.in-progress { border-color: var(--info); }
+.node.locked { opacity: .5; }
+.node-head { display: flex; justify-content: space-between; gap: 8px; align-items: start; }
+.branch { font: 600 9px var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text-label); }
+.node-name { font: 600 14px var(--font-head); }
+.check { flex: none; width: 18px; height: 18px; border-radius: 50%; background: var(--bg-card-active); border: 1px solid var(--info); color: var(--info); font: 700 11px var(--font-body); display: flex; align-items: center; justify-content: center; }
+.desc { font: 400 12px var(--font-body); color: var(--text-desc); line-height: 1.45; }
+.node .btn { align-self: flex-start; margin-top: 2px; }
+.hint { font: 500 11px var(--font-mono); color: var(--text-muted); }
+.hint.on { color: var(--info); }
+@media (max-width: 520px) { .nodes { grid-template-columns: minmax(0, 1fr); } }
 </style>

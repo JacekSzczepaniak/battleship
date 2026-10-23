@@ -41,16 +41,17 @@ final class GetExpedition
         $rank = $profile->rank();
         $next = $rank->next();
 
+        $sea = $this->worldFactory->seaFor($profile);
         $world = $this->worldFactory->worldFor($profile);
+        $theme = $world->theme();
         $profile->ensureWorldState($world);
         $position = $profile->position();
 
+        // wyspy bieżącego akwenu; bandery liczą się ze wszystkich akwenów
         $islands = [];
-        $owned = 0;
-        foreach ($this->islands->all() as $island) {
+        foreach ($sea->islands->all() as $island) {
             $stats = $profile->battleStats($island->id);
             $isOwned = $profile->ownsIsland($island->id);
-            $owned += (int) $isOwned;
             $islandPos = $world->islandPosition($island->id);
             $discovered = null !== $islandPos && $profile->isDiscovered($islandPos['x'], $islandPos['y']);
             $islands[] = [
@@ -72,8 +73,8 @@ final class GetExpedition
                 'owned' => $isOwned,
                 // złoże: urobek na tik (z tartakiem/kopalnią), limit czekający w magazynie, czy pracuje (pod banderą)
                 'deposit' => $island->hasDeposit() ? [
-                    'yield' => $profile->depositYield($island)->toArray(),
-                    'cap' => $profile->depositCap($island)->toArray(),
+                    'yield' => $profile->depositYield($island, $theme)->toArray(),
+                    'cap' => $profile->depositCap($island, $theme)->toArray(),
                     'active' => $isOwned,
                 ] : null,
                 // osada: stojące budynki (czynne pod banderą) i powód blokady budowy każdego typu (null = można)
@@ -138,14 +139,23 @@ final class GetExpedition
                 'cargo' => $profile->cargo()->toArray(),
                 'cargoCapacity' => $profile->cargoCapacity(),
                 'enemyShipsSunk' => $profile->enemyShipsSunk(),
-                // wyspy pod banderą (z katalogu wysp)
-                'ownedIslands' => $owned,
+                // wyspy pod banderą na wszystkich akwenach
+                'ownedIslands' => count(array_filter(
+                    $this->islands->all(),
+                    static fn ($island) => $profile->ownsIsland($island->id),
+                )),
             ],
             'fleet' => $fleet,
             'shipTypes' => $shipTypes,
             'buildingTypes' => $buildingTypes,
             'islands' => $islands,
             'world' => [
+                // akwen floty i jego motyw (Epic I): sztorm, widoczność, mnożnik złóż
+                'sea' => [
+                    'id' => $sea->id,
+                    'name' => $sea->name,
+                    'theme' => $theme->toArray(),
+                ],
                 'width' => WorldMap::WIDTH,
                 'height' => WorldMap::HEIGHT,
                 'position' => $position,
@@ -153,8 +163,8 @@ final class GetExpedition
                 // sektory, na których kapitan był — tam sztorm już nie grozi
                 'visited' => $profile->visitedSectors(),
                 'atIsland' => $world->islandAt($position['x'], $position['y']),
-                // Mapy sztormowe (Epic G) obniżają szansę z 20% do 10%
-                'stormChance' => $profile->stormChance(),
+                // szansa z motywu akwenu; Mapy sztormowe (Epic G) ją połowią
+                'stormChance' => $profile->stormChance($theme),
                 // Żegluga dwusektorowa (Epic G) wydłuża rejs za 1 tik z 1 do 2 sektorów
                 'sailRange' => $profile->sailRange(),
                 // zegar świata: rejs i bitwa kosztują tik

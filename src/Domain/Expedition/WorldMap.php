@@ -7,7 +7,8 @@ namespace App\Domain\Expedition;
  * żadnego globalnego RNG; ten sam seed = ten sam świat, co daje powtarzalne
  * testy i replay). Wyspy trasy lądują w pionowych pasmach coraz dalej od
  * startu — progresja przestrzenna odpowiada progresji rang. Startem wyprawy
- * jest sektor pierwszej wyspy (Zatoka Rozbitka).
+ * jest sektor pierwszej wyspy (Zatoka Rozbitka). Każdy akwen ma własną mapę
+ * (Sea::map()), która zna id i motyw swojego akwenu (Epic I).
  */
 final class WorldMap
 {
@@ -19,15 +20,21 @@ final class WorldMap
      * @param array<string, Island>             $deposits    wyspy ze złożem (klucz: id)
      * @param array<string, bool>               $safeHarbors bezpieczne przystanie (klucz: id) — kontrataki ich nie dotyczą
      */
-    private function __construct(private array $islands, private array $deposits, private array $safeHarbors = [])
-    {
+    private function __construct(
+        private array $islands,
+        private array $deposits,
+        private array $safeHarbors,
+        private SeaTheme $theme,
+        private string $seaId,
+    ) {
     }
 
     /**
      * @param list<string> $islandIds wyspy w kolejności trasy
      * @param list<Island> $deposits  definicje wysp: złoża i bezpieczne przystanie — nie zmieniają rozkładu wysp
+     * @param SeaTheme     $theme     motyw akwenu; domyślny = Morze Rozbitków
      */
-    public static function generate(int $seed, array $islandIds, array $deposits = []): self
+    public static function generate(int $seed, array $islandIds, array $deposits = [], SeaTheme $theme = new SeaTheme(), string $seaId = Sea::START): self
     {
         $state = $seed & 0x7FFFFFFF;
         $next = static function (int $mod) use (&$state): int {
@@ -58,7 +65,19 @@ final class WorldMap
             }
         }
 
-        return new self($islands, $withDeposit, $safeHarbors);
+        return new self($islands, $withDeposit, $safeHarbors, $theme, $seaId);
+    }
+
+    /** Id akwenu, którego to mapa. */
+    public function seaId(): string
+    {
+        return $this->seaId;
+    }
+
+    /** Motyw akwenu: sztorm, widoczność, mnożnik złóż. */
+    public function theme(): SeaTheme
+    {
+        return $this->theme;
     }
 
     /** Czy wyspa jest bezpieczną przystanią (kontrataki jej nie dotyczą, #78). */

@@ -6,6 +6,7 @@ use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\OwnedShip;
 use App\Domain\Expedition\Resources;
+use App\Domain\Expedition\SeaState;
 use App\Domain\Expedition\ShipType;
 use App\Domain\Expedition\ShipVariant;
 use App\Domain\Expedition\Technology;
@@ -30,11 +31,15 @@ final class ProfileSnapshotMapper
                 'variant' => $ship->variant?->value,
             ], static fn ($v) => null !== $v), $profile->fleet()),
             'worldSeed' => $profile->worldSeed(),
-            'position' => $profile->hasWorldState() ? $profile->position() : null,
-            'discovered' => $profile->discoveredSectors(),
+            // akweny (Epic I): akwen floty i stan każdego akwenu — pozycja, odkryte i odwiedzone sektory
+            'sea' => $profile->currentSea(),
+            'seas' => array_map(static fn (SeaState $state) => [
+                'position' => $state->position(),
+                'discovered' => $state->discoveredSectors(),
+                'visited' => $state->visitedSectors(),
+            ], $profile->seaStates()),
             'moveCount' => $profile->moveCount(),
             'tick' => $profile->tick(),
-            'visited' => $profile->visitedSectors(),
             // surowce czekające na magazyn wyspy — rozłoży je ensureWorldState()
             'unplaced' => $profile->unplacedResources()?->toArray(),
             // złoża wysp: tik ostatniego naliczenia urobku
@@ -93,15 +98,17 @@ final class ProfileSnapshotMapper
             }
         }
 
-        $position = null;
-        if (isset($state['position']) && is_array($state['position'])
-            && isset($state['position']['x'], $state['position']['y'])) {
-            $position = ['x' => (int) $state['position']['x'], 'y' => (int) $state['position']['y']];
-        }
+        // akweny: brak klucza `seas` = profil sprzed akwenów, którego płaskie pola są stanem Morza Rozbitków
+        $sea = isset($state['sea']) ? (string) $state['sea'] : null;
+        $seaStates = $this->seaStatesFrom($state);
+        $here = null !== $sea && isset($state['seas'][$sea]) && is_array($state['seas'][$sea]) ? $state['seas'][$sea] : $state;
+        unset($seaStates[$sea ?? '']);
+
+        $position = $this->positionFrom($here);
 
         $discovered = null;
-        if (isset($state['discovered']) && is_array($state['discovered'])) {
-            $discovered = array_values(array_map('strval', $state['discovered']));
+        if (isset($here['discovered']) && is_array($here['discovered'])) {
+            $discovered = array_values(array_map('strval', $here['discovered']));
         }
 
         $cargo = isset($state['cargo']) && is_array($state['cargo']) ? Resources::fromArray($state['cargo']) : null;
@@ -120,7 +127,7 @@ final class ProfileSnapshotMapper
             // brak klucza = profil sprzed tiku; CaptainProfile wyliczy go z historii
             isset($state['tick']) ? (int) $state['tick'] : null,
             // brak klucza = profil sprzed odwiedzin; CaptainProfile przyjmie obecną pozycję
-            isset($state['visited']) && is_array($state['visited']) ? array_values(array_map('strval', $state['visited'])) : null,
+            isset($here['visited']) && is_array($here['visited']) ? array_values(array_map('strval', $here['visited'])) : null,
             $this->stockpilesFrom($state),
             $this->unplacedFrom($state, $cargo),
             array_map('intval', (array) ($state['depositTicks'] ?? [])),
@@ -130,7 +137,48 @@ final class ProfileSnapshotMapper
             $this->counterattacksFrom($state),
             $this->buildingsFrom($state),
             ...$this->researchFrom($state),
+            sea: $sea,
+            seaStates: $seaStates,
         );
+    }
+
+    /**
+     * Stan akwenów zapisany pod kluczem `seas` (klucz: id akwenu); stan
+     * akwenu floty wyjmuje toDomain() osobno.
+     *
+     * @param array<string,mixed> $state
+     *
+     * @return array<string, SeaState>
+     */
+    private function seaStatesFrom(array $state): array
+    {
+        $out = [];
+        foreach ((array) ($state['seas'] ?? []) as $seaId => $sea) {
+            if (!is_array($sea)) {
+                continue;
+            }
+            $out[(string) $seaId] = new SeaState(
+                $this->positionFrom($sea),
+                array_values(array_map('strval', (array) ($sea['discovered'] ?? []))),
+                array_values(array_map('strval', (array) ($sea['visited'] ?? []))),
+            );
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param array<mixed> $state
+     *
+     * @return array{x:int,y:int}|null
+     */
+    private function positionFrom(array $state): ?array
+    {
+        $position = $state['position'] ?? null;
+
+        return is_array($position) && isset($position['x'], $position['y'])
+            ? ['x' => (int) $position['x'], 'y' => (int) $position['y']]
+            : null;
     }
 
     /**

@@ -177,13 +177,29 @@ export interface IslandDTO {
     stockpile: ResourcesDTO;
 }
 
+// motyw akwenu (Epic I): szansa sztormu przy pierwszym wpłynięciu (%), promień odkrywania (0 = tylko sektor floty), mnożnik złóż
+export interface SeaThemeDTO {
+    stormChance: number;
+    visibility: number;
+    depositMultiplier: number;
+}
+
+// akwen, w którym stoi flota
+export interface SeaDTO {
+    id: string;
+    name: string;
+    theme: SeaThemeDTO;
+}
+
 export interface WorldDTO {
+    sea: SeaDTO;
     width: number;
     height: number;
     position: { x: number; y: number };
     discovered: string[]; // sektory "x:y"
     visited: string[]; // sektory "x:y", na których kapitan był — tam sztorm nie grozi
     atIsland: string | null;
+    // szansa sztormu akwenu z Mapami sztormowymi (połowa) albo bez nich
     stormChance: number;
     // najdalszy sektor osiągalny w jednym rejsie (większa z różnic x i y); Żegluga dwusektorowa: 2
     sailRange: number;

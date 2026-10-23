@@ -70,9 +70,10 @@
             <!-- Mapa morza: mgła, wyspy, pozycja -->
             <section class="card sea">
                 <div class="island-head">
-                    <h2>🗺️ Morze</h2>
+                    <h2>🗺️ {{ expedition.world.sea.name }}</h2>
                     <span class="muted">tik {{ expedition.world.tick }} · nieodwiedzone sektory: ryzyko sztormu {{ expedition.world.stormChance }}%</span>
                 </div>
+                <p class="muted sea-theme">{{ seaThemeText }}</p>
                 <div class="sea-grid" :style="{ gridTemplateColumns: `repeat(${expedition.world.width}, 1.7rem)` }">
                     <button
                         v-for="cell in seaCells"
@@ -357,6 +358,14 @@ const currentIsland = computed<IslandDTO | null>(
 const economy = computed<IslandDTO[]>(() => economyIslands(expedition.value?.islands ?? []));
 
 const counterattack = computed(() => expedition.value?.counterattack ?? { pending: null, last: null });
+
+// motyw akwenu (Epic I): bazowy sztorm akwenu, promień odkrywania, mnożnik złóż
+const seaThemeText = computed(() => {
+    const theme = expedition.value?.world.sea.theme;
+    if (!theme) return '';
+    const visibility = theme.visibility === 0 ? 'tylko sektor floty' : `${theme.visibility} ${theme.visibility === 1 ? 'sektor' : 'sektory'} wokół floty`;
+    return `Motyw akwenu: sztorm ${theme.stormChance}% · widoczność: ${visibility} · złoża ×${theme.depositMultiplier}`;
+});
 
 const discoveredIslands = computed<IslandDTO[]>(
     () => expedition.value?.islands.filter(i => i.discovered) ?? []
@@ -775,6 +784,7 @@ h2, h3 { font-family: var(--font-head); }
 .sea-cell.sailable.risk:not(:disabled) { outline-color: var(--warn); }
 .sea-cell.sailable:not(:disabled):hover { filter: brightness(1.3); }
 .sea-msg { margin: 0.5rem 0 0; color: var(--warn); }
+.sea-theme { margin: 0 0 0.5rem; font-size: 0.85rem; }
 .port h2, .port h3 { margin: 0 0 0.4rem; font-size: 1.05rem; }
 .port h3 { margin-top: 0.8rem; }
 .ships { list-style: none; padding: 0; margin: 0; }

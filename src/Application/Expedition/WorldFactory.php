@@ -3,22 +3,26 @@
 namespace App\Application\Expedition;
 
 use App\Domain\Expedition\CaptainProfile;
-use App\Domain\Expedition\IslandCatalog;
+use App\Domain\Expedition\Sea;
+use App\Domain\Expedition\SeaGraph;
 use App\Domain\Expedition\WorldMap;
 
-/** Buduje mapę świata kapitana: seed profilu + wyspy trasy (i ich złoża) z katalogu. */
+/** Buduje mapę akwenu, w którym stoi flota kapitana: seed profilu + wyspy, złoża i motyw akwenu z grafu świata. */
 final class WorldFactory
 {
-    public function __construct(private IslandCatalog $islands)
+    public function __construct(private SeaGraph $seas)
     {
+    }
+
+    /** Akwen, w którym stoi flota. */
+    public function seaFor(CaptainProfile $profile): Sea
+    {
+        return $this->seas->sea($profile->currentSea())
+            ?? throw new \LogicException("Unknown sea {$profile->currentSea()}");
     }
 
     public function worldFor(CaptainProfile $profile): WorldMap
     {
-        return WorldMap::generate(
-            $profile->worldSeed(),
-            array_map(static fn ($island) => $island->id, $this->islands->all()),
-            $this->islands->all(),
-        );
+        return $this->seaFor($profile)->map($profile->worldSeed());
     }
 }

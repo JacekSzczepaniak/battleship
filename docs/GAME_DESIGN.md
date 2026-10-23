@@ -56,6 +56,12 @@ generowana deterministycznie: `worldSeed → akwenSeed_i`.
   polują na konwoje) → Morze Mgieł (widoczność 0 — sonar i mapy w cenie) →
   Ocean Sztormów (sztorm 40%, najbogatsza stal) → Wody Admiralicji (endgame).
 
+✅ (Epic I) Na start trzy akweny: Morze Rozbitków → (strzeżona cieśnina, od
+rangi porucznik) → Ocean Sztormów → (otwarty ocean, technologia Nawigacja
+oceaniczna) → Morze Mgieł. Motyw to trzy parametry: szansa sztormu,
+widoczność i mnożnik złóż. Brama „wody nieznane” wchodzi z Epikiem J razem z
+mapą akwenu.
+
 **Przejścia między akwenami — trzy rodzaje bram (mieszane):**
 1. **Strzeżona cieśnina** — bitwa-boss: flota strażnicza + fort,
 2. **Otwarty ocean** — wymaga technologii („Nawigacja oceaniczna"),
@@ -304,10 +310,9 @@ Akwenu 1 zacznie uwierać.
 ## Otwarte pytania
 
 - Które technologie dostaną ścieżkę questową (Epic J) i czy dojdą technologie tylko questowe?
-- Rangi vs akweny: czy progi rosną z liczbą akwenów; gdzie osiągalny admirał; czym zapełnić lukę 250–600 XP (dziś wyspy II poziomu, a od Epica G także drugi poziom drzewka) i które rangi bramkują akwen 2?
+- Rangi vs akweny: czy progi rosną z liczbą akwenów; gdzie osiągalny admirał; czym zapełnić lukę 250–600 XP (dziś wyspy II poziomu, a od Epica G także drugi poziom drzewka) i które rangi bramkują akwen 2? Akwen 2 otwiera się od porucznika, a admirał to końcówka gry na akwenie 3.
 - Specjalizacje: konkretne perki i progi; czy bojowa wpływa na samą bitwę, czy tylko na otoczkę (remont, zwiad)?
 - Pobojowisko: procent odzysku, po ilu tikach resztki znikają?
-- Ile akwenów na start (2–3?) i rozmiar planszy akwenu (12×12 wystarczy?)
 - Balans z obserwacji: pełna utrata floty przy przegranej, sztormy 20%, koszty statków
 - Abordaż: dokładna mechanika rozstrzygnięcia (rzut? mini-plansza? koszt?)
 - Czy kiedyś dzielimy flotę na zespoły z własną pozycją?

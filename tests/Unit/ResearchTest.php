@@ -80,7 +80,7 @@ it('uczelnia kosztuje 30 drewna, 20 stali i 15 złota i stoi także w Zatoce Roz
 });
 
 it('katalog zawiera tylko działające technologie, a poziom niesie koszt, czas i rangę', function () {
-    expect(Technology::cases())->toBe([Technology::Spichlerze, Technology::MapySztormowe, Technology::SonarDalekiegoZasiegu, Technology::ZeglugaDwusektorowa, Technology::PojemneLadownie, Technology::DokRemontowy, Technology::LepszeNarzedzia, Technology::NiszczycielZwiadowczy])
+    expect(Technology::cases())->toBe([Technology::Spichlerze, Technology::MapySztormowe, Technology::SonarDalekiegoZasiegu, Technology::ZeglugaDwusektorowa, Technology::PojemneLadownie, Technology::DokRemontowy, Technology::LepszeNarzedzia, Technology::NiszczycielZwiadowczy, Technology::NawigacjaOceaniczna])
         ->and(Technology::Spichlerze->branch())->toBe(TechBranch::Osady)
         ->and(Technology::MapySztormowe->branch())->toBe(TechBranch::Nawigacja)
         ->and(Technology::Spichlerze->level())->toBe(TechLevel::First)
@@ -89,7 +89,18 @@ it('katalog zawiera tylko działające technologie, a poziom niesie koszt, czas 
         ->and(TechLevel::First->requiredRank())->toBeNull()
         ->and(TechLevel::Second->researchCost()->toArray())->toBe(['wood' => 40, 'steel' => 30, 'gold' => 15])
         ->and(TechLevel::Second->researchTicks())->toBe(10)
-        ->and(TechLevel::Second->requiredRank())->toBe(Rank::Sternik);
+        ->and(TechLevel::Second->requiredRank())->toBe(Rank::Sternik)
+        ->and(Technology::NawigacjaOceaniczna->branch())->toBe(TechBranch::Nawigacja)
+        ->and(Technology::NawigacjaOceaniczna->level())->toBe(TechLevel::Third)
+        ->and(TechLevel::Third->researchCost()->toArray())->toBe(['wood' => 60, 'steel' => 50, 'gold' => 30])
+        ->and(TechLevel::Third->researchTicks())->toBe(14)
+        ->and(TechLevel::Third->requiredRank())->toBe(Rank::Kapitan);
+});
+
+it('poziom 3 wymaga zbadanego poziomu 2 w tej samej gałęzi i rangi kapitan', function () {
+    expect(TechLevel::Third->treeBlocker(TechBranch::Nawigacja, [Technology::MapySztormowe], Rank::Admiral))->toBe(ResearchBlock::Prerequisite)
+        ->and(TechLevel::Third->treeBlocker(TechBranch::Nawigacja, [Technology::ZeglugaDwusektorowa], Rank::Porucznik))->toBe(ResearchBlock::Rank)
+        ->and(TechLevel::Third->treeBlocker(TechBranch::Nawigacja, [Technology::ZeglugaDwusektorowa], Rank::Kapitan))->toBeNull();
 });
 
 it('poziom 2 wymaga zbadanego poziomu 1 w tej samej gałęzi i rangi sternik', function () {

@@ -293,6 +293,10 @@
                                 </template>
                                 <p v-else-if="currentGate.blocker" class="muted">🔒 {{ gateBlockText(currentGate) }}</p>
                             </div>
+                            <div v-if="!currentGate.guardian && currentGate.blocker" class="block">
+                                <div class="kicker">Przejście</div>
+                                <p class="muted">🔒 {{ gateBlockText(currentGate) }}</p>
+                            </div>
                             <div v-if="currentGate.open" class="block">
                                 <div class="kicker">Przejście</div>
                                 <button class="btn btn-primary act" :disabled="busy || pendingBattle !== null" @click="onPassGate(currentGate)">
@@ -579,15 +583,20 @@ function sectorLabel(pos: { x: number; y: number }): string {
 
 function gateStatus(gate: GateDTO): string {
     if (gate.open) return '🔓 otwarta';
-    return gate.blocker === 'rank' && gate.guardian ? `🔒 od rangi ${rankLabel(gate.guardian.requiredRank)}` : '🔒 strzeżona';
+    switch (gate.blocker) {
+        case 'rank': return gate.guardian ? `🔒 od rangi ${rankLabel(gate.guardian.requiredRank)}` : '🔒 zamknięta';
+        case 'technology': return '🔒 wymaga technologii';
+        default: return '🔒 strzeżona';
+    }
 }
 
-/** Powód zamknięcia bramy pełnym zdaniem; kolejne warunki (#108) dopisują się tutaj. */
+/** Powód zamknięcia bramy pełnym zdaniem; nowy warunek bramy dopisuje się tutaj. */
 function gateBlockText(gate: GateDTO): string {
     switch (gate.blocker) {
         case null: return 'otwarta';
         case 'rank': return gate.guardian ? `strażnik przyjmie bitwę od rangi ${rankLabel(gate.guardian.requiredRank)}` : 'zamknięta rangą';
         case 'guardian': return gate.guardian ? `strzeże jej ${gate.guardian.name} — pokonaj go na sektorze bramy` : 'strzeżona';
+        case 'technology': return gate.technology ? `otworzy ją zbadana technologia „${TECH_LABELS[gate.technology]}” (uczelnia)` : 'wymaga technologii';
     }
 }
 

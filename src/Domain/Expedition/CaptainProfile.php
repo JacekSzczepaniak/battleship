@@ -989,8 +989,8 @@ final class CaptainProfile
     /**
      * Rejs za 1 tik na sektor w zasięgu sailRange(): sąsiedni, a z Żeglugą
      * dwusektorową także odległy o 2. Sektor, przez który flota przepływa,
-     * nie jest liczony osobno — leży w sąsiedztwie celu, więc przybycie
-     * i tak go odkrywa; nie jest odwiedzony. Pierwsze wpłynięcie na sektor grozi sztormem
+     * zostaje odkryty (także przy widoczności 0, #108), ale nie odwiedzony
+     * i nie grozi sztormem. Pierwsze wpłynięcie na sektor grozi sztormem
      * (deterministycznie z seed+tik — przeładowanie strony nie zmienia
      * losu); powrót na odwiedzony sektor jest bezpieczny. Nowo odkryte
      * sektory dają dochód kartograficzny. Żegluga NIGDY nie
@@ -1020,20 +1020,29 @@ final class CaptainProfile
         ++$this->moveCount;
         ++$this->tick;
 
-        return $this->arrive($x, $y, $world);
+        // rejs o 2 sektory odkrywa też sektor po drodze: krok od startu w stronę
+        // celu (przy ruchu 2+1 po skosie). Przy widoczności 1 leży on i tak
+        // w sąsiedztwie celu; liczy się na Morzu Mgieł z widocznością 0 (#108)
+        $passed = 2 === $distance
+            ? [[$position['x'] + ($x <=> $position['x']), $position['y'] + ($y <=> $position['y'])]]
+            : [];
+
+        return $this->arrive($x, $y, $world, $passed);
     }
 
     /**
      * Wpłynięcie floty na sektor bieżącego akwenu po rejsie albo przejściu
      * przez bramę: sztorm z motywu akwenu, odkrycie sąsiedztwa i kartografia.
      *
+     * @param list<array{0:int,1:int}> $passed sektory minięte po drodze (odkrywane bez sztormu)
+     *
      * @return array{discoveredNow: list<string>, cartography: int, cartographyLost: int, event: array<string,mixed>|null}
      */
-    private function arrive(int $x, int $y, WorldMap $world): array
+    private function arrive(int $x, int $y, WorldMap $world, array $passed = []): array
     {
         // sztorm łapie w drodze — tylko przy pierwszym wpłynięciu na sektor.
-        // Nie „nieodkryty”: cel rejsu jest zawsze odkryty, bo przybycie odkrywa
-        // całe sąsiedztwo (#68)
+        // Nie „nieodkryty”: cel rejsu bywa odkryty wcześniej (sąsiedztwo, #68),
+        // a przy widoczności 0 nieodkryty jest każdy nowy cel
         $event = $this->isVisited($x, $y) ? null : $this->rollStorm($world->theme());
         if (null !== $event) {
             $this->record($this->tick, LogEvent::Storm, array_diff_key($event, ['type' => true]));
@@ -1043,7 +1052,7 @@ final class CaptainProfile
 
         $discoveredNow = [];
         $cartography = 0;
-        foreach ($this->neighborhood($x, $y, $world) as [$nx, $ny]) {
+        foreach ([...$passed, ...$this->neighborhood($x, $y, $world)] as [$nx, $ny]) {
             if (!$this->here()->discover($nx, $ny)) {
                 continue;
             }

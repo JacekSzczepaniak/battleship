@@ -28,13 +28,14 @@ const emit = defineEmits<{
 // opis efektu = to, co technologia zmienia w CaptainProfile / bitwie (sprawdzone z kodem przy #111)
 const EFFECTS: Record<TechnologyName, string> = {
     spichlerze: 'Magazyn złoża mieści 20 tików produkcji zamiast 10.',
-    'mapy-sztormowe': 'Połowa szansy sztormu akwenu przy pierwszym wpłynięciu: Morze Rozbitków 10% zamiast 20%, Ocean Sztormów 20% zamiast 40%.',
+    'mapy-sztormowe': 'Połowa szansy sztormu akwenu przy pierwszym wpłynięciu: Morze Rozbitków 10% zamiast 20%, Ocean Sztormów 20% zamiast 40%, Morze Mgieł 5% zamiast 10%.',
     'sonar-dalekiego-zasiegu': 'Sonar w bitwach wyprawy: krzyż o promieniu 4 zamiast 3.',
-    'zegluga-dwusektorowa': 'Rejs o 2 sektory (także po skosie) za 1 tik.',
+    'zegluga-dwusektorowa': 'Rejs o 2 sektory (także po skosie) za 1 tik; sektor po drodze też zostaje odkryty.',
     'pojemne-ladownie': 'Ładownia każdego statku +50% (w dół).',
     'dok-remontowy': 'Remont za połowę ceny (w górę).',
     'lepsze-narzedzia': 'Złoże +1 na tik swojego surowca, przed mnożnikiem akwenu (na Oceanie Sztormów +2); tartak i kopalnia podwajają powiększony urobek.',
     'niszczyciel-zwiadowczy': 'Stocznia buduje niszczyciel zwiadowczy: 2 sonary zamiast torpedy.',
+    'nawigacja-oceaniczna': 'Otwiera otwarty ocean na wschodniej krawędzi Oceanu Sztormów: przejście na Morze Mgieł i z powrotem za 1 tik, bez bitwy.',
 };
 
 const current = computed(() => props.research.current);

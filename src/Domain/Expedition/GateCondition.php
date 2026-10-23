@@ -4,7 +4,7 @@ namespace App\Domain\Expedition;
 
 /**
  * Warunek otwarcia bramy akwenu (Epic I, D3). Typ bramy to implementacja:
- * strzeżona cieśnina (GuardianCondition), otwarty ocean z technologią (#108).
+ * strzeżona cieśnina (GuardianCondition), otwarty ocean z technologią (TechnologyCondition, #108).
  * Warunek tylko czyta profil; stan, który trzeba zdobyć (pokonany strażnik),
  * trzyma profil pod id bramy.
  */

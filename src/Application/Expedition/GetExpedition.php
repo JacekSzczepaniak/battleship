@@ -14,6 +14,7 @@ use App\Domain\Expedition\ShipVariant;
 use App\Domain\Expedition\TechBranch;
 use App\Domain\Expedition\TechLevel;
 use App\Domain\Expedition\Technology;
+use App\Domain\Expedition\TechnologyCondition;
 use App\Domain\Expedition\WorldMap;
 use App\Domain\Shared\ProfileId;
 
@@ -237,9 +238,11 @@ final class GetExpedition
                 'discovered' => $discovered,
                 'position' => $discovered ? $pos : null,
                 'present' => $discovered && $pos === $position,
-                // null = otwarta; rank | guardian (#108 dołoży technology)
+                // null = otwarta; rank | guardian | technology
                 'blocker' => $blocker?->value,
                 'open' => null === $blocker,
+                // technologia, która otwiera bramę (otwarty ocean); null = inny warunek
+                'technology' => $gate->condition instanceof TechnologyCondition ? $gate->condition->technology->value : null,
                 'guardian' => null !== $guardian ? [
                     'name' => $guardian->name,
                     'description' => $guardian->description,

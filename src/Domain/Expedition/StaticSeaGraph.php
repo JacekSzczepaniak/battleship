@@ -5,13 +5,15 @@ namespace App\Domain\Expedition;
 /**
  * Stały graf akwenów: Morze Rozbitków (katalog wysp plastra A/B, motyw
  * 20% / 1 / ×1, na którym gra działa jak przed akwenami) i za strzeżoną
- * cieśniną Ocean Sztormów (40% / 1 / ×2, #107). Morze Mgieł za otwartym
- * oceanem dochodzi w #108.
+ * cieśniną Ocean Sztormów (40% / 1 / ×2, #107), a za otwartym oceanem na
+ * jego wschodniej krawędzi Morze Mgieł (10% / 0 / ×2, #108).
  */
 final class StaticSeaGraph implements SeaGraph
 {
     public const STORM_OCEAN = 'ocean-sztormow';
     public const GUARDED_STRAIT = 'strzezona-ciesnina';
+    public const MIST_SEA = 'morze-mgiel';
+    public const OPEN_OCEAN = 'otwarty-ocean';
 
     /** @var list<Sea> */
     private array $seas;
@@ -29,11 +31,16 @@ final class StaticSeaGraph implements SeaGraph
             $this->seas = [
                 new Sea(Sea::START, 'Morze Rozbitków', new SeaTheme(stormChance: 20, visibility: 1, depositMultiplier: 1), $shipwreckIslands),
                 new Sea(self::STORM_OCEAN, 'Ocean Sztormów', new SeaTheme(stormChance: 40, visibility: 1, depositMultiplier: 2), new StormOceanIslandCatalog()),
+                new Sea(self::MIST_SEA, 'Morze Mgieł', new SeaTheme(stormChance: 10, visibility: 0, depositMultiplier: 2), new MistSeaIslandCatalog()),
             ];
             $strait = self::guardedStrait();
+            // otwarty ocean: bez bitwy, otwiera go technologia (#108)
+            $ocean = new SeaGate(self::OPEN_OCEAN, 'Otwarty ocean', new TechnologyCondition(Technology::NawigacjaOceaniczna));
             $this->passages = $passages ?? [
                 new SeaPassage(Sea::START, self::STORM_OCEAN, $strait, SeaEdge::East),
                 new SeaPassage(self::STORM_OCEAN, Sea::START, $strait, SeaEdge::West),
+                new SeaPassage(self::STORM_OCEAN, self::MIST_SEA, $ocean, SeaEdge::East),
+                new SeaPassage(self::MIST_SEA, self::STORM_OCEAN, $ocean, SeaEdge::West),
             ];
         } else {
             $this->seas = $seas;

@@ -1283,6 +1283,114 @@ final class CaptainProfile
         return $outcome;
     }
 
+    // --- Port handlowy i rynek (#140) ---
+
+    /** Czy flota stoi na sektorze portu handlowego bieżącego akwenu. */
+    public function isAtTradePort(WorldMap $world): bool
+    {
+        $this->ensureWorldState($world);
+        $pos = $world->tradePortPosition();
+
+        return null !== $pos && $pos === $this->position();
+    }
+
+    /**
+     * Mnożnik ceny rynku w procentach (100 = kurs bazowy akwenu). Na razie
+     * stały: miejsce na reputację kupiec ↔ korsarz z #142.
+     */
+    public function marketPricePercent(): int
+    {
+        return MarketRate::BASE_PRICE_PERCENT;
+    }
+
+    /**
+     * Kupno albo sprzedaż towaru w porcjach po 1 złoto (obecność w porcie
+     * sprawdza warstwa aplikacji). Płaci się z magazynu portu, a brakującą
+     * resztę bierze z ładowni; to, co kapitan dostaje, trafia do ładowni.
+     * Transakcja bez środków albo bez miejsca w ładowni jest odrzucana.
+     * Kosztuje tik jak przeładunek.
+     *
+     * @return array{paid: Resources, received: Resources}
+     */
+    public function trade(TradePort $port, MarketSide $side, MarketGood $good, int $gold): array
+    {
+        if ($gold < 1) {
+            throw new \InvalidArgumentException('Trade amount must be positive');
+        }
+        $percent = $this->marketPricePercent();
+        $coins = new Resources(gold: $gold);
+        [$paid, $received] = match ($side) {
+            MarketSide::Buy => [$coins, $good->resources($gold * $port->rate->buyAmount($good, $percent))],
+            MarketSide::Sell => [$good->resources($gold * $port->rate->sellAmount($good, $percent)), $coins],
+        };
+
+        $stock = $this->stockpile($port->id);
+        if (!$stock->add($this->cargo)->covers($paid)) {
+            throw new \DomainException('Not enough resources');
+        }
+        // płatność najpierw z magazynu: z ładowni ubywa tylko reszta
+        $fromCargo = $paid->subtract(new Resources(min($stock->wood, $paid->wood), min($stock->steel, $paid->steel), min($stock->gold, $paid->gold)));
+        if ($this->cargo->total() - $fromCargo->total() + $received->total() > $this->cargoCapacity()) {
+            throw new \DomainException('Cargo capacity exceeded');
+        }
+
+        $this->pay($port->id, $paid);
+        $this->cargo = $this->cargo->add($received);
+        ++$this->tick;
+        $this->record($this->tick, LogEvent::MarketTrade, [
+            'island' => $port->id,
+            'side' => $side->value,
+            'good' => $good->value,
+            'paid' => $paid->toArray(),
+            'received' => $received->toArray(),
+        ]);
+
+        return ['paid' => $paid, 'received' => $received];
+    }
+
+    /**
+     * Ile złota da sprzedaż statku: zwrot jak przy złomowaniu (#124), a drewno
+     * i stal przeliczone po kursie sprzedaży rynku akwenu.
+     */
+    public function shipSaleValue(OwnedShip $ship, MarketRate $rate): int
+    {
+        return $rate->goldValue($this->scrapValue($ship), $this->marketPricePercent());
+    }
+
+    /**
+     * Sprzedaje statek za złoto w porcie handlowym (obecność sprawdza warstwa
+     * aplikacji); stocznia nie jest potrzebna. Blokady jak przy złomowaniu.
+     * Złoto trafia do ładowni, która po sprzedaży musi pomieścić cały ładunek —
+     * inaczej transakcja jest odrzucana. Kosztuje tik.
+     */
+    public function sellShip(string $shipId, TradePort $port): int
+    {
+        $ship = $this->shipById($shipId) ?? throw new \DomainException('Ship not found');
+        $block = $this->scrapBlocker($ship);
+        if (null !== $block) {
+            throw new \DomainException($block->message());
+        }
+
+        $gold = $this->shipSaleValue($ship, $port->rate);
+        $capacityAfter = $this->cargoCapacity() - $this->shipCargoCapacity($ship->type);
+        if ($this->cargo->total() + $gold > $capacityAfter) {
+            throw new \DomainException('Cargo capacity exceeded');
+        }
+
+        $this->fleet = array_values(array_filter($this->fleet, static fn (OwnedShip $s) => $s->id !== $shipId));
+        $this->cargo = $this->cargo->add(new Resources(gold: $gold));
+        ++$this->tick;
+        $this->record($this->tick, LogEvent::ShipSold, [
+            'ship' => $ship->type->value,
+            'variant' => $ship->variant?->value,
+            'island' => $port->id,
+            'damaged' => $ship->isDamaged() ?: null,
+            'gold' => $gold,
+        ]);
+
+        return $gold;
+    }
+
     // --- Bitwy ---
 
     /**

@@ -19,6 +19,9 @@ interface SeaGraph
     /** Przejście z akwenu przez daną bramę; null = brama nie leży na tym akwenie. */
     public function passage(string $fromSeaId, string $gateId): ?SeaPassage;
 
+    /** Port handlowy o danym id (z dowolnego akwenu, #140); null = nieznany. */
+    public function tradePort(string $portId): ?TradePort;
+
     /** Brama o danym id (z dowolnego akwenu); null = nieznana. */
     public function gate(string $gateId): ?SeaGate;
 }

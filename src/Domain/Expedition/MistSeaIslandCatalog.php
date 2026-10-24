@@ -94,6 +94,20 @@ final class MistSeaIslandCatalog implements IslandCatalog
         ];
     }
 
+    /**
+     * Port handlowy Morza Mgieł (#140): neutralna wyspa poza trasą, z rynkiem
+     * po stałym kursie akwenu. Drewno droższe niż na pozostałych akwenach.
+     */
+    public function tradePort(): TradePort
+    {
+        return new TradePort(
+            id: 'bazar-we-mgle',
+            name: 'Bazar we Mgle',
+            description: 'Handel we mgle idzie na słowo. Drewno trzeba wozić zza oceanu, więc jest tu w cenie złota.',
+            rate: new MarketRate(woodPerGold: 3, steelPerGold: 3),
+        );
+    }
+
     public function byId(string $id): ?Island
     {
         foreach ($this->all() as $island) {

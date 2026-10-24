@@ -54,6 +54,15 @@ export function logText(e: LogEntryDTO, tick?: number): string {
             const unloaded = e.unloaded ? `; z ładowni zostało w porcie: ${formatResources(e.unloaded)}` : '';
             return `Złomowano: ${prizeLabel(e).toLowerCase()}${e.damaged ? ' (uszkodzony)' : ''} — do magazynu (${island}): ${formatResources(e.refund ?? { wood: 0, steel: 0, gold: 0 }, 'nic')}${unloaded}.`;
         }
+        case 'market-trade': {
+            const paid = formatResources(e.paid ?? { wood: 0, steel: 0, gold: 0 });
+            const received = formatResources(e.received ?? { wood: 0, steel: 0, gold: 0 });
+            return e.side === 'sell'
+                ? `Rynek (${island}): sprzedano ${paid} za ${received}.`
+                : `Rynek (${island}): kupiono ${received} za ${paid}.`;
+        }
+        case 'ship-sold':
+            return `Sprzedano: ${prizeLabel(e).toLowerCase()}${e.damaged ? ' (uszkodzony)' : ''} — do ładowni (${island}): ${formatResources({ wood: 0, steel: 0, gold: e.gold ?? 0 }, 'nic')}.`;
     }
 }
 

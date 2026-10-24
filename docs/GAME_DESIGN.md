@@ -28,7 +28,8 @@ w Filarze VIII; licznik zatopionych jednostek wroga) · flota jako majątek
 (budowa/remont, stocznie, wygrana→remont / przegrana→strata; uszkodzony
 statek wozi ładunek, ale nie walczy — #92; złomowanie w stoczni za połowę
 kosztu budowy do magazynu wyspy, uszkodzony mniej o remont, bez ostatniej
-sprawnej jednostki — #124) · rozbudowa
+sprawnej jednostki — #124) · port handlowy z rynkiem na każdym
+akwenie, sprzedaż statku za złoto (#140) · rozbudowa
 stoczni w osadzie (#82: Zatoka pod banderą 1→2) · fort w osadzie (#81:
 nieobecność przy kontrataku to grabież połowy magazynu, wyspa zostaje) · wolne morze
 12×12 z mgłą, deterministyczne z seeda profilu · kartografia pasywna ·
@@ -169,6 +170,11 @@ powroty. Odrzucone: czas rzeczywisty i hybrydy czasowe.
 - **Surowcowa** — złoża do wydobycia; surowiec trzeba **odebrać i przewieźć**
 - **Neutralna (handlowa)** — rynek (surowce, mapy, technologie), questy,
   tubylcy; tu się nie walczy
+  ✅ (#140) Jeden port handlowy na akwen: Targ Rozbitków, Faktoria Kotwic,
+  Bazar we Mgle. Nie ma na nim bitwy, bandery, złoża ani kontrataków i nie
+  liczy się do pełnej bandery akwenu. Ma magazyn jak każda wyspa. Sektor
+  losuje seed akwenu osobnym rzutem we wnętrzu mapy, nie obok wyspy, więc
+  rozkład wysp trasy się nie zmienia. Na mapie: zielona wyspa z kramem.
 - **Osada gracza** ✅ (Epic F): budynki na posiadanej wyspie, każdy typ raz,
   bez poziomów, budowa natychmiastowa. Tartak i kopalnia przy złożu swojego
   surowca podwajają urobek. Fort chroni wyspę pod nieobecność floty: kontratak
@@ -306,6 +312,16 @@ Obrona wyspy bez floty: fort w osadzie (#81, Filar III wyżej).
   drewnem. Na start dokładnie trzy — budżet złożoności. ✅ Złoto wchodzi
   od razu (złoża na mapie), nawet jeśli jego sink (handel/uczelnie)
   pojawi się w późniejszym plastrze — migracja surowców tylko raz.
+  ✅ (#140) **Rynek** w porcie handlowym (filar III): stały kurs akwenu,
+  bez dynamicznego popytu. Za 1 złoto kupisz na Morzu Rozbitków 5 drewna
+  albo 3 stali, na Oceanie Sztormów 5 drewna albo 4 stali (tańsza stal),
+  na Morzu Mgieł 3 drewna albo 3 stali (droższe drewno). Sprzedaż idzie po
+  połowie ceny kupna, więc między akwenami nie ma arbitrażu. Transakcje
+  w porcjach po 1 złoto, 1 tik każda: płaci magazyn portu, resztę ładownia,
+  a towar i złoto trafiają do ładowni (bez miejsca = odrzucenie). Statek
+  sprzedasz za złoto bez stoczni: zwrot jak przy złomowaniu (#124),
+  przeliczony po kursie sprzedaży, w dół z całości. Mnożnik ceny
+  w procentach czeka na reputację (#142) i handlarza na morzu (#141).
 - **Ładownia**: statki mają pojemność cargo; surowce wozi się fizycznie
   między wyspami. Nowy typ: **transportowiec/galeon** — dużo cargo,
   bezbronny, wymaga eskorty.

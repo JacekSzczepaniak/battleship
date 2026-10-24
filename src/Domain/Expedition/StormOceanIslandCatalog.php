@@ -95,6 +95,20 @@ final class StormOceanIslandCatalog implements IslandCatalog
         ];
     }
 
+    /**
+     * Port handlowy Oceanu Sztormów (#140): neutralna wyspa poza trasą, z rynkiem
+     * po stałym kursie akwenu. Stal tańsza niż na Morzu Rozbitków.
+     */
+    public function tradePort(): TradePort
+    {
+        return new TradePort(
+            id: 'faktoria-kotwic',
+            name: 'Faktoria Kotwic',
+            description: 'Cech kupiecki skupuje stal z zatopionych kadłubów i sprzedaje ją taniej niż gdziekolwiek. Działa faktorii milczą z rozkazu cechu.',
+            rate: new MarketRate(woodPerGold: 5, steelPerGold: 4),
+        );
+    }
+
     public function byId(string $id): ?Island
     {
         foreach ($this->all() as $island) {

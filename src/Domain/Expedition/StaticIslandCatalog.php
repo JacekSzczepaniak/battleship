@@ -111,6 +111,20 @@ final class StaticIslandCatalog implements IslandCatalog
         ];
     }
 
+    /**
+     * Port handlowy Morza Rozbitków (#140): neutralna wyspa poza trasą, z rynkiem
+     * po stałym kursie akwenu.
+     */
+    public function tradePort(): TradePort
+    {
+        return new TradePort(
+            id: 'targ-rozbitkow',
+            name: 'Targ Rozbitków',
+            description: 'Kupcy skupują tu wszystko, co morze wyrzuci na brzeg. Na targu nikt nie strzela: handel ma pierwszeństwo przed banderą.',
+            rate: new MarketRate(woodPerGold: 5, steelPerGold: 3),
+        );
+    }
+
     public function byId(string $id): ?Island
     {
         foreach ($this->all() as $island) {

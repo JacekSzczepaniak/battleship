@@ -6,10 +6,11 @@
     Przy wąskim oknie przewija się sama mapa, nie strona.
     Znaczniki wysp (#131): twierdza, stocznia z poziomem, złoże w kolorze
     surowca i budynki osady pod banderą — widoczne bez najeżdżania.
+    Port handlowy (#140): zielona wyspa z kramem — rynek, bez bitwy i bandery.
 -->
 <script setup lang="ts">
 import { computed, type Component } from 'vue';
-import { Anchor, Axe, Castle, Coins, GraduationCap, Mountain, Pickaxe, Shield, Trees, Wrench } from 'lucide-vue-next';
+import { Anchor, Axe, Castle, Coins, GraduationCap, Mountain, Pickaxe, Shield, Store, Trees, Wrench } from 'lucide-vue-next';
 import { BUILDING_LABELS, type BuildingTypeName, type ExpeditionDTO, type GateDTO, type IslandDTO } from '../api/expeditionApi';
 import { columnLabel } from '../lib/ships';
 import { depositLabel, depositState } from '../lib/economy';
@@ -92,6 +93,7 @@ const cells = computed<Cell[]>(() => {
     const visited = new Set(w.visited);
     const islandsByPos = new Map(exp.islands.filter(i => i.discovered && i.position).map(i => [`${i.position!.x}:${i.position!.y}`, i]));
     const gatesByPos = new Map(w.gates.filter(g => g.position).map(g => [`${g.position!.x}:${g.position!.y}`, g]));
+    const port = w.tradePort?.position ? w.tradePort : null;
     const { x: px, y: py } = w.position;
     const pending = exp.counterattack.pending;
 
@@ -102,6 +104,7 @@ const cells = computed<Cell[]>(() => {
             const discovered = fog.has(key);
             const island = islandsByPos.get(key) ?? null;
             const gate = gatesByPos.get(key) ?? null;
+            const atPort = !!port && port.position!.x === x && port.position!.y === y;
             const here = x === px && y === py;
             // osiągalne w jednym rejsie: większa z różnic x i y (#98), z Żeglugą dwusektorową do 2
             const distance = Math.max(Math.abs(x - px), Math.abs(y - py));
@@ -116,13 +119,13 @@ const cells = computed<Cell[]>(() => {
                 cls: {
                     explored: discovered || !!island, fog: !discovered && !island, reach: sailable, risk,
                     island: !!island, locked: !!island && !island.unlocked, owned: !!island?.owned,
-                    gate: !!gate, 'gate-open': !!gate?.open, here, attacked,
+                    gate: !!gate, 'gate-open': !!gate?.open, port: atPort, here, attacked,
                     marked: !!marks && (marks.shipyard > 0 || marks.deposit.length > 0 || marks.buildings.length > 0),
                 },
                 marks,
-                name: island?.name ?? (gate ? `${gate.name} → ${gate.to.name}` : ''),
+                name: island?.name ?? (gate ? `${gate.name} → ${gate.to.name}` : atPort ? port!.name : ''),
                 title: [
-                    island ? island.name : gate ? `${gate.name} → ${gate.to.name} (${props.gateStatus(gate)})` : `${columnLabel(x)}${y + 1}${discovered ? '' : ' · niezbadane wody'}`,
+                    island ? island.name : atPort ? `${port!.name} · port handlowy: rynek, bez bitwy i bandery` : gate ? `${gate.name} → ${gate.to.name} (${props.gateStatus(gate)})` : `${columnLabel(x)}${y + 1}${discovered ? '' : ' · niezbadane wody'}`,
                     here ? 'tu jesteś' : '',
                     island?.owned ? 'pod Twoją banderą' : '',
                     island?.stronghold ? (island.besieged && !island.owned ? 'twierdza oblężona' : 'twierdza z fortem') : '',
@@ -132,6 +135,7 @@ const cells = computed<Cell[]>(() => {
                     island?.deposit ? `złoże: ${depositLabel(island)}` : '',
                     island?.owned && island.buildings.length ? `budynki: ${island.buildings.map(b => BUILDING_LABELS[b]).join(', ')}` : '',
                     island && !isEmpty(island.stockpile) ? `magazyn: ${formatResources(island.stockpile)}` : '',
+                    atPort && !isEmpty(port!.stockpile) ? `magazyn: ${formatResources(port!.stockpile)}` : '',
                     sailable ? `wypłyń · 1 tik${distance > 1 ? ' (2 sektory)' : ''}` : '',
                     risk ? `pierwsze wpłynięcie — ryzyko sztormu ${w.stormChance}%` : '',
                 ].filter(Boolean).join(' · '),
@@ -176,6 +180,7 @@ const rows = computed(() => Array.from({ length: world.value.height }, (_, y) =>
                     <span v-if="cell.cls.island" class="isle" :class="{ besieged: cell.marks?.besieged && !cell.cls.owned }">
                         <Castle v-if="cell.marks?.stronghold" class="castle" :size="20" :stroke-width="2.25" />
                     </span>
+                    <span v-else-if="cell.cls.port" class="isle port"><Store class="stall" :size="18" :stroke-width="2.25" /></span>
                     <span v-else-if="cell.cls.gate" class="portal"></span>
                     <span v-if="cell.cls.owned" class="flag"></span>
                     <span v-if="cell.marks?.buildings.length" class="blds">
@@ -205,6 +210,7 @@ const rows = computed(() => Array.from({ length: world.value.height }, (_, y) =>
             <span v-for="r in RESOURCES" :key="r.key" class="dep"><i :style="{ '--res': r.color }"><component :is="DEPOSIT_MARKS[r.key]" :size="9" :stroke-width="2.5" /></i>złoże: {{ r.label.toLowerCase() }}</span>
             <span class="dep idle"><i :style="{ '--res': 'var(--text-muted)' }"></i>złoże stoi (bez bandery albo pełny magazyn)</span>
             <span v-for="(icon, type) in BUILDING_MARKS" :key="type" class="lg-bld"><component :is="icon" :size="11" :stroke-width="2.5" />{{ BUILDING_LABELS[type].toLowerCase() }}</span>
+            <span><i class="lg-port"><Store :size="9" :stroke-width="2.5" /></i>port handlowy (rynek)</span>
             <span><i class="lg-gate"></i>brama akwenu</span>
             <span><i class="lg-flag"></i>Twoja bandera</span>
             <span><i class="lg-fog"></i>niezbadane</span>
@@ -280,6 +286,10 @@ h2 { margin: 2px 0 0; font: 700 24px var(--font-head); }
 /* budynki osady: rząd nad wyspą */
 .blds { position: absolute; left: 50%; top: -9px; transform: translateX(-50%); display: flex; align-items: center; justify-content: center; gap: 2px; color: var(--accent-light); line-height: 1; white-space: nowrap; pointer-events: none; padding: 2px 4px; border-radius: 8px; background: #0a1b23cc; }
 .blds em { font: 700 10px var(--font-mono); font-style: normal; }
+/* port handlowy (#140): neutralna wyspa w kolorze morskiej zieleni, z kramem zamiast twierdzy */
+.cell.port { z-index: 1; }
+.isle.port { background: #7fc4a4; box-shadow: inset -4px -4px 0 #5a9e80; }
+.stall { color: #12352a; }
 .portal { width: 22px; height: 22px; border-radius: 50%; border: 2px dashed #6f86d6; box-shadow: inset 0 0 6px #4a5ea8; }
 .cell.gate-open .portal { border-style: solid; border-color: var(--info); }
 .flag { position: absolute; top: 2px; left: 2px; z-index: 1; width: 10px; height: 10px; border-radius: 2px; background: var(--accent); box-shadow: 0 0 0 1.5px #0a1b23; }
@@ -315,6 +325,7 @@ h2 { margin: 2px 0 0; font: 700 24px var(--font-head); }
 .lg-reach { width: 14px; height: 14px; border-radius: 4px; border: 1.5px dashed var(--info); }
 .lg-risk { width: 14px; height: 14px; border-radius: 4px; border: 1.5px dashed var(--warn); }
 .lg-isle { width: 12px; height: 12px; border-radius: 50%; background: #c9a874; }
+.legend .lg-port { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; border-radius: 50%; background: #7fc4a4; color: #12352a; }
 .lg-gate { width: 12px; height: 12px; border-radius: 50%; border: 2px dashed #6f86d6; }
 .lg-flag { width: 8px; height: 8px; border-radius: 2px; background: var(--accent); }
 .lg-icon { color: var(--text-2); flex: none; }

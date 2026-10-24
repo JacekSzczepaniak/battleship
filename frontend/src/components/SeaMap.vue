@@ -174,18 +174,18 @@ const rows = computed(() => Array.from({ length: world.value.height }, (_, y) =>
                     @click="emit('sail', cell.x, cell.y)"
                 >
                     <span v-if="cell.cls.island" class="isle" :class="{ besieged: cell.marks?.besieged && !cell.cls.owned }">
-                        <Castle v-if="cell.marks?.stronghold" class="castle" :size="13" :stroke-width="2.25" />
+                        <Castle v-if="cell.marks?.stronghold" class="castle" :size="20" :stroke-width="2.25" />
                     </span>
                     <span v-else-if="cell.cls.gate" class="portal"></span>
                     <span v-if="cell.cls.owned" class="flag"></span>
                     <span v-if="cell.marks?.buildings.length" class="blds">
-                        <component :is="b.icon" v-for="b in cell.marks.buildings" :key="b.type" :size="10" :stroke-width="2.5" />
+                        <component :is="b.icon" v-for="b in cell.marks.buildings" :key="b.type" :size="13" :stroke-width="2.5" />
                         <em v-if="cell.marks.moreBuildings">+{{ cell.marks.moreBuildings }}</em>
                     </span>
                     <span v-if="cell.marks && (cell.marks.shipyard || cell.marks.deposit.length)" class="badges">
-                        <span v-if="cell.marks.shipyard" class="yard"><Anchor :size="9" :stroke-width="2.5" />{{ cell.marks.shipyard }}</span>
+                        <span v-if="cell.marks.shipyard" class="yard"><Anchor :size="12" :stroke-width="2.5" />{{ cell.marks.shipyard }}</span>
                         <span v-if="cell.marks.deposit.length" class="dep" :class="{ idle: cell.marks.depositIdle }">
-                            <i v-for="r in cell.marks.deposit" :key="r.key" :style="{ '--res': r.color }"><component :is="r.icon" :size="9" :stroke-width="2.5" /></i>
+                            <i v-for="r in cell.marks.deposit" :key="r.key" :style="{ '--res': r.color }"><component :is="r.icon" :size="11" :stroke-width="2.5" /></i>
                         </span>
                     </span>
                     <span v-if="cell.cls.attacked" class="alarm">⚔</span>
@@ -261,28 +261,28 @@ h2 { margin: 2px 0 0; font: 700 24px var(--font-head); }
 .cell.reach:not(:disabled) { background: #0f2f38; box-shadow: none; border: 1.5px dashed var(--info); cursor: pointer; }
 .cell.reach.risk:not(:disabled) { border-color: var(--warn); }
 .cell.reach:not(:disabled):hover { filter: brightness(1.35); }
-.isle { position: relative; width: 24px; height: 20px; border-radius: 50% 45% 50% 40%; background: #c9a874; box-shadow: inset -3px -3px 0 #a68756; display: flex; align-items: center; justify-content: center; }
+/* wyspy nigdy nie stoją obok siebie, więc wyspa i jej znaczniki mogą wychodzić
+   poza swoją komórkę na sąsiednią wodę — komórka wyspy leży nad sąsiadami */
+.cell.island { z-index: 1; }
+.isle { position: relative; width: 40px; height: 32px; border-radius: 50% 45% 50% 40%; background: #c9a874; box-shadow: inset -4px -4px 0 #a68756; display: flex; align-items: center; justify-content: center; }
 .cell.locked .isle { opacity: .45; }
 .castle { color: #3a2c18; }
-.isle.besieged { box-shadow: inset -3px -3px 0 #a68756, 0 0 0 1.5px var(--danger); }
+.isle.besieged { box-shadow: inset -4px -4px 0 #a68756, 0 0 0 2px var(--danger); }
 .isle.besieged .castle { color: var(--danger); }
-/* znaczniki pod wyspą (#131): rogi zostają dla bandery i alarmu kontrataku;
-   wyspa bez znaczników zostaje na środku */
-.cell.marked { flex-direction: column; justify-content: flex-start; padding-top: 4px; }
-.cell.marked .isle { width: 22px; height: 15px; }
-/* stocznia i złoże: rząd pod plamą wyspy */
-.badges { position: absolute; left: 2px; right: 2px; bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 4px; line-height: 1; pointer-events: none; }
-.yard { display: inline-flex; align-items: center; gap: 1px; color: var(--info-light); font: 700 9px var(--font-mono); }
+/* znaczniki (#131): rogi zostają dla bandery i alarmu kontrataku; stocznia i złoże
+   wiszą pod wyspą, budynki nad nią — oba rzędy mogą wyjść poza komórkę */
+.badges { position: absolute; left: 50%; bottom: -9px; transform: translateX(-50%); display: flex; align-items: center; justify-content: center; gap: 4px; line-height: 1; white-space: nowrap; pointer-events: none; padding: 2px 4px; border-radius: 8px; background: #0a1b23cc; }
+.yard { display: inline-flex; align-items: center; gap: 1px; color: var(--info-light); font: 700 11px var(--font-mono); }
 .dep { display: inline-flex; gap: 1px; }
 /* złoże: krążek w kolorze surowca — ciemne tokeny drewna i stali giną na morzu jako sama kreska */
-.dep i { display: inline-flex; align-items: center; justify-content: center; width: 11px; height: 11px; border-radius: 50%; background: var(--res); color: #10202a; }
+.dep i { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; border-radius: 50%; background: var(--res); color: #10202a; }
 .dep.idle i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--res); color: var(--res); opacity: .7; }
-/* budynki osady: dolny pasek komórki */
-.blds { position: absolute; left: 0; right: 0; bottom: 2px; display: flex; align-items: center; justify-content: center; gap: 1px; color: var(--accent-light); line-height: 1; pointer-events: none; }
-.blds em { font: 700 8px var(--font-mono); font-style: normal; }
+/* budynki osady: rząd nad wyspą */
+.blds { position: absolute; left: 50%; top: -9px; transform: translateX(-50%); display: flex; align-items: center; justify-content: center; gap: 2px; color: var(--accent-light); line-height: 1; white-space: nowrap; pointer-events: none; padding: 2px 4px; border-radius: 8px; background: #0a1b23cc; }
+.blds em { font: 700 10px var(--font-mono); font-style: normal; }
 .portal { width: 22px; height: 22px; border-radius: 50%; border: 2px dashed #6f86d6; box-shadow: inset 0 0 6px #4a5ea8; }
 .cell.gate-open .portal { border-style: solid; border-color: var(--info); }
-.flag { position: absolute; top: 4px; left: 4px; width: 8px; height: 8px; border-radius: 2px; background: var(--accent); }
+.flag { position: absolute; top: 2px; left: 2px; z-index: 1; width: 10px; height: 10px; border-radius: 2px; background: var(--accent); box-shadow: 0 0 0 1.5px #0a1b23; }
 .alarm { position: absolute; top: 1px; right: 3px; font-size: 11px; color: var(--danger); line-height: 1; }
 .cell.attacked { box-shadow: inset 0 0 0 1.5px var(--danger); }
 .fleet { position: absolute; inset: -3px; border-radius: 10px; box-shadow: 0 0 0 2px var(--accent), 0 0 16px #e8843c88; pointer-events: none; }

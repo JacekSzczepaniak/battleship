@@ -3,12 +3,14 @@
     planszach). Komórka dostaje listę klas stanu:
       podłoże:  water | fog
       treść:    ship | hit | sunk | miss
-      nakładki: preview | preview-ok | preview-bad | launch | sonar-ship | sonar-water | note | anim
+      nakładki: preview | preview-ok | preview-bad | launch | sonar-ship | sonar-water | note
       fort (#119, odsłonięte konstrukcje): fort-gun | fort-wall | fort-magazine; nakładka: blast
+    Nad komórkami leży warstwa efektów (#145) — `fxBoard()` daje jej geometrię.
 -->
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { columnLabel } from '../lib/ships';
+import { boardFromGrid, type FxBoard } from '../fx/board';
 
 const props = withDefaults(defineProps<{
     cells: string[][];
@@ -42,6 +44,18 @@ const gridStyle = computed(() => ({
     '--cell': `${size.value}px`,
     gridTemplateColumns: `repeat(${width.value}, var(--cell))`,
 }));
+
+const stage = ref<HTMLElement | null>(null);
+const cellsEl = ref<HTMLElement | null>(null);
+const fxLayer = ref<HTMLElement | null>(null);
+
+/** Geometria planszy dla efektów, liczona z bieżącego układu strony. */
+function fxBoard(): FxBoard | null {
+    if (!stage.value || !cellsEl.value || !fxLayer.value) return null;
+    return boardFromGrid(cellsEl.value, fxLayer.value, stage.value, width.value, height.value);
+}
+
+defineExpose({ fxBoard });
 </script>
 
 <template>
@@ -53,20 +67,23 @@ const gridStyle = computed(() => ({
         <div class="axis rows" :style="{ gridTemplateRows: `repeat(${height}, var(--cell))` }">
             <div v-for="y in height" :key="y">{{ y }}</div>
         </div>
-        <div class="cells" :class="{ interactive }" :style="gridStyle">
-            <template v-for="(row, y) in cells" :key="y">
-                <div
-                    v-for="(cls, x) in row"
-                    :key="`${x}:${y}`"
-                    class="cell"
-                    :class="cls"
-                    @click="interactive && emit('cellClick', x, y)"
-                    @mouseenter="emit('cellHover', x, y)"
-                    @contextmenu.prevent="emit('cellContext', x, y)"
-                    @dragover.prevent="emit('cellHover', x, y)"
-                    @drop.prevent="emit('cellDrop', x, y, $event)"
-                ></div>
-            </template>
+        <div ref="stage" class="stage">
+            <div ref="cellsEl" class="cells" :class="{ interactive }" :style="gridStyle">
+                <template v-for="(row, y) in cells" :key="y">
+                    <div
+                        v-for="(cls, x) in row"
+                        :key="`${x}:${y}`"
+                        class="cell"
+                        :class="cls"
+                        @click="interactive && emit('cellClick', x, y)"
+                        @mouseenter="emit('cellHover', x, y)"
+                        @contextmenu.prevent="emit('cellContext', x, y)"
+                        @dragover.prevent="emit('cellHover', x, y)"
+                        @drop.prevent="emit('cellDrop', x, y, $event)"
+                    ></div>
+                </template>
+            </div>
+            <div ref="fxLayer" class="fx-layer" aria-hidden="true"></div>
         </div>
     </div>
 </template>
@@ -85,6 +102,9 @@ const gridStyle = computed(() => ({
 .axis.rows { display: grid; gap: 3px; }
 .axis.rows div { display: flex; align-items: center; justify-content: center; }
 .cells { display: grid; gap: 3px; }
+/* efekty (#145): overlay dokładnie na siatce; stage jest rodzicem offsetów komórek */
+.stage { position: relative; }
+.fx-layer { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
 
 .cell {
     position: relative;
@@ -202,17 +222,4 @@ const gridStyle = computed(() => ({
 .cell.preview-ok { background: #13404a; box-shadow: inset 0 0 0 2px var(--info); }
 .cell.preview-bad { background: #3a2220; box-shadow: inset 0 0 0 2px var(--danger); }
 .cell.launch { box-shadow: inset 0 0 0 2px var(--info), 0 0 10px #3fb6c455; cursor: pointer; }
-
-/* animacja ostatniego strzału */
-.cell.anim.hit::after { animation: hitPop 320ms ease-out; }
-.cell.anim.miss::after { animation: missRipple 420ms ease-out; }
-@keyframes hitPop {
-    0% { transform: translate(-50%, -50%) scale(.2); box-shadow: 0 0 0 0 #e8843c; }
-    60% { transform: translate(-50%, -50%) scale(1.25); }
-    100% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 12px #e8843c99; }
-}
-@keyframes missRipple {
-    0% { transform: translate(-50%, -50%) scale(3); opacity: 0; }
-    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-}
 </style>

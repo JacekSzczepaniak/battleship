@@ -1,4 +1,4 @@
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, onBeforeUnmount, computed, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import {
     getGame, fireShot, fireTorpedo, sonarPing, sendAirRaid, endTurn as apiEndTurn, moveShip as apiMoveShip, boardShip as apiBoardShip,
@@ -6,6 +6,10 @@ import {
     type TorpedoDirection, type TurnOutcomeDTO, type SonarCell, type PlayerFleetItem, type CellShotResult, type Loadout, type FortView,
 } from '../api/gameApi.ts';
 import { carriedWeapons, cellLabel, fieldsLabel, shipName } from '../lib/ships';
+import {
+    FxSequencer, fxMode, isCancelled, playAirstrike, playShot, playSonar, playTorpedo,
+    type Cell, type FxBoard, type FxOutcome, type FxToken,
+} from '../fx';
 
 export type WeaponMode = 'shot' | 'torpedo' | 'sonar' | 'airraid';
 
@@ -19,6 +23,16 @@ export interface LogEntry { id: number; side: LogSide; text: string }
 const TORPEDO_ARROWS: Record<TorpedoDirection, string> = {
     N: '↑', NE: '↗', E: '→', SE: '↘', S: '↓', SW: '↙', W: '←', NW: '↖',
 };
+
+const TORPEDO_STEPS: Record<TorpedoDirection, Cell> = {
+    N: [0, -1], NE: [1, -1], E: [1, 0], SE: [1, 1], S: [0, 1], SW: [-1, 1], W: [-1, 0], NW: [-1, -1],
+};
+
+/** Plansza z warstwą efektów (#145) — SeaGrid przez template ref. */
+export interface FxBoardHost { fxBoard(): FxBoard | null }
+
+/** Animacja broni gracza na wodach wroga; `outcome` z projekcji po ruchu. */
+type PlayerFx = (tok: FxToken, board: FxBoard, outcome: FxOutcome) => Promise<void>;
 
 // odrzucenia ruchu statku (#60) po kodzie z API
 const MOVE_ERRORS: Record<string, string> = {
@@ -49,7 +63,6 @@ export function useGame() {
     const toast = ref<string>('');
     const toastType = ref<'info'|'warn'|'error'>('info');
     const duplicates = ref<number>(0);
-    const lastShot = ref<{ x: number; y: number; result: ShotResultDTO['result'] } | null>(null);
     const sunkCells = ref<Array<[number, number]>>([]);
     const shotsTotal = ref<number>(0);
 
@@ -81,6 +94,14 @@ export function useGame() {
     const noteMarks = ref<Set<string>>(new Set());
     // bitwa oblężnicza (#119): fort zamiast floty wroga; null = zwykła bitwa
     const fort = ref<FortView | null>(null);
+
+    // efekty (#145): plansze z warstwą overlay i sekwencja animacji tury;
+    // opponentAnimating = trwa odtwarzanie ruchu AI na planszy gracza
+    const enemyBoard = ref<FxBoardHost | null>(null);
+    const ownBoard = ref<FxBoardHost | null>(null);
+    const fx = new FxSequencer();
+    const animating = ref<boolean>(false);
+    const opponentAnimating = ref<boolean>(false);
 
     // Dziennik bitwy — po stronie klienta (po przeładowaniu zaczyna się od nowa)
     const log = ref<LogEntry[]>([]);
@@ -259,7 +280,97 @@ export function useGame() {
             && status.value !== 'won' && status.value !== 'lost';
     }
 
-    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    // --- animacja tury (#145) ---
+
+    /** Skutki ruchu gracza z projekcji: nowo zatopione statki wroga i eksplozja magazynu. */
+    function enemyOutcome(g: GameViewDTO): FxOutcome {
+        const known = new Set(sunkCells.value.map(([x, y]) => `${x}:${y}`));
+        const magazine = g.fort?.revealed.find(c => c.kind === 'magazine');
+        const isMagazine = (cells: Cell[]) => !!magazine && cells.length === 1 && cells[0][0] === magazine.x && cells[0][1] === magazine.y;
+        const sunk = g.enemyFogGrid.sunk
+            .map(s => s.cells)
+            .filter(cells => cells.some(([x, y]) => !known.has(`${x}:${y}`)) && !isMagazine(cells));
+        const explosion = g.fort?.explosion;
+        const blast = explosion && magazine && !fort.value?.explosion
+            ? { at: [magazine.x, magazine.y] as Cell, cells: explosion }
+            : null;
+        return { sunk, blast };
+    }
+
+    /** Skutki ruchu AI: statki gracza zatopione w tej turze. */
+    function ownOutcome(g: GameViewDTO): FxOutcome {
+        const ov = playerUnderFireOverlay.value;
+        const hits = new Set((g.playerUnderFireGrid?.hits ?? []).map(([x, y]) => `${x}:${y}`));
+        const sunk = (g.playerFleet ?? [])
+            .map(shipCellsOf)
+            .filter(cells => cells.every(([x, y]) => hits.has(`${x}:${y}`)) && cells.some(([x, y]) => ov[y]?.[x] !== 'opp-hit'));
+        return { sunk };
+    }
+
+    function hasOpponentAction(o: TurnOutcomeDTO): boolean {
+        return (o.opponentMoves?.length ?? 0) > 0 || !!o.opponentSonar;
+    }
+
+    /** Ruch AI tymi samymi animacjami na planszy gracza: sonar, potem atak. */
+    async function playOpponent(tok: FxToken, board: FxBoard, o: TurnOutcomeDTO, outcome: FxOutcome) {
+        const sonar = o.opponentSonar;
+        if (sonar) await playSonar(tok, board, [sonar.x, sonar.y], sonar.radius, sonar.results);
+        const moves = o.opponentMoves ?? [];
+        if (moves.length === 0) return;
+        if (o.opponentTorpedoLaunch) {
+            const step: Cell = moves.length > 1
+                ? [Math.sign(moves[1].x - moves[0].x), Math.sign(moves[1].y - moves[0].y)]
+                : [1, 0];
+            await playTorpedo(tok, board, moves, step, outcome);
+        } else if (moves.length > 1) {
+            await playAirstrike(tok, board, moves, outcome);
+        } else {
+            await playShot(tok, board, moves[0], outcome);
+        }
+    }
+
+    /**
+     * Animacja ruchu przed pokazaniem wyniku: wynik jest już znany z API,
+     * animacja tylko opóźnia jego pokazanie. Najpierw broń gracza na wodach
+     * wroga, potem ruch AI na planszy gracza. Przerwanie (skipFx, wyjście
+     * z ekranu) kończy sekwencję od razu — stan zapisuje potem `commit`.
+     */
+    async function animateTurn(g: GameViewDTO, playerFx: PlayerFx | null, o: TurnOutcomeDTO | null) {
+        if (fxMode() === 'off') return;
+        const tok = fx.begin();
+        animating.value = true;
+        try {
+            const enemy = enemyBoard.value?.fxBoard();
+            if (playerFx && enemy) await playerFx(tok, enemy, enemyOutcome(g));
+            const own = ownBoard.value?.fxBoard();
+            if (o && own && hasOpponentAction(o)) {
+                // przy prefers-reduced-motion bez pauzy: wynik od razu
+                if (playerFx && fxMode() === 'full') await tok.wait(350);
+                opponentAnimating.value = true;
+                await playOpponent(tok, own, o, ownOutcome(g));
+            }
+        } catch (e) {
+            if (!isCancelled(e)) {
+                try { console.warn('[useGame.fx]', e); } catch {}
+            }
+        } finally {
+            fx.end(tok);
+            animating.value = false;
+            opponentAnimating.value = false;
+        }
+    }
+
+    /** Ponowne kliknięcie / Esc w trakcie animacji: od razu wynik. */
+    function skipFx() {
+        fx.cancel();
+    }
+
+    /** Znaczniki efektów schodzą dopiero, gdy plansza pokazuje już nowy stan. */
+    async function clearFx() {
+        await nextTick();
+        enemyBoard.value?.fxBoard()?.clear();
+        ownBoard.value?.fxBoard()?.clear();
+    }
 
     async function start() {
         loading.value = true;
@@ -291,10 +402,14 @@ export function useGame() {
     /** Odświeża projekcję i dopisuje do dziennika zatopienia, które z niej wynikają. */
     async function refresh() {
         if (!gameId.value) return;
+        await commit(await getGame(gameId.value));
+    }
+
+    /** Pokazuje projekcję po ruchu (po animacji) i dopisuje zatopienia do dziennika. */
+    async function commit(g: GameViewDTO) {
         const enemyBefore = enemySunkLengths.value.length;
         const ownBefore = playerSunkLengths.value.length;
         const fortBefore = fort.value;
-        const g = await getGame(gameId.value);
         applyProjection(g);
         if (fort.value) {
             logFort(fortBefore, fort.value);
@@ -307,6 +422,7 @@ export function useGame() {
         if (ownSunk.length > ownBefore) {
             pushLog('WRÓG', `Stracono: ${ownSunk.slice(ownBefore).map(l => shipName(l).toLowerCase()).join(', ')}.`);
         }
+        await clearFx();
     }
 
     /** Dziennik oblężenia: eksplozja magazynu, odsłonięte mury, zniszczone działa. */
@@ -338,17 +454,9 @@ export function useGame() {
         try {
             shooting.value = true;
             const res: ShotResultDTO = await fireShot(gameId.value, x, y);
-            if (enemyFogGrid.value[y] && typeof enemyFogGrid.value[y][x] !== 'undefined') {
-                enemyFogGrid.value[y][x] = res.result === 'miss' ? 'miss' : 'hit';
-            }
-            if (res.result !== 'duplicate') {
-                lastShot.value = { x, y, result: res.result === 'sunk' ? 'hit' : res.result };
-                setTimeout(() => {
-                    if (lastShot.value && lastShot.value.x === x && lastShot.value.y === y) {
-                        lastShot.value = null;
-                    }
-                }, 400);
-            }
+            const g = await getGame(gameId.value);
+            const result = res.result;
+            await animateTurn(g, result === 'duplicate' ? null : (tok, b, out) => playShot(tok, b, { x, y, result }, out), res);
             if (res.result === 'duplicate') {
                 duplicates.value += 1;
                 showToast('Duplikat: to pole było już ostrzelane.', 'warn', 2200);
@@ -358,8 +466,8 @@ export function useGame() {
             // Tura/koniec gry + ewentualne ujawnienie wyrzutni torpedy AI
             // (AI może odpalić torpedę także w odpowiedzi na zwykły strzał!)
             applyTurnOutcome(res);
-            // Refetch pełnej projekcji, by zsynchronizować mgłę i stany
-            await refresh();
+            // pełna projekcja (pobrana przed animacją) synchronizuje mgłę i stany
+            await commit(g);
         } catch (e: any) {
             error.value = e?.message ?? 'Shot failed';
             showToast(error.value, 'error', 3000);
@@ -373,20 +481,14 @@ export function useGame() {
         if (!canAct()) return;
         try {
             shooting.value = true;
-            const res = await fireTorpedo(gameId.value, x, y, torpedoDirection.value);
-            // animacja przejścia: odsłaniaj tor komórka po komórce
-            for (const cell of res.results) {
-                if (cell.result !== 'duplicate' && enemyFogGrid.value[cell.y]?.[cell.x] !== undefined) {
-                    enemyFogGrid.value[cell.y][cell.x] = cell.result === 'miss' ? 'miss' : 'hit';
-                }
-                lastShot.value = { x: cell.x, y: cell.y, result: cell.result === 'sunk' ? 'hit' : cell.result };
-                await sleep(90);
-            }
-            lastShot.value = null;
+            const direction = torpedoDirection.value;
+            const res = await fireTorpedo(gameId.value, x, y, direction);
+            const g = await getGame(gameId.value);
+            await animateTurn(g, (tok, b, out) => playTorpedo(tok, b, res.results, TORPEDO_STEPS[direction], out), res);
             const hits = res.results.filter(c => c.result === 'hit' || c.result === 'sunk').length;
-            pushLog('TY', `Torpeda z ${cellLabel(x, y)} ${TORPEDO_ARROWS[torpedoDirection.value]} — ${fieldsLabel(res.results.length)}, trafienia: ${hits}`);
+            pushLog('TY', `Torpeda z ${cellLabel(x, y)} ${TORPEDO_ARROWS[direction]} — ${fieldsLabel(res.results.length)}, trafienia: ${hits}`);
             applyTurnOutcome(res);
-            await refresh();
+            await commit(g);
         } catch (e: any) {
             showToast(e?.message ?? 'Torpeda nie wypaliła', 'warn', 2500);
         } finally {
@@ -400,27 +502,17 @@ export function useGame() {
         try {
             shooting.value = true;
             const res = await sonarPing(gameId.value, x, y);
-            // animacja: odsłaniaj skan od środka na zewnątrz
-            const ordered = [...res.results].sort(
-                (a, b) => (Math.abs(a.x - x) + Math.abs(a.y - y)) - (Math.abs(b.x - x) + Math.abs(b.y - y))
-            );
+            const g = await getGame(gameId.value); // licznik użyć
+            await animateTurn(g, (tok, b) => playSonar(tok, b, [x, y], res.radius, res.results), null);
             const merged = new Map(sonarMarks.value.map(c => [`${c.x}:${c.y}`, c]));
-            let lastDistance = -1;
-            for (const c of ordered) {
-                const distance = Math.abs(c.x - x) + Math.abs(c.y - y);
-                if (distance !== lastDistance) {
-                    await sleep(140);
-                    lastDistance = distance;
-                }
-                merged.set(`${c.x}:${c.y}`, c);
-                sonarMarks.value = [...merged.values()];
-            }
+            res.results.forEach(c => merged.set(`${c.x}:${c.y}`, c));
+            sonarMarks.value = [...merged.values()];
             if (res.energy !== undefined) energy.value = res.energy;
             const found = res.results.filter(c => c.occupied).length;
             pushLog('SONAR', found > 0
                 ? `Skan wokół ${cellLabel(x, y)}: echo kadłuba na ${found} ${found === 1 ? 'polu' : 'polach'}. Sonar nie kończy tury.`
                 : `Skan wokół ${cellLabel(x, y)}: czysta woda. Sonar nie kończy tury.`);
-            await refresh(); // licznik użyć
+            await commit(g);
         } catch (e: any) {
             showToast(e?.message ?? 'Sonar nie zadziałał', 'warn', 2500);
         } finally {
@@ -434,10 +526,12 @@ export function useGame() {
         try {
             shooting.value = true;
             const res = await sendAirRaid(gameId.value, x, y);
+            const g = await getGame(gameId.value);
+            await animateTurn(g, (tok, b, out) => playAirstrike(tok, b, res.results, out), res);
             const hits = res.results.filter(c => c.result === 'hit' || c.result === 'sunk').length;
             pushLog('TY', `Nalot na ${cellLabel(x, y)} (3×3) — trafienia: ${hits}`);
             applyTurnOutcome(res);
-            await refresh();
+            await commit(g);
         } catch (e: any) {
             showToast(e?.message ?? 'Nalot się nie powiódł', 'warn', 2500);
         } finally {
@@ -452,9 +546,11 @@ export function useGame() {
         try {
             shooting.value = true;
             const res = await apiEndTurn(gameId.value);
+            const g = await getGame(gameId.value);
             pushLog('TY', 'Koniec tury bez ataku.');
+            await animateTurn(g, null, res);
             applyTurnOutcome(res);
-            await refresh();
+            await commit(g);
         } catch (e: any) {
             showToast(e?.message ?? 'Nie udało się zakończyć tury', 'warn', 2500);
         } finally {
@@ -496,11 +592,14 @@ export function useGame() {
         try {
             shooting.value = true;
             const res = await apiBoardShip(gameId.value);
+            const g = await getGame(gameId.value);
+            // abordaż bez animacji (#145 p. 7); odpowiedź AI po odpartym abordażu — tak
+            await animateTurn(g, null, res);
             const b = res.boarding;
             pushLog('TY', `Abordaż: k6 = ${b.roll} (próg ${b.threshold}+) — ${b.success ? 'statek wroga zdobyty!' : 'załoga odparta, tura stracona.'}`);
             showToast(b.success ? '⚓ Abordaż udany — statek jest twój!' : 'Abordaż odparty.', b.success ? 'info' : 'warn', 3000);
             applyTurnOutcome(res);
-            await refresh();
+            await commit(g);
         } catch (e: any) {
             showToast(e?.message ?? 'Abordaż się nie powiódł', 'warn', 2500);
         } finally {
@@ -520,6 +619,8 @@ export function useGame() {
     }
 
     onMounted(start);
+    // wyjście z ekranu przerywa animację; zapis stanu w toku kończy się bez efektów
+    onBeforeUnmount(() => fx.cancel());
 
     const size = computed(() => Math.max(width.value, height.value));
     const hitsCount = computed(() => enemyFogGrid.value.flat().filter(c => c === 'hit').length);
@@ -549,6 +650,8 @@ export function useGame() {
         enemySunkLengths, playerSunkLengths, enemyTotal, playerTotal, allowedShips, opponentShips, opponentVariants, playerFleet,
         // dziennik i toast
         log, toast, toastType,
-        lastShot, sunkCells,
+        sunkCells,
+        // efekty (#145)
+        enemyBoard, ownBoard, animating, opponentAnimating, skipFx,
     };
 }

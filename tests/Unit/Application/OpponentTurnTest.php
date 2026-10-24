@@ -65,6 +65,42 @@ it('AI w trybie hunt używa sonaru jako zwiadu i dobija wykryty statek', functio
     expect($game->aiState()['targets'])->not->toBe([]);
 });
 
+it('odpowiedź tury niesie skan sonaru AI do animacji (#145)', function () {
+    $turn = new OpponentTurn(decider(fn (int $pct) => true));
+    $game = funGameWithBothFleets();
+
+    $out = $turn->respond($game);
+
+    $sonar = $out['opponentSonar'];
+    expect($sonar)->not->toBeNull()
+        ->and($sonar['radius'])->toBe(3);
+    // krzyż wokół środka: każde pole w linii ze środkiem, najwyżej o promień od niego
+    foreach ($sonar['results'] as $cell) {
+        $dx = abs($cell['x'] - $sonar['x']);
+        $dy = abs($cell['y'] - $sonar['y']);
+        expect(0 === $dx || 0 === $dy)->toBeTrue()
+            ->and(max($dx, $dy))->toBeLessThanOrEqual(3);
+    }
+    // wynik skanu zgadza się z flotą gracza, a AI dobija wykryte pole
+    $occupied = array_map(
+        fn (array $c) => $c['x'].':'.$c['y'],
+        array_values(array_filter($sonar['results'], fn (array $c) => $c['occupied'])),
+    );
+    $move = $out['opponentMoves'][0];
+    expect($occupied)->not->toBe([])
+        ->and($occupied)->toContain($move['x'].':'.$move['y']);
+});
+
+it('bez sonaru AI odpowiedź tury ma opponentSonar = null', function () {
+    $turn = new OpponentTurn(decider(fn (int $pct) => false));
+    $game = funGameWithBothFleets();
+
+    $out = $turn->respond($game);
+
+    expect($out)->toHaveKey('opponentSonar')
+        ->and($out['opponentSonar'])->toBeNull();
+});
+
 it('AI odpala torpedę z niezatopionego statku w linię z nieostrzelanymi polami', function () {
     // decyzja: tak tylko dla torpedy (35%), nie dla sonaru (40%) i nalotu (25%)
     $turn = new OpponentTurn(decider(fn (int $pct) => 35 === $pct));

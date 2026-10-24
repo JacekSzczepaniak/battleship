@@ -81,6 +81,15 @@ enum ShipType: string
         };
     }
 
+    /**
+     * Wartość złomu: połowa kosztu budowy, z zaokrągleniem w dół. Tyle daje
+     * rozbiórka zdobyczy (#118) i złomowanie sprawnego statku (#124).
+     */
+    public function scrapValue(): Resources
+    {
+        return Resources::fromArray(array_map(static fn (int $amount) => intdiv($amount, 2), $this->buildCost()->toArray()));
+    }
+
     /** Koszt remontu uszkodzonego statku. */
     public function repairCost(): Resources
     {

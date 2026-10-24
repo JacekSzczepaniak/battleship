@@ -29,9 +29,7 @@ final class Prize
     /** Zwrot z rozbiórki: połowa kosztu budowy typu, z zaokrągleniem w dół. */
     public function scrapValue(): Resources
     {
-        $cost = $this->type->buildCost();
-
-        return new Resources(intdiv($cost->wood, 2), intdiv($cost->steel, 2), intdiv($cost->gold, 2));
+        return $this->type->scrapValue();
     }
 
     /** @return array{id:string, type:string, variant:?string, tick:int} */

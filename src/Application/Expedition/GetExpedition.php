@@ -117,6 +117,9 @@ final class GetExpedition
             'variant' => $ship->variant?->value,
             'damaged' => $ship->isDamaged(),
             'repairCost' => $profile->repairCost($ship->type)->toArray(),
+            // złomowanie (#124): zwrot do magazynu wyspy i blokada domeny; stocznię w porcie sprawdza widok
+            'scrapValue' => $profile->scrapValue($ship)->toArray(),
+            'scrapBlock' => $profile->scrapBlocker($ship)?->value,
         ], $profile->fleet());
 
         $shipTypes = array_map(static fn (ShipType $type) => [

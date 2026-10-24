@@ -13,6 +13,7 @@ use App\Application\Expedition\RenameFleetPreset;
 use App\Application\Expedition\RepairShip;
 use App\Application\Expedition\Sail;
 use App\Application\Expedition\SaveFleetPreset;
+use App\Application\Expedition\ScrapShip;
 use App\Application\Expedition\SettleBattle;
 use App\Application\Expedition\StartGuardianBattle;
 use App\Application\Expedition\StartIslandBattle;
@@ -55,6 +56,7 @@ final class ExpeditionController
         private SaveFleetPreset $saveFleetPreset,
         private RenameFleetPreset $renameFleetPreset,
         private DeleteFleetPreset $deleteFleetPreset,
+        private ScrapShip $scrapShip,
     ) {
     }
 
@@ -182,6 +184,27 @@ final class ExpeditionController
         $ship = $this->repairShip->handle($id, $islandId, $shipId);
 
         return new JsonResponse($this->shipView($ship));
+    }
+
+    /** Złomowanie statku w stoczni portu (#124): zwrot trafia do magazynu wyspy. */
+    #[Route('/{id}/ships/{shipId}/scrap', name: 'api_profiles_scrap_ship', methods: ['POST'])]
+    public function scrapShip(string $id, string $shipId, Request $request): JsonResponse
+    {
+        $this->assertUuid($id, 'profile');
+        $payload = $this->jsonPayload($request);
+
+        $islandId = $payload['islandId'] ?? null;
+        if (!is_string($islandId)) {
+            throw new ApiException('Missing or invalid field: islandId:string', 'VALIDATION_ERROR', 400);
+        }
+
+        $outcome = $this->scrapShip->handle($id, $islandId, $shipId);
+
+        return new JsonResponse([
+            'refund' => $outcome['refund']->toArray(),
+            'stockpile' => $outcome['stockpile']->toArray(),
+            'cargo' => $outcome['cargo']->toArray(),
+        ]);
     }
 
     /** Decyzja o statku zdobytym abordażem (#118): {decision: join|scrap|study}; study = zbadaj konstrukcję (#121). */

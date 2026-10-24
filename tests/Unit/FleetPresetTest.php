@@ -148,6 +148,16 @@ it('zestaw przeżywa utratę statku — wpis zostaje, wczytanie go pominie', fun
         ->and(array_map(fn ($s) => $s->id, $restored->fleet()))->toBe(['k1', 't1', 't2']);
 });
 
+it('złomowany statek (#124) zostaje w zestawie, ale nie da się go zapisać ponownie', function () {
+    $profile = presetProfile();
+    $profile->saveFleetPreset('Klin', 7, 7, presetPlacements());
+
+    $profile->scrapShip('t1', 'zatoka-rozbitka');
+
+    expect(array_column($profile->fleetPresets()[0]->toArray()['ships'], 'shipId'))->toBe(['n1', 'k1', 't1'])
+        ->and(fn () => $profile->saveFleetPreset('Klin', 7, 7, presetPlacements()))->toThrow(DomainException::class, 'Ship not found');
+});
+
 it('pomija w snapshocie zestaw z nieczytelnym wpisem statku', function () {
     $m = new ProfileSnapshotMapper();
     $profile = presetProfile();

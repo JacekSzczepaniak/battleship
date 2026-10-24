@@ -100,6 +100,27 @@ final class FleetPresetApiTest extends WebTestCase
         self::assertSame(['Grot'], array_column($expedition['fleetPresets'], 'name'));
     }
 
+    public function testScrappedShipStaysInPresetButLeavesFleet(): void
+    {
+        $client = static::createClient();
+        $profileId = $this->request($client, 'POST', '/api/profiles', ['name' => 'Jacek'])['id'];
+        $ids = $this->fleetIdsByType($client, $profileId);
+        $this->request($client, 'POST', "/api/profiles/$profileId/fleet-presets", $this->preset('Klin', $ids));
+
+        // złomowanie (#124) nie rusza zestawu — wczytanie (frontend) pominie statek spoza floty
+        $this->request($client, 'POST', "/api/profiles/$profileId/ships/{$ids['tratwa'][0]}/scrap", ['islandId' => 'zatoka-rozbitka']);
+        self::assertResponseIsSuccessful();
+
+        $expedition = $this->request($client, 'GET', "/api/profiles/$profileId/expedition");
+        self::assertSame([$ids['kuter'][0], $ids['tratwa'][0]], array_column($expedition['fleetPresets'][0]['ships'], 'shipId'));
+        self::assertNotContains($ids['tratwa'][0], array_column($expedition['fleet'], 'id'));
+
+        // ponowny zapis z tym statkiem jest już odrzucany
+        $error = $this->request($client, 'POST', "/api/profiles/$profileId/fleet-presets", $this->preset('Klin', $ids));
+        self::assertResponseStatusCodeSame(404);
+        self::assertSame('SHIP_NOT_FOUND', $error['error']['code']);
+    }
+
     public function testExpeditionExposesSquadOfUnsettledBattle(): void
     {
         $client = static::createClient();

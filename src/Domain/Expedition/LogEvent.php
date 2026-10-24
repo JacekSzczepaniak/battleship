@@ -53,4 +53,7 @@ enum LogEvent: string
 
     /** Kapitan zdecydował o zdobytym statku: dołączył go, rozebrał (#118) albo zbadał konstrukcję (#121). */
     case PrizeDecided = 'prize-decided';
+
+    /** Kapitan zezłomował statek w stoczni; zwrot trafił do magazynu wyspy (#124). */
+    case ShipScrapped = 'ship-scrapped';
 }

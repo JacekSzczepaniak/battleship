@@ -150,6 +150,8 @@ export interface TurnOutcomeDTO {
     opponentMoves: CellShotResult[];
     // torpeda AI zdradza wyrzutnię — pozycja statku przeciwnika
     opponentTorpedoLaunch?: { x: number; y: number } | null;
+    // skan sonaru AI w tej turze (do animacji, #145); brak = AI nie skanowało
+    opponentSonar?: { x: number; y: number; radius: number; results: SonarCell[] } | null;
     // energia gracza na nową turę (#59)
     energy?: EnergyState | null;
 }

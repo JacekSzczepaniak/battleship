@@ -44,19 +44,20 @@ final class OpponentTurn
     }
 
     /**
-     * @return array{finished:bool, win:bool, loss:bool, turn:string, opponentMoves:list<array{x:int,y:int,result:string}>, opponentTorpedoLaunch: array{x:int,y:int}|null, energy: array{left:int,max:int,costs:array<string,int>}|null}
+     * @return array{finished:bool, win:bool, loss:bool, turn:string, opponentMoves:list<array{x:int,y:int,result:string}>, opponentTorpedoLaunch: array{x:int,y:int}|null, opponentSonar: array{x:int,y:int,radius:int,results:list<array{x:int,y:int,occupied:bool}>}|null, energy: array{left:int,max:int,costs:array<string,int>}|null}
      */
     public function respond(Game $game): array
     {
         $finished = $game->isFinished();
         $opponentMoves = [];
         $torpedoLaunch = null;
+        $sonar = null;
 
         if (!$finished) {
             // tura AI: odnowiona pula energii przeciwnika
             $game->passTurnTo('opponent');
             $ai = HuntTargetAI::fromSnapshot($game->aiState());
-            ['moves' => $opponentMoves, 'torpedoLaunch' => $torpedoLaunch] = $this->act($game, $ai);
+            ['moves' => $opponentMoves, 'torpedoLaunch' => $torpedoLaunch, 'sonar' => $sonar] = $this->act($game, $ai);
             $game->setAiState($ai->toSnapshot());
 
             $finished = $game->isFinished();
@@ -77,14 +78,18 @@ final class OpponentTurn
             'opponentTorpedoLaunch' => null !== $torpedoLaunch
                 ? ['x' => $torpedoLaunch->x, 'y' => $torpedoLaunch->y]
                 : null,
+            // skan sonaru AI w tej turze (do animacji na planszy gracza, #145); gracz
+            // widzi tylko pola własnej planszy, więc wynik nie zdradza niczego nowego
+            'opponentSonar' => $sonar,
             // energia gracza na nową turę (#59); null = bitwa bez energii
             'energy' => $game->energyState(),
         ];
     }
 
-    /** @return array{moves: list<array{x:int,y:int,result:string}>, torpedoLaunch: Coordinate|null} */
+    /** @return array{moves: list<array{x:int,y:int,result:string}>, torpedoLaunch: Coordinate|null, sonar: array{x:int,y:int,radius:int,results:list<array{x:int,y:int,occupied:bool}>}|null} */
     private function act(Game $game, HuntTargetAI $ai): array
     {
+        $sonar = null;
         $view = $game->opponentShotsView();
         $huntMode = [] === ($game->aiState()['targets'] ?? []);
         // fort (#119) strzela tylko zwykłą salwą: bez broni specjalnych
@@ -94,11 +99,14 @@ final class OpponentTurn
         //    broń wymaga żywego nośnika sonaru we flocie AI
         if ($huntMode && $this->hasUses($weapons, 'sonar') && $game->canAfford('opponent', BattleAction::Sonar)
             && $game->opponentHasWeaponCarrier(WeaponKind::Sonar) && $this->decide(self::SONAR_CHANCE)) {
-            $center = $this->bestSonarCenter($view, $game->ruleset()->opponentWeapons()->sonar->radius);
+            $radius = $game->ruleset()->opponentWeapons()->sonar->radius;
+            $center = $this->bestSonarCenter($view, $radius);
             if (null !== $center) {
                 $game->spendEnergy('opponent', BattleAction::Sonar);
+                $scan = $game->opponentSonarPing($center, $radius);
+                $sonar = ['x' => $center->x, 'y' => $center->y, 'radius' => $radius, 'results' => $scan];
                 $detected = [];
-                foreach ($game->opponentSonarPing($center) as $cell) {
+                foreach ($scan as $cell) {
                     $c = new Coordinate($cell['x'], $cell['y']);
                     if ($cell['occupied'] && !$view->wasTried($c)) {
                         $detected[] = $c;
@@ -120,7 +128,7 @@ final class OpponentTurn
                 $this->notifyAll($ai, $results);
 
                 // koszt torpedy: wyrzutnia AI zostaje ujawniona graczowi
-                return ['moves' => $results, 'torpedoLaunch' => $start];
+                return ['moves' => $results, 'torpedoLaunch' => $start, 'sonar' => $sonar];
             }
         }
 
@@ -133,7 +141,7 @@ final class OpponentTurn
                 $results = $game->sendOpponentAirRaid($center, new Area($halfX, $halfY));
                 $this->notifyAll($ai, $results);
 
-                return ['moves' => $results, 'torpedoLaunch' => null];
+                return ['moves' => $results, 'torpedoLaunch' => null, 'sonar' => $sonar];
             }
         }
 
@@ -145,6 +153,7 @@ final class OpponentTurn
         return [
             'moves' => [['x' => $target->x, 'y' => $target->y, 'result' => $result->value]],
             'torpedoLaunch' => null,
+            'sonar' => $sonar,
         ];
     }
 

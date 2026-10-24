@@ -126,6 +126,8 @@ Brak obrazów. Ikony jednostek/broni to tymczasowe znaki tekstowe (✈ ◆ ▮ �
 - `support.js` — runtime potrzebny tylko do podglądu HTML w przeglądarce
 - `REJS.md` — handoff ekranu Rejs (`/expedition`): mapa akwenu zawsze widoczna, panel z zakładkami Wyspa / Flota / Badania / Dziennik, baner ostatniego zdarzenia (projekt z 23.10.2026)
 - `Rejs.dc.html` — referencja HTML ekranu Rejs (otwiera się obok `support.js`)
+- `ANIMACJE.md` — handoff animacji: rejs floty A → B oraz bronie w bitwie (salwa, torpeda, nalot, sonar) ze wspólnymi efektami trafienia, pudła i zatopienia (projekt z 24.10.2026)
+- `Animacje.dc.html` — referencja HTML animacji (otwiera się obok `support.js`; kod w klasie `Component` na dole pliku)
 
 ## Ekran Rejs w grze (#111)
 Wdrożony według `REJS.md`, z regułami gry ważniejszymi niż projekt (decyzja 23.10.2026):
@@ -134,3 +136,26 @@ Wdrożony według `REJS.md`, z regułami gry ważniejszymi niż projekt (decyzja
 - rynku w zakładce Wyspa nie ma (Epic J, #57), styl zostaje ciemny, morski — bez design systemu „Organic”.
 
 Uzupełnienia ponad projekt: pierwsza zakładka (`#wyspa`) pokazuje miejsce floty — wyspę w porcie, bramę akwenu na jej sektorze albo przegląd akwenu na pełnym morzu (wyspy, magazyny, złoża, bramy z powodem blokady). Dziennik i baner czytają dziennik kapitana z backendu (`log` w `GET /profiles/{id}/expedition`, 50 ostatnich wpisów). Przeładunek ‹ › przenosi od razu — każde przeniesienie to 1 tik.
+
+## Animacje bitwy w grze (#145)
+Wdrożone według `ANIMACJE.md` w module `frontend/src/fx/` (Web Animations API, warstwa overlay nad planszą `SeaGrid`).
+Reguły gry są ważniejsze niż projekt (decyzja 24.10.2026):
+- torpeda startuje z wyrzutni gracza i leci w wybranym kierunku, także po skosie, do krawędzi planszy;
+  pola rozbłyskują według wyniku z silnika w chwili przejścia torpedy,
+- sonar ma kształt krzyża o promieniu z reguł broni (3, po technologii 4), a nie kwadratu 3×3;
+  pola odsłaniają się po ramionach krzyża według odległości od środka,
+- nalot obejmuje obszar wybrany przez gracza, najwyżej 3×3, przycięty do planszy jak w silniku,
+- geometria jest liczona z układu planszy na stronie (komórka 27–34 px), a nie ze stałych 40 px + 4 px z projektu,
+- oblężenie (#119): trafienie magazynu prochu odtwarza efekt trafienia na wszystkich polach eksplozji
+  (do 9), a uciszone działo dostaje efekt zatopienia,
+- prędkość animacji 1× / 1,5× / 2× / wył. wybiera się w panelu dziennika bitwy; ustawienie siedzi
+  w `localStorage` (`fx.speed`), a bez dostępu do niego obowiązuje 1×,
+- abordaż i ruch statku zostają bez animacji.
+
+Animacja opóźnia pokazanie wyniku, ale go nie liczy: front pobiera wynik i projekcję po ruchu,
+odtwarza ruch gracza na wodach wroga, potem ruch AI na planszy gracza, i dopiero wtedy pokazuje
+nowy stan. Ruch AI odtwarzają te same animacje na planszy gracza: sonar AI przychodzi w odpowiedzi
+tury jako `opponentSonar` (środek, promień, pola skanu), a rodzaj ataku front rozpoznaje po
+`opponentTorpedoLaunch` i liczbie pól w `opponentMoves`. Klik w planszę albo Esc pomija resztę sekwencji. Przy „wył.” wynik pojawia się od razu,
+a przy `prefers-reduced-motion` bez przelotów, z krótkim fade 150 ms. Animację rejsu (sekcja 01)
+robi #146.

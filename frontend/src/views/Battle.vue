@@ -10,6 +10,7 @@ import { getBattleReport, saveBattleReport, type BattleReport } from '../lib/bat
 import { carriedWeapons, fieldsLabel, shipName } from '../lib/ships';
 import { attackerMissingShip, battleBonusLabel } from '../lib/counterattack';
 import type { BattleActionName, MoveDirection, PlayerFleetItem, TorpedoDirection } from '../api/gameApi';
+import { FX_SPEEDS, fxSpeed, setFxSpeed } from '../fx/speed';
 
 const {
     gameId, status, finished, turn, loading, shooting, error, disabled, attack, endTurn, moveShip, moveUsed, boardShip, boarding, width, height,
@@ -18,7 +19,8 @@ const {
     shotsCount, hitsCount, opponentHitsCount, enemySunkLengths, playerSunkLengths, enemyTotal, playerTotal,
     allowedShips, opponentShips, opponentVariants, playerFleet,
     log, toast, toastType,
-    playerGrid, playerUnderFireOverlay, enemyFogGrid, lastShot, sunkCells,
+    playerGrid, playerUnderFireOverlay, enemyFogGrid, sunkCells,
+    enemyBoard, ownBoard, animating, opponentAnimating, skipFx,
 } = useGame();
 const router = useRouter();
 
@@ -398,7 +400,6 @@ const ownCells = computed<string[][]>(() => {
 });
 
 const enemyCells = computed<string[][]>(() => {
-    const ls = lastShot.value;
     const sunk = new Set(sunkCells.value.map(([x, y]) => `${x}:${y}`));
     const sonar = new Map(sonarMarks.value.map(c => [`${c.x}:${c.y}`, c.occupied]));
 
@@ -421,7 +422,6 @@ const enemyCells = computed<string[][]>(() => {
         if (blast.has(key)) cls += ' blast';
         // torpeda: kursor stoi na własnej wyrzutni, tor rysujemy na wodach wroga
         if (previewCells.value.has(key)) cls += ' preview';
-        if (ls && ls.x === x && ls.y === y) cls += ' anim';
         return cls;
     }));
 });
@@ -451,7 +451,13 @@ function onOwnHover(x: number, y: number) {
     if (weaponMode.value === 'torpedo') hoverCell.value = { x, y };
 }
 
+// animacje (#145): klik w planszę albo Esc w trakcie — od razu wynik
+function skipAnimation() {
+    if (animating.value) skipFx();
+}
+
 const enemyHint = computed(() => {
+    if (animating.value) return 'Kliknij planszę albo Esc — pomiń animację.';
     if (gameOver.value) return 'Bitwa rozstrzygnięta.';
     if (turn.value !== 'player') return 'Wróg mierzy…';
     if (energy.value?.left === 0) return 'Energia wyczerpana — zakończ turę.';
@@ -479,6 +485,7 @@ const ownFooter = computed(() => {
 const turnLabel = computed(() => {
     if (status.value === 'won') return 'Zwycięstwo';
     if (status.value === 'lost') return 'Porażka';
+    if (opponentAnimating.value) return 'Ruch wroga';
     if (shooting.value) return 'Ogień…';
     return turn.value === 'player' ? 'Twój ruch' : 'Ruch wroga';
 });
@@ -513,7 +520,9 @@ const aiArsenal = computed(() => {
 
 function onKey(e: KeyboardEvent) {
     const card = weaponCards.value.find(c => c.hotkey === e.key);
-    if (moving.value && movingShip.value !== null && MOVE_KEYS[e.key]) {
+    if (animating.value && e.key === 'Escape') {
+        skipFx();
+    } else if (moving.value && movingShip.value !== null && MOVE_KEYS[e.key]) {
         e.preventDefault();
         doMove(MOVE_KEYS[e.key]);
     } else if (card) {
@@ -663,8 +672,9 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
                         <Move :size="13" /> {{ moving ? 'Anuluj ruch' : 'Przesuń flotę' }} <span class="w-cost">⚡{{ energyCost('move') }}</span>
                     </button>
                 </div>
-                <div class="board-box">
+                <div class="board-box" @pointerdown="skipAnimation">
                     <SeaGrid
+                        ref="ownBoard"
                         :cells="ownCells"
                         :interactive="(weaponMode === 'torpedo' || moving) && !disabled"
                         @cell-click="onOwnClick"
@@ -682,8 +692,9 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
                     <span v-if="fort" class="kicker">działa {{ gunsDestroyed }}/{{ fort.guns.total }}</span>
                     <span v-else class="kicker">zatopiono {{ enemySunkLengths.length }}/{{ enemyTotal }}</span>
                 </div>
-                <div class="board-box" :class="{ locked: disabled }">
+                <div class="board-box" :class="{ locked: disabled && !animating }" @pointerdown="skipAnimation">
                     <SeaGrid
+                        ref="enemyBoard"
                         :cells="enemyCells"
                         :interactive="!disabled && weaponMode !== 'torpedo'"
                         @cell-click="onEnemyClick"
@@ -738,6 +749,19 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
                         </template>
                     </div>
                     <p class="muted small">⚡{{ energyCost('move') }} · raz na turę · nie kończy tury</p>
+                </div>
+
+                <div class="fx-speed" role="radiogroup" aria-label="prędkość animacji">
+                    <span class="kicker">ANIMACJE</span>
+                    <button
+                        v-for="s in FX_SPEEDS"
+                        :key="s.value"
+                        class="fx-opt"
+                        :class="{ on: fxSpeed === s.value }"
+                        role="radio"
+                        :aria-checked="fxSpeed === s.value"
+                        @click="setFxSpeed(s.value)"
+                    >{{ s.label }}</button>
                 </div>
 
                 <div class="kicker">DZIENNIK</div>
@@ -888,6 +912,10 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
 .toast.warn { border-color: var(--warn); color: var(--warn); }
 .toast.error { border-color: var(--danger); color: var(--danger); }
 .small { font-size: 11px; margin: 0; }
+.fx-speed { display: flex; align-items: center; gap: 5px; }
+.fx-speed .kicker { margin-right: auto; }
+.fx-opt { padding: 4px 9px; border-radius: 7px; border: 1px solid var(--line-btn); background: var(--bg-card-off); color: var(--text-muted); font: 600 11px var(--font-mono); cursor: pointer; }
+.fx-opt.on { border-color: var(--info); color: var(--info); background: var(--bg-card-active); }
 
 .rose-box { padding: 12px; border-radius: 12px; background: var(--bg-card); border: 1px solid var(--accent); }
 .rose { display: grid; grid-template-columns: repeat(3, 38px); grid-auto-rows: 38px; gap: 5px; margin-top: 10px; justify-content: center; }

@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:#071319;color:#e8f0f0;font-family:'Archivo',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:#3fb6c4;text-decoration:none}
+  a:hover{color:#e8843c}
+</style>
+</helmet>
+<div style="min-height:100vh;background:radial-gradient(1200px 700px at 70% -10%,#0e2a34 0%,#071319 60%);padding:36px 32px 64px;">
+  <div style="max-width:1500px;margin:0 auto;display:flex;flex-direction:column;gap:24px;">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;">
+      <div>
+        <div style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.32em;color:#5f8089;">ANIMACJE · PROPOZYCJE</div>
+        <div style="font:700 30px 'Space Grotesk',sans-serif;margin-top:6px;">Ruch floty i <span style="color:#3fb6c4;">bronie specjalne</span></div>
+        <div style="font:400 14px 'Archivo';color:#a9c0c5;margin-top:8px;max-width:620px;line-height:1.5;text-wrap:pretty;">Każda animacja to sekwencja Web Animations API (element.animate), do przeniesienia 1:1 do gry. Czasy i krzywe pod każdą planszą.</div>
+      </div>
+      <button onClick="{{ playAll }}" style="padding:14px 22px;border:none;border-radius:12px;background:#e8843c;color:#0a1a24;font:700 15px 'Space Grotesk',sans-serif;cursor:pointer;" style-hover="background:#f0975a;">↻ Odtwórz wszystkie</button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,430px),1fr));gap:20px;">
+
+      <div style="border-radius:18px;background:#0b2129;border:1px solid #1c3b46;padding:22px;display:flex;flex-direction:column;gap:14px;min-width:0;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+          <div>
+            <div style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.2em;color:#e8843c;">01 · REJS</div>
+            <div style="font:700 22px 'Space Grotesk',sans-serif;margin-top:4px;">Przepływ floty A → B</div>
+          </div>
+          <button onClick="{{ playFleet }}" style="padding:9px 14px;border-radius:10px;background:#0d2530;border:1px solid #24505e;color:#e8f0f0;font:600 12px 'IBM Plex Mono',monospace;cursor:pointer;" style-hover="border-color:#e8843c;">↻ Odtwórz</button>
+        </div>
+        <div style="background:#081a21;border:1px solid #143743;border-radius:14px;min-height:392px;display:flex;align-items:center;justify-content:center;padding:20px;overflow:hidden;">
+          <div style="position:relative;width:348px;height:260px;flex:none;">
+            <div style="display:grid;grid-template-columns:repeat(8,40px);gap:4px;">
+              <sc-for list="{{ fleetCells }}" as="cell" hint-placeholder-count="48">
+                <div style="{{ cell.style }}">
+                  <sc-if value="{{ cell.isle }}" hint-placeholder-val="{{ false }}">
+                    <div style="width:22px;height:18px;border-radius:50% 45% 50% 40%;background:#c9a874;box-shadow:inset -3px -3px 0 #a68756;"></div>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+            <div ref="{{ fleetL }}" style="position:absolute;inset:0;pointer-events:none;"></div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:12px;font:500 12px 'IBM Plex Mono',monospace;min-height:16px;">
+          <span ref="{{ fleetS }}" style="color:#c3d3d6;"></span>
+          <span ref="{{ fleetT }}" style="color:#3fb6c4;flex:none;"></span>
+        </div>
+        <div style="padding:12px 14px;border-radius:10px;border:1px dashed #24505e;font:400 11px/1.7 'IBM Plex Mono',monospace;color:#8fa6ab;">trasa: rysowanie 700 ms ease-out<br>krok (1 tik): 420 ms cubic-bezier(.45,0,.25,1)<br>mgła: 380 ms, promień 1 · ślad: 1,4 s fade<br>dokowanie: 2× puls 700 ms</div>
+      </div>
+
+      <div style="border-radius:18px;background:#0b2129;border:1px solid #1c3b46;padding:22px;display:flex;flex-direction:column;gap:14px;min-width:0;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+          <div>
+            <div style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.2em;color:#e8843c;">02 · TORPEDA ⚡2</div>
+            <div style="font:700 22px 'Space Grotesk',sans-serif;margin-top:4px;">Przebicie linii</div>
+          </div>
+          <button onClick="{{ playTorp }}" style="padding:9px 14px;border-radius:10px;background:#0d2530;border:1px solid #24505e;color:#e8f0f0;font:600 12px 'IBM Plex Mono',monospace;cursor:pointer;" style-hover="border-color:#e8843c;">↻ Odtwórz</button>
+        </div>
+        <div style="background:#081a21;border:1px solid #143743;border-radius:14px;min-height:392px;display:flex;align-items:center;justify-content:center;padding:20px;overflow:hidden;">
+          <div ref="{{ torpB }}" style="position:relative;width:348px;height:348px;flex:none;">
+            <div style="display:grid;grid-template-columns:repeat(8,40px);gap:4px;">
+              <sc-for list="{{ fogCells }}" as="cell" hint-placeholder-count="64">
+                <div style="{{ cell.style }}"></div>
+              </sc-for>
+            </div>
+            <div ref="{{ torpL }}" style="position:absolute;inset:0;pointer-events:none;"></div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:12px;font:500 12px 'IBM Plex Mono',monospace;min-height:16px;">
+          <span ref="{{ torpS }}" style="color:#c3d3d6;"></span>
+        </div>
+        <div style="padding:12px 14px;border-radius:10px;border:1px dashed #24505e;font:400 11px/1.7 'IBM Plex Mono',monospace;color:#8fa6ab;">celowanie: pas wiersza 300 ms<br>przelot: 1,5 s linear, kilwater rośnie z torpedą<br>trafienie: błysk 520 ms + pierścień 600 ms + iskry 480 ms + wstrząs 260 ms<br>pudło: rozprysk 500 ms</div>
+      </div>
+
+      <div style="border-radius:18px;background:#0b2129;border:1px solid #1c3b46;padding:22px;display:flex;flex-direction:column;gap:14px;min-width:0;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+          <div>
+            <div style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.2em;color:#e8843c;">03 · NALOT ⚡3</div>
+            <div style="font:700 22px 'Space Grotesk',sans-serif;margin-top:4px;">Bombardowanie 3×3</div>
+          </div>
+          <button onClick="{{ playRaid }}" style="padding:9px 14px;border-radius:10px;background:#0d2530;border:1px solid #24505e;color:#e8f0f0;font:600 12px 'IBM Plex Mono',monospace;cursor:pointer;" style-hover="border-color:#e8843c;">↻ Odtwórz</button>
+        </div>
+        <div style="background:#081a21;border:1px solid #143743;border-radius:14px;min-height:392px;display:flex;align-items:center;justify-content:center;padding:20px;overflow:hidden;">
+          <div ref="{{ raidB }}" style="position:relative;width:348px;height:348px;flex:none;">
+            <div style="display:grid;grid-template-columns:repeat(8,40px);gap:4px;">
+              <sc-for list="{{ fogCells }}" as="cell" hint-placeholder-count="64">
+                <div style="{{ cell.style }}"></div>
+              </sc-for>
+            </div>
+            <div ref="{{ raidL }}" style="position:absolute;inset:0;pointer-events:none;"></div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:12px;font:500 12px 'IBM Plex Mono',monospace;min-height:16px;">
+          <span ref="{{ raidS }}" style="color:#c3d3d6;"></span>
+        </div>
+        <div style="padding:12px 14px;border-radius:10px;border:1px dashed #24505e;font:400 11px/1.7 'IBM Plex Mono',monospace;color:#8fa6ab;">celownik: 350 ms cubic-bezier(.2,.8,.2,1), skala 1,25→1<br>przelot cienia: 1,4 s linear po skosie<br>zrzut: co 90 ms, kolejność wg przekątnej<br>bomba: 220 ms → trafienie / pudło</div>
+      </div>
+
+      <div style="border-radius:18px;background:#0b2129;border:1px solid #1c3b46;padding:22px;display:flex;flex-direction:column;gap:14px;min-width:0;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+          <div>
+            <div style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.2em;color:#3fb6c4;">04 · SONAR ⚡1</div>
+            <div style="font:700 22px 'Space Grotesk',sans-serif;margin-top:4px;">Skan 3×3</div>
+          </div>
+          <button onClick="{{ playSonar }}" style="padding:9px 14px;border-radius:10px;background:#0d2530;border:1px solid #24505e;color:#e8f0f0;font:600 12px 'IBM Plex Mono',monospace;cursor:pointer;" style-hover="border-color:#3fb6c4;">↻ Odtwórz</button>
+        </div>
+        <div style="background:#081a21;border:1px solid #143743;border-radius:14px;min-height:392px;display:flex;align-items:center;justify-content:center;padding:20px;overflow:hidden;">
+          <div style="position:relative;width:348px;height:348px;flex:none;">
+            <div style="display:grid;grid-template-columns:repeat(8,40px);gap:4px;">
+              <sc-for list="{{ fogCells }}" as="cell" hint-placeholder-count="64">
+                <div style="{{ cell.style }}"></div>
+              </sc-for>
+            </div>
+            <div ref="{{ sonL }}" style="position:absolute;inset:0;pointer-events:none;"></div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:12px;font:500 12px 'IBM Plex Mono',monospace;min-height:16px;">
+          <span ref="{{ sonS }}" style="color:#c3d3d6;"></span>
+        </div>
+        <div style="padding:12px 14px;border-radius:10px;border:1px dashed #24505e;font:400 11px/1.7 'IBM Plex Mono',monospace;color:#8fa6ab;">fale: 3 pierścienie × 1,2 s, co 300 ms<br>odsłanianie: wg odległości od środka, 110 ms/krok<br>wykrycie: obrys cyjan, 3× mrugnięcie 900 ms<br>bez zdradzania typu jednostki</div>
+      </div>
+
+      <div style="border-radius:18px;background:#0b2129;border:1px solid #1c3b46;padding:22px;display:flex;flex-direction:column;gap:14px;min-width:0;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+          <div>
+            <div style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.2em;color:#e8843c;">05 · SALWA ⚡1</div>
+            <div style="font:700 22px 'Space Grotesk',sans-serif;margin-top:4px;">Zwykły ostrzał</div>
+          </div>
+          <button onClick="{{ playSalvo }}" style="padding:9px 14px;border-radius:10px;background:#0d2530;border:1px solid #24505e;color:#e8f0f0;font:600 12px 'IBM Plex Mono',monospace;cursor:pointer;" style-hover="border-color:#e8843c;">↻ Odtwórz</button>
+        </div>
+        <div style="background:#081a21;border:1px solid #143743;border-radius:14px;min-height:392px;display:flex;align-items:center;justify-content:center;padding:20px;overflow:hidden;">
+          <div ref="{{ salB }}" style="position:relative;width:348px;height:348px;flex:none;">
+            <div style="display:grid;grid-template-columns:repeat(8,40px);gap:4px;">
+              <sc-for list="{{ fogCells }}" as="cell" hint-placeholder-count="64">
+                <div style="{{ cell.style }}"></div>
+              </sc-for>
+            </div>
+            <div ref="{{ salL }}" style="position:absolute;inset:0;pointer-events:none;overflow:visible;"></div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:12px;font:500 12px 'IBM Plex Mono',monospace;min-height:16px;">
+          <span ref="{{ salS }}" style="color:#c3d3d6;"></span>
+        </div>
+        <div style="padding:12px 14px;border-radius:10px;border:1px dashed #24505e;font:400 11px/1.7 'IBM Plex Mono',monospace;color:#8fa6ab;">celownik: 220 ms ease-out, skala 1,4→1<br>pocisk: łuk 650 ms, skala 1→1,8→1, cień rośnie do celu<br>wynik: pudło / trafienie jak w torpedzie<br>zatopienie: kadłub ciemnieje 400 ms + obrys statku</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;speed&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:1,&quot;min&quot;:0.5,&quot;max&quot;:2,&quot;step&quot;:0.25,&quot;unit&quot;:&quot;×&quot;,&quot;tsType&quot;:&quot;number&quot;},&quot;loop&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  R = (() => { const o = {}; ['fleetL','fleetS','fleetT','torpB','torpL','torpS','raidB','raidL','raidS','sonL','sonS','salB','salL','salS'].forEach(k => o[k] = React.createRef()); return o; })();
+  tok = {};
+  P = 44;
+
+  componentDidMount() {
+    this._t = setTimeout(() => this.playAll(), 400);
+  }
+  componentWillUnmount() {
+    clearTimeout(this._t);
+    Object.values(this.tok).forEach(t => t.alive = false);
+  }
+  spd() { return Math.max(0.25, this.props.speed ?? 1); }
+  d(ms) { return ms / this.spd(); }
+  wait(ms, tok) {
+    return new Promise((res, rej) => setTimeout(() => tok.alive ? res() : rej('cancel'), this.d(ms)));
+  }
+  mk(parent, s, child) {
+    const el = document.createElement('div');
+    Object.assign(el.style, { position: 'absolute', pointerEvents: 'none' }, s);
+    (child || parent).appendChild(el);
+    return el;
+  }
+  fade(el, ms, from = 1, to = 0, remove = true) {
+    const a = el.animate([{ opacity: from }, { opacity: to }], { duration: this.d(ms), fill: 'forwards' });
+    if (remove) a.onfinish = () => el.remove();
+    return a;
+  }
+  setText(ref, t) { if (ref.current) ref.current.textContent = t; }
+
+  async run(key) {
+    const tok = { alive: true };
+    if (this.tok[key]) this.tok[key].alive = false;
+    this.tok[key] = tok;
+    try {
+      await this[key](tok);
+      if (this.props.loop ?? true) { await this.wait(2200, tok); this.run(key); }
+    } catch (e) { if (e !== 'cancel') console.error(e); }
+  }
+  playAll = () => { ['fleet','torp','raid','sonar','salvo'].forEach(k => this.run(k)); };
+
+  tile(L, r, c, bg, sh) {
+    const P = this.P;
+    return this.mk(L, { left: c*P + 'px', top: r*P + 'px', width: '40px', height: '40px', borderRadius: '8px', background: bg, boxShadow: sh });
+  }
+  hit(L, B, r, c) {
+    const P = this.P, x = c*P, y = r*P;
+    const m = this.tile(L, r, c, '#4a3327', 'inset 0 0 0 1px #7a4a33');
+    Object.assign(m.style, { display: 'flex', alignItems: 'center', justifyContent: 'center' });
+    this.mk(m, { position: 'static', width: '15px', height: '15px', borderRadius: '50%', background: '#e8843c', boxShadow: '0 0 12px #e8843c99' });
+    m.animate([{ opacity: 0 }, { opacity: 1 }], { duration: this.d(200), fill: 'forwards' });
+    const f = this.mk(L, { left: x - 10 + 'px', top: y - 10 + 'px', width: '60px', height: '60px', borderRadius: '50%', background: 'radial-gradient(circle,#fff3e0 0%,#f3a45f 35%,#e8843c55 60%,transparent 70%)' });
+    f.animate([{ transform: 'scale(.3)', opacity: 1 }, { transform: 'scale(1.3)', opacity: 0 }], { duration: this.d(520), easing: 'ease-out', fill: 'forwards' }).onfinish = () => f.remove();
+    const ring = this.mk(L, { left: x + 'px', top: y + 'px', width: '40px', height: '40px', borderRadius: '50%', border: '3px solid #e8843c' });
+    ring.animate([{ transform: 'scale(.4)', opacity: 1 }, { transform: 'scale(2)', opacity: 0 }], { duration: this.d(600), easing: 'ease-out', fill: 'forwards' }).onfinish = () => ring.remove();
+    for (let i = 0; i < 6; i++) {
+      const a = (i * 60 + 15) * Math.PI / 180;
+      const s = this.mk(L, { left: x + 18 + 'px', top: y + 18 + 'px', width: '4px', height: '4px', borderRadius: '50%', background: '#f3a45f' });
+      s.animate([{ transform: 'translate(0,0)', opacity: 1 }, { transform: `translate(${Math.cos(a)*28}px,${Math.sin(a)*28}px)`, opacity: 0 }], { duration: this.d(480), easing: 'cubic-bezier(.1,.7,.3,1)', fill: 'forwards' }).onfinish = () => s.remove();
+    }
+    if (B) B.animate([{ transform: 'translate(0,0)' }, { transform: 'translate(-3px,1px)' }, { transform: 'translate(3px,-1px)' }, { transform: 'translate(-2px,0)' }, { transform: 'translate(0,0)' }], { duration: this.d(260) });
+  }
+  miss(L, r, c) {
+    const P = this.P, x = c*P, y = r*P;
+    const w = this.tile(L, r, c, '#0c2029', 'inset 0 0 0 1px #163540');
+    Object.assign(w.style, { display: 'flex', alignItems: 'center', justifyContent: 'center' });
+    this.mk(w, { position: 'static', width: '8px', height: '8px', borderRadius: '50%', boxShadow: 'inset 0 0 0 1.6px #5f8089' });
+    w.animate([{ opacity: 0 }, { opacity: 1 }], { duration: this.d(250), fill: 'forwards' });
+    const sp = this.mk(L, { left: x + 6 + 'px', top: y + 6 + 'px', width: '28px', height: '28px', borderRadius: '50%', border: '1.6px solid #8fb4bd' });
+    sp.animate([{ transform: 'scale(.3)', opacity: 1 }, { transform: 'scale(1.5)', opacity: 0 }], { duration: this.d(500), easing: 'ease-out', fill: 'forwards' }).onfinish = () => sp.remove();
+  }
+
+  async fleet(tok) {
+    const L = this.R.fleetL.current; if (!L) return;
+    const P = this.P; L.innerHTML = '';
+    const path = [[4,1],[4,2],[3,2],[3,3],[2,3],[2,4],[2,5],[1,5],[1,6]];
+    const known = new Set(['0-6','1-6','0-7','1-7']);
+    const fog = {};
+    for (let r = 0; r < 6; r++) for (let c = 4; c < 8; c++) {
+      const k = r + '-' + c; if (known.has(k)) continue;
+      fog[k] = this.tile(L, r, c, '#0a1b23', 'inset 0 0 0 1px #12303a');
+    }
+    const reveal = ([r, c]) => {
+      for (const k of Object.keys(fog)) {
+        const [fr, fc] = k.split('-').map(Number);
+        if (Math.abs(fr - r) + Math.abs(fc - c) <= 1) {
+          const el = fog[k]; delete fog[k];
+          el.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(.85)' }], { duration: this.d(380), easing: 'ease-out', fill: 'forwards' }).onfinish = () => el.remove();
+        }
+      }
+    };
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('width', '348'); svg.setAttribute('height', '260');
+    Object.assign(svg.style, { position: 'absolute', left: 0, top: 0, overflow: 'visible' });
+    const pl = document.createElementNS(ns, 'polyline');
+    pl.setAttribute('points', path.map(([r, c]) => `${c*P+20},${r*P+20}`).join(' '));
+    Object.entries({ fill: 'none', stroke: '#3fb6c4', 'stroke-width': '2.5', 'stroke-linejoin': 'round', 'stroke-linecap': 'round', opacity: '.55' }).forEach(([k, v]) => pl.setAttribute(k, v));
+    svg.appendChild(pl); L.appendChild(svg);
+    const len = pl.getTotalLength();
+    pl.style.strokeDasharray = len;
+    pl.animate([{ strokeDashoffset: len }, { strokeDashoffset: 0 }], { duration: this.d(700), easing: 'ease-out', fill: 'forwards' });
+    const [tr0, tc0] = path[path.length - 1];
+    const tgt = this.mk(L, { left: tc0*P - 4 + 'px', top: tr0*P - 4 + 'px', width: '48px', height: '48px', borderRadius: '50%', border: '2px dashed #e8843c' });
+    tgt.animate([{ opacity: 0, transform: 'scale(1.4) rotate(0deg)' }, { opacity: 1, transform: 'scale(1) rotate(90deg)' }], { duration: this.d(500), easing: 'ease-out', fill: 'forwards' });
+    const T = ([r, c]) => `translate(${c*P+7}px,${r*P+7}px)`;
+    const boat = this.mk(L, { left: 0, top: 0, width: '26px', height: '26px', borderRadius: '50%', background: '#e8843c', boxShadow: '0 0 0 4px #e8843c33, 0 0 16px #e8843c99', transform: T(path[0]) });
+    let tick = 833;
+    this.setText(this.R.fleetT, 'TIK ' + tick);
+    this.setText(this.R.fleetS, `Kurs na Kowadło · ${path.length - 1} tików`);
+    await this.wait(850, tok);
+    reveal(path[0]);
+    for (let i = 1; i < path.length; i++) {
+      const [fr, fc] = path[i - 1];
+      const wk = this.mk(L, { left: fc*P + 16 + 'px', top: fr*P + 16 + 'px', width: '8px', height: '8px', borderRadius: '50%', background: '#3fb6c4' });
+      wk.animate([{ opacity: .9, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(.4)' }], { duration: this.d(1400), fill: 'forwards' }).onfinish = () => wk.remove();
+      boat.animate([{ transform: T(path[i - 1]) }, { transform: T(path[i]) }], { duration: this.d(420), easing: 'cubic-bezier(.45,0,.25,1)', fill: 'forwards' });
+      await this.wait(240, tok);
+      reveal(path[i]);
+      await this.wait(200, tok);
+      this.setText(this.R.fleetT, 'TIK ' + (++tick));
+    }
+    this.fade(tgt, 300);
+    for (let k = 0; k < 2; k++) {
+      const [r, c] = path[path.length - 1];
+      const ring = this.mk(L, { left: c*P + 2 + 'px', top: r*P + 2 + 'px', width: '36px', height: '36px', borderRadius: '50%', border: '2px solid #e8843c' });
+      ring.animate([{ transform: 'scale(1)', opacity: .9 }, { transform: 'scale(2.4)', opacity: 0 }], { duration: this.d(700), easing: 'ease-out', fill: 'forwards' }).onfinish = () => ring.remove();
+      await this.wait(220, tok);
+    }
+    this.setText(this.R.fleetS, 'Zadokowano · wyspa Kowadło');
+  }
+
+  async torp(tok) {
+    const L = this.R.torpL.current, B = this.R.torpB.current; if (!L) return;
+    const P = this.P, row = 3; L.innerHTML = '';
+    const ships = new Set([3, 4, 6]);
+    const band = this.mk(L, { left: '-6px', top: row*P - 4 + 'px', width: 8*P + 8 + 'px', height: '48px', borderRadius: '12px', border: '1.5px dashed #e8843c', background: '#e8843c14' });
+    band.animate([{ opacity: 0 }, { opacity: 1 }], { duration: this.d(300), fill: 'forwards' });
+    this.setText(this.R.torpS, 'Cel: wiersz 4 · wystrzał z niszczyciela');
+    await this.wait(600, tok);
+    const sx = -34, ex = 8*P + 10, DUR = 1500;
+    const wake = this.mk(L, { left: sx + 'px', top: row*P + 19 + 'px', height: '2px', width: '0px', borderRadius: '2px', background: 'linear-gradient(90deg,transparent,#3fb6c4bb)' });
+    const tp = this.mk(L, { left: 0, top: row*P + 17 + 'px', width: '24px', height: '6px', borderRadius: '3px', background: '#e8f0f0', boxShadow: '0 0 10px #e8f0f0aa, -8px 0 14px #3fb6c4' });
+    tp.animate([{ transform: `translateX(${sx}px)` }, { transform: `translateX(${ex}px)` }], { duration: this.d(DUR), easing: 'linear', fill: 'forwards' });
+    wake.animate([{ width: '0px' }, { width: (ex - sx) + 'px' }], { duration: this.d(DUR), easing: 'linear', fill: 'forwards' });
+    let t = 0;
+    for (let c = 0; c < 8; c++) {
+      const at = (c*P + 20 - (sx + 12)) / (ex - sx) * DUR;
+      await this.wait(at - t, tok); t = at;
+      ships.has(c) ? this.hit(L, B, row, c) : this.miss(L, row, c);
+    }
+    await this.wait(DUR - t, tok);
+    this.fade(tp, 200); this.fade(wake, 600); this.fade(band, 400);
+    this.setText(this.R.torpS, '3 trafienia · 2 jednostki · wiersz zbadany');
+  }
+
+  async raid(tok) {
+    const L = this.R.raidL.current, B = this.R.raidB.current; if (!L) return;
+    const P = this.P; L.innerHTML = '';
+    const ships = new Set(['2-4', '3-4', '4-5']);
+    const area = this.mk(L, { left: 3*P - 6 + 'px', top: 2*P - 6 + 'px', width: 3*P + 8 + 'px', height: 3*P + 8 + 'px', borderRadius: '14px', border: '2px dashed #e8843c', background: '#e8843c10' });
+    area.animate([{ opacity: 0, transform: 'scale(1.25)' }, { opacity: 1, transform: 'scale(1)' }], { duration: this.d(350), easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' });
+    this.setText(this.R.raidS, 'Cel: obszar 3×3 · start z lotniskowca');
+    await this.wait(650, tok);
+    const plane = this.mk(L, { left: 0, top: 0, width: '160px', height: '30px', transform: 'translate(-200px,-90px) rotate(40deg)' });
+    this.mk(plane, { left: 0, top: '13px', width: '110px', height: '2px', borderRadius: '2px', background: 'linear-gradient(90deg,transparent,#e8f0f055)' });
+    this.mk(plane, { left: '100px', top: '2px', width: '60px', height: '26px', borderRadius: '50%', background: 'rgba(0,0,0,.55)', filter: 'blur(5px)' });
+    plane.animate([{ transform: 'translate(-200px,-90px) rotate(40deg)' }, { transform: 'translate(380px,400px) rotate(40deg)' }], { duration: this.d(1400), easing: 'linear', fill: 'forwards' }).onfinish = () => plane.remove();
+    await this.wait(420, tok);
+    const cells = [];
+    for (let r = 2; r <= 4; r++) for (let c = 3; c <= 5; c++) cells.push([r, c]);
+    cells.sort((a, b) => (a[0] + a[1]) - (b[0] + b[1]));
+    let n = 0;
+    for (const [r, c] of cells) {
+      const b = this.mk(L, { left: c*P + 15 + 'px', top: r*P + 15 + 'px', width: '10px', height: '10px', borderRadius: '50%', background: '#e8f0f0', boxShadow: '0 0 8px #e8f0f0' });
+      b.animate([{ transform: 'scale(2.2)', opacity: 0 }, { transform: 'scale(.5)', opacity: 1 }], { duration: this.d(220), easing: 'ease-in', fill: 'forwards' }).onfinish = () => {
+        b.remove();
+        if (!tok.alive) return;
+        if (ships.has(r + '-' + c)) { this.hit(L, B, r, c); n++; } else this.miss(L, r, c);
+      };
+      await this.wait(90, tok);
+    }
+    await this.wait(500, tok);
+    const fl = this.mk(L, { inset: '-8px', borderRadius: '14px', background: '#e8843c' });
+    fl.animate([{ opacity: 0 }, { opacity: .12 }, { opacity: 0 }], { duration: this.d(380), fill: 'forwards' }).onfinish = () => fl.remove();
+    this.fade(area, 500);
+    this.setText(this.R.raidS, `${ships.size} trafienia · ${9 - ships.size} pudeł`);
+  }
+
+  async sonar(tok) {
+    const L = this.R.sonL.current; if (!L) return;
+    const P = this.P, cr = 4, cc = 3; L.innerHTML = '';
+    const ships = new Set(['4-3', '4-4']);
+    const area = this.mk(L, { left: (cc - 1)*P - 6 + 'px', top: (cr - 1)*P - 6 + 'px', width: 3*P + 8 + 'px', height: 3*P + 8 + 'px', borderRadius: '14px', border: '2px dashed #3fb6c4', background: '#3fb6c40d' });
+    area.animate([{ opacity: 0 }, { opacity: 1 }], { duration: this.d(300), fill: 'forwards' });
+    this.setText(this.R.sonS, 'Skan z kutra · obszar 3×3');
+    await this.wait(450, tok);
+    for (let i = 0; i < 3; i++) {
+      const ring = this.mk(L, { left: cc*P + 'px', top: cr*P + 'px', width: '40px', height: '40px', borderRadius: '50%', border: '2px solid #3fb6c4' });
+      ring.animate([{ transform: 'scale(.2)', opacity: .9 }, { transform: 'scale(3.6)', opacity: 0 }], { duration: this.d(1200), easing: 'cubic-bezier(.2,.6,.3,1)', delay: this.d(i * 300), fill: 'both' }).onfinish = () => ring.remove();
+    }
+    await this.wait(200, tok);
+    const cells = [];
+    for (let r = cr - 1; r <= cr + 1; r++) for (let c = cc - 1; c <= cc + 1; c++) cells.push([r, c, Math.abs(r - cr) + Math.abs(c - cc)]);
+    for (let dist = 0; dist <= 2; dist++) {
+      for (const [r, c, dd] of cells) {
+        if (dd !== dist) continue;
+        if (ships.has(r + '-' + c)) {
+          const m = this.tile(L, r, c, '#123c46', 'inset 0 0 0 2px #3fb6c4, 0 0 14px #3fb6c455');
+          m.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: .35 }, { opacity: 1 }, { opacity: .35 }, { opacity: 1 }], { duration: this.d(900), fill: 'forwards' });
+        } else {
+          const w = this.tile(L, r, c, '#0f2f38', 'inset 0 0 0 1px #1f5c66');
+          w.animate([{ opacity: 0 }, { opacity: 1 }], { duration: this.d(250), fill: 'forwards' });
+        }
+      }
+      await this.wait(110, tok);
+    }
+    await this.wait(900, tok);
+    this.fade(area, 500);
+    this.setText(this.R.sonS, 'Wykryto jednostkę · 2 pola');
+  }
+
+  async shell(L, r, c, tok) {
+    const P = this.P;
+    const ch = this.mk(L, { left: c*P - 2 + 'px', top: r*P - 2 + 'px', width: '44px', height: '44px', borderRadius: '50%', border: '2px solid #e8843c', display: 'flex', alignItems: 'center', justifyContent: 'center' });
+    this.mk(ch, { position: 'static', width: '6px', height: '6px', borderRadius: '50%', background: '#e8843c' });
+    ch.animate([{ opacity: 0, transform: 'scale(1.4)' }, { opacity: 1, transform: 'scale(1)' }], { duration: this.d(220), easing: 'ease-out', fill: 'forwards' });
+    await this.wait(260, tok);
+    const sx = 174, sy = 372, tx = c*P + 20, ty = r*P + 20, apex = Math.min(sy, ty) - 70;
+    const kf = [], sk = [];
+    for (let i = 0; i <= 8; i++) {
+      const t = i / 8, x = sx + (tx - sx) * t;
+      const y = (1 - t) * (1 - t) * sy + 2 * (1 - t) * t * apex + t * t * ty;
+      const s = 1 + 0.8 * Math.sin(Math.PI * t);
+      kf.push({ transform: `translate(${x - 4}px,${y - 4}px) scale(${s})` });
+      const gy = sy + (ty - sy) * t;
+      sk.push({ transform: `translate(${x - 6}px,${gy - 3}px) scale(${0.4 + 0.6 * t})`, opacity: 0.15 + 0.45 * t });
+    }
+    const sh = this.mk(L, { left: 0, top: 0, width: '12px', height: '6px', borderRadius: '50%', background: 'rgba(0,0,0,.6)', filter: 'blur(2px)' });
+    const b = this.mk(L, { left: 0, top: 0, width: '8px', height: '8px', borderRadius: '50%', background: '#e8f0f0', boxShadow: '0 0 8px #e8f0f0, 0 0 14px #e8843c88' });
+    sh.animate(sk, { duration: this.d(650), easing: 'linear', fill: 'forwards' }).onfinish = () => sh.remove();
+    b.animate(kf, { duration: this.d(650), easing: 'cubic-bezier(.3,0,.7,1)', fill: 'forwards' }).onfinish = () => b.remove();
+    await this.wait(650, tok);
+    this.fade(ch, 200);
+  }
+
+  async salvo(tok) {
+    const L = this.R.salL.current, B = this.R.salB.current; if (!L) return;
+    const P = this.P; L.innerHTML = '';
+    this.setText(this.R.salS, 'Twój ruch · wybierz pole');
+    await this.wait(400, tok);
+    await this.shell(L, 2, 2, tok); this.miss(L, 2, 2);
+    this.setText(this.R.salS, 'C-3 · pudło');
+    await this.wait(700, tok);
+    await this.shell(L, 5, 5, tok); this.hit(L, B, 5, 5);
+    this.setText(this.R.salS, 'F-6 · trafienie!');
+    await this.wait(700, tok);
+    await this.shell(L, 5, 6, tok); this.hit(L, B, 5, 6);
+    await this.wait(450, tok);
+    for (const c of [5, 6]) {
+      const s = this.tile(L, 5, c, '#3a1c12', 'inset 0 0 0 1px #7a3a22');
+      Object.assign(s.style, { display: 'flex', alignItems: 'center', justifyContent: 'center' });
+      this.mk(s, { position: 'static', width: '16px', height: '16px', borderRadius: '50%', background: '#c8624a', boxShadow: '0 0 6px #c8624a77' });
+      s.animate([{ opacity: 0 }, { opacity: 1 }], { duration: this.d(400), fill: 'forwards' });
+    }
+    const hull = this.mk(L, { left: 5*P - 4 + 'px', top: 5*P - 4 + 'px', width: 2*P + 4 + 'px', height: '48px', borderRadius: '12px', border: '2px solid #e8843c' });
+    hull.animate([{ opacity: 0, transform: 'scale(1.15)' }, { opacity: 1, transform: 'scale(1)' }], { duration: this.d(400), easing: 'ease-out', fill: 'forwards' });
+    if (B) B.animate([{ transform: 'translate(0,0)' }, { transform: 'translate(-4px,2px)' }, { transform: 'translate(4px,-2px)' }, { transform: 'translate(-2px,1px)' }, { transform: 'translate(0,0)' }], { duration: this.d(340) });
+    this.setText(this.R.salS, 'G-6 · ZATOPIONY · Ścigacz');
+  }
+
+  cells() {
+    if (this._c) return this._c;
+    const base = { width: '40px', height: '40px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+    const isles = new Set(['4-0', '0-6', '3-6', '5-5', '1-0']);
+    const fleetCells = [];
+    for (let r = 0; r < 6; r++) for (let c = 0; c < 8; c++) fleetCells.push({ isle: isles.has(r + '-' + c), style: { ...base, background: '#0f2a34', boxShadow: 'inset 0 0 0 1px #1c3b46' } });
+    const fogCells = Array.from({ length: 64 }, () => ({ style: { ...base, background: '#0a1b23', boxShadow: 'inset 0 0 0 1px #12303a' } }));
+    return this._c = { fleetCells, fogCells };
+  }
+
+  renderVals() {
+    return {
+      ...this.cells(),
+      ...this.R,
+      playAll: this.playAll,
+      playFleet: this._pf || (this._pf = () => this.run('fleet')),
+      playTorp: this._pt || (this._pt = () => this.run('torp')),
+      playRaid: this._pr || (this._pr = () => this.run('raid')),
+      playSonar: this._ps || (this._ps = () => this.run('sonar')),
+      playSalvo: this._pv || (this._pv = () => this.run('salvo'))
+    };
+  }
+}
+</script>
+</body>
+</html>

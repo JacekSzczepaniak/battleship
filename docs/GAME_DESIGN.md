@@ -26,7 +26,9 @@ statku o 1 pole, #60) · profil
 kapitana (XP nigdy nie maleje, 9 rang od rozbitka do admirała — progi
 w Filarze VIII; licznik zatopionych jednostek wroga) · flota jako majątek
 (budowa/remont, stocznie, wygrana→remont / przegrana→strata; uszkodzony
-statek wozi ładunek, ale nie walczy — #92) · rozbudowa
+statek wozi ładunek, ale nie walczy — #92; złomowanie w stoczni za połowę
+kosztu budowy do magazynu wyspy, uszkodzony mniej o remont, bez ostatniej
+sprawnej jednostki — #124) · rozbudowa
 stoczni w osadzie (#82: Zatoka pod banderą 1→2) · fort w osadzie (#81:
 nieobecność przy kontrataku to grabież połowy magazynu, wyspa zostaje) · wolne morze
 12×12 z mgłą, deterministyczne z seeda profilu · kartografia pasywna ·

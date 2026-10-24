@@ -136,7 +136,14 @@ export interface FleetShipDTO {
     variant: ShipVariantName | null;
     damaged: boolean;
     repairCost: ResourcesDTO;
+    // złomowanie (#124): zwrot do magazynu wyspy (uszkodzony oddaje mniej o remont) i blokada domeny;
+    // wymóg stoczni w porcie sprawdza widok
+    scrapValue: ResourcesDTO;
+    scrapBlock: ScrapBlockCode | null;
 }
+
+// Domain/Expedition/ScrapBlock
+export type ScrapBlockCode = 'in-battle' | 'last-seaworthy';
 
 export interface ShipTypeDTO {
     type: ShipTypeName;
@@ -411,7 +418,7 @@ export type BattleKindName = 'capture' | 'defense' | 'guardian' | 'siege';
 export type LogEventName =
     | 'storm' | 'island-captured' | 'island-lost' | 'island-defended' | 'island-plundered' | 'counterattack-announced'
     | 'research-completed' | 'ship-built' | 'building-built' | 'gate-opened' | 'gate-passed'
-    | 'ship-boarded' | 'prize-decided' | 'island-besieged' | 'siege-failed';
+    | 'ship-boarded' | 'prize-decided' | 'island-besieged' | 'siege-failed' | 'ship-scrapped';
 
 export interface LogEntryDTO {
     tick: number;
@@ -441,6 +448,9 @@ export interface LogEntryDTO {
     decision?: PrizeDecisionName;
     refund?: ResourcesDTO;
     lost?: ResourcesDTO;
+    // złomowanie (#124): zwrot w refund; ładunek ponad pojemność floty został w magazynie wyspy
+    damaged?: boolean;
+    unloaded?: ResourcesDTO;
 }
 
 // decyzja o statku zdobytym abordażem (#118); study = zbadaj konstrukcję (#121)
@@ -462,7 +472,7 @@ export interface PrizeDTO {
 export interface DecidePrizeDTO {
     decision: PrizeDecisionName;
     // dołączony statek (uszkodzony); null przy rozbiórce
-    ship: Omit<FleetShipDTO, 'repairCost'> | null;
+    ship: Omit<FleetShipDTO, 'repairCost' | 'scrapValue' | 'scrapBlock'> | null;
     refund: ResourcesDTO;
     cargoLost: ResourcesDTO;
     cargo: ResourcesDTO;
@@ -555,6 +565,16 @@ export async function buildShip(profileId: string, islandId: string, type: ShipT
 
 export async function repairShip(profileId: string, islandId: string, shipId: string): Promise<FleetShipDTO> {
     return http.post<FleetShipDTO>(`/profiles/${profileId}/ships/${shipId}/repair`, { islandId });
+}
+
+export interface ScrapShipDTO {
+    refund: ResourcesDTO;
+    stockpile: ResourcesDTO;
+    cargo: ResourcesDTO;
+}
+
+export async function scrapShip(profileId: string, islandId: string, shipId: string): Promise<ScrapShipDTO> {
+    return http.post<ScrapShipDTO>(`/profiles/${profileId}/ships/${shipId}/scrap`, { islandId });
 }
 
 export interface BuildBuildingDTO {

@@ -194,6 +194,7 @@ Wszystkie ścieżki pod `/api`, JSON. Pełna lista: `docker compose exec app php
 | `POST` | `/profiles/{id}/battles/{gameId}/settle` | rozliczenie zakończonej bitwy |
 | `POST` | `/profiles/{id}/ships` | budowa statku w stoczni (`type`, `islandId`, opcjonalnie `variant` niszczyciela: `torpedowy`/`zwiadowczy`) |
 | `POST` | `/profiles/{id}/ships/{shipId}/repair` | remont statku |
+| `POST` | `/profiles/{id}/ships/{shipId}/scrap` | złomowanie statku w stoczni portu (`islandId`, stocznia dowolnego poziomu): połowa kosztu budowy do magazynu wyspy, za uszkodzony mniej o koszt remontu, tratwa bez zwrotu; w odpowiedzi `refund`, `stockpile`, `cargo`; `409 NO_SHIPYARD`, `409 SHIP_IN_BATTLE` (statek w nierozliczonej bitwie), `409 LAST_SEAWORTHY_SHIP` (ostatnia sprawna jednostka) |
 | `POST` | `/profiles/{id}/prizes/{prizeId}` | decyzja o statku zdobytym abordażem: `decision` `join` (do floty jako uszkodzony) albo `scrap` (połowa kosztu budowy do ładowni, nadmiar przepada) albo `study` (zbadaj konstrukcję: statek przepada, wariant ze zdobyczy trafia do stoczni, w odpowiedzi `technology`); `404 PRIZE_NOT_FOUND`, `409 PRIZE_NOT_STUDIABLE` (wariant znany albo statek bez wariantu ze zdobyczy) |
 
 Poza `/api`: `GET /healthz`.

@@ -438,6 +438,17 @@
                         </div>
 
                         <div class="block">
+                            <div class="kicker">Złomowanie</div>
+                            <p class="muted">Połowa kosztu budowy wraca do magazynu wyspy, za uszkodzony statek mniej o koszt remontu. Tratwa nic nie zwraca.</p>
+                            <ul class="ships">
+                                <li v-for="g in scrapGroups" :key="g.key" class="ship">
+                                    <span class="ship-name">{{ SHIP_ICONS[g.ships[0].type] }} {{ g.label }} <span class="muted">({{ g.ships[0].damaged ? 'uszkodzone' : 'sprawne' }}: {{ g.ships.length }})</span></span>
+                                    <ScrapButton :ship="scrapCandidate(g.ships)" :busy="busy" :block="scrapBlock(scrapCandidate(g.ships))" @scrap="onScrap" />
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="block">
                             <div class="kicker">Rozbudowa stoczni</div>
                             <p v-if="hasShipyardUpgrade" class="muted">{{ BUILDING_ICONS['rozbudowa-stoczni'] }} Stoi — stocznia ma poziom {{ currentIsland.shipyardLevel }}<template v-if="!currentIsland.owned">, ale bez bandery rozbudowa nie działa</template>.</p>
                             <div v-else class="ship">
@@ -483,7 +494,9 @@
                             :busy="busy"
                             :unescorted-convoy="unescortedConvoy"
                             :repair-block="repairBlock"
+                            :scrap-block="scrapBlock"
                             @repair="onRepair"
+                            @scrap="onScrap"
                         />
                     </div>
 
@@ -519,7 +532,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
-    buildBuilding, buildShip, createProfile, decidePrize, getExpedition, passGate, repairShip, sail, settleBattle, startGuardianBattle, startIslandBattle, startSiege,
+    buildBuilding, buildShip, createProfile, decidePrize, getExpedition, passGate, repairShip, sail, scrapShip, settleBattle, startGuardianBattle, startIslandBattle, startSiege,
     startResearch, transferCargo,
     BUILDING_ICONS, BUILDING_LABELS, RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, SHIP_VARIANT_LABELS, SHIP_VARIANT_NAMES, TECH_LABELS, fleetShipLabel,
     type BuildingTypeName, type TechnologyName, type ExpeditionDTO, type FleetShipDTO, type GateDTO, type GuardianDTO, type IslandDTO,
@@ -536,6 +549,7 @@ import { depositLabel, depositState, whereToFind } from '../lib/economy';
 import { logText, logTone } from '../lib/eventLog';
 import CargoPanel from '../components/CargoPanel.vue';
 import FleetPanel from '../components/FleetPanel.vue';
+import ScrapButton from '../components/ScrapButton.vue';
 import SeaMap from '../components/SeaMap.vue';
 import SettlementPanel from '../components/SettlementPanel.vue';
 import TechTreePanel from '../components/TechTreePanel.vue';
@@ -817,6 +831,24 @@ function repairBlock(ship: FleetShipDTO): string | null {
     return null;
 }
 
+/** Powód blokady złomowania (#124); null = można złomować. */
+function scrapBlock(ship: FleetShipDTO): string | null {
+    const island = currentIsland.value;
+    if (!expedition.value) return 'wczytywanie…';
+    if (!island) return 'dopłyń do portu ze stocznią';
+    if (island.shipyardLevel < 1) return shipyardMissing(island, 1);
+    switch (ship.scrapBlock) {
+        case 'in-battle': return 'statek walczy w nierozliczonej bitwie';
+        case 'last-seaworthy': return 'ostatnia sprawna jednostka floty — bez niej nie stoczysz bitwy';
+        case null: return null;
+    }
+}
+
+/** Statek grupy do złomowania: pierwszy bez blokady, żeby statek z bitwy nie zasłaniał reszty grupy. */
+function scrapCandidate(ships: FleetShipDTO[]): FleetShipDTO {
+    return ships.find(s => s.scrapBlock === null) ?? ships[0];
+}
+
 /** Warianty czekające na technologię — podpowiedź, gdy sam typ da się już budować. */
 function lockedVariants(t: ShipTypeDTO): ShipVariantDTO[] {
     return buildBlock(t) === null ? t.variants.filter(v => !v.unlocked) : [];
@@ -863,6 +895,17 @@ const damagedGroups = computed(() => {
     for (const ship of expedition.value?.fleet ?? []) {
         if (!ship.damaged) continue;
         const key = `${ship.type}:${ship.variant ?? ''}`;
+        if (!byKey.has(key)) byKey.set(key, { key, label: fleetShipLabel(ship), ships: [] });
+        byKey.get(key)!.ships.push(ship);
+    }
+    return [...byKey.values()];
+});
+
+// złomowanie (#124): sprawne i uszkodzone osobno, bo oddają różny zwrot
+const scrapGroups = computed(() => {
+    const byKey = new Map<string, { key: string; label: string; ships: FleetShipDTO[] }>();
+    for (const ship of expedition.value?.fleet ?? []) {
+        const key = `${ship.type}:${ship.variant ?? ''}:${ship.damaged ? 'damaged' : 'ok'}`;
         if (!byKey.has(key)) byKey.set(key, { key, label: fleetShipLabel(ship), ships: [] });
         byKey.get(key)!.ships.push(ship);
     }
@@ -952,6 +995,10 @@ async function onDecidePrize(prize: PrizeDTO, decision: PrizeDecisionName) {
 
 function onRepair(ship: FleetShipDTO) {
     return inPort((profileId, island) => repairShip(profileId, island.id, ship.id), 'Remont nie powiódł się');
+}
+
+function onScrap(ship: FleetShipDTO) {
+    return inPort((profileId, island) => scrapShip(profileId, island.id, ship.id), 'Złomowanie nie powiodło się');
 }
 // watch po definicjach zakładek: getter liczy się od razu przy rejestracji.
 // Rejs, utrata bandery albo zmiana wyspy zabiera zakładkę Budynki lub Stocznia — wróć do domyślnej

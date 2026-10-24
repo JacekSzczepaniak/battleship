@@ -491,6 +491,69 @@ final class CaptainProfile
         return Resources::fromArray(array_map(static fn (int $amount) => intdiv($amount + 1, 2), $cost->toArray()));
     }
 
+    /**
+     * Zwrot ze złomowania (#124): połowa kosztu budowy typu (wariant kosztuje
+     * tyle co typ), a za uszkodzony statek mniej o koszt remontu z Dokiem
+     * remontowym — każdy surowiec nie mniej niż zero. Tratwa nic nie zwraca.
+     */
+    public function scrapValue(OwnedShip $ship): Resources
+    {
+        $value = $ship->type->scrapValue()->toArray();
+        if ($ship->isDamaged()) {
+            $repair = $this->repairCost($ship->type)->toArray();
+            foreach ($value as $resource => $amount) {
+                $value[$resource] = max(0, $amount - $repair[$resource]);
+            }
+        }
+
+        return Resources::fromArray($value);
+    }
+
+    /** Powód, dla którego statku nie da się zezłomować; null = można (stocznię sprawdza warstwa aplikacji). */
+    public function scrapBlocker(OwnedShip $ship): ?ScrapBlock
+    {
+        foreach ($this->battles as $battle) {
+            if (!$battle['settled'] && in_array($ship->id, $battle['ships'] ?? [], true)) {
+                return ScrapBlock::InBattle;
+            }
+        }
+        if (!$ship->isDamaged() && 1 === count($this->activeFleet())) {
+            return ScrapBlock::LastSeaworthy;
+        }
+
+        return null;
+    }
+
+    /**
+     * Złomuje statek w stoczni wyspy (obecność i stocznię sprawdza warstwa
+     * aplikacji). Zwrot trafia do magazynu wyspy, a akcja nie kosztuje tiku.
+     * Ładunek, który nie mieści się już w ładowni, kapitan zostawia w magazynie.
+     */
+    public function scrapShip(string $shipId, string $islandId): Resources
+    {
+        $ship = $this->shipById($shipId) ?? throw new \DomainException('Ship not found');
+        $block = $this->scrapBlocker($ship);
+        if (null !== $block) {
+            throw new \DomainException($block->message());
+        }
+
+        $refund = $this->scrapValue($ship);
+        $this->fleet = array_values(array_filter($this->fleet, static fn (OwnedShip $s) => $s->id !== $shipId));
+        // ładunek ponad pojemność floty bez złomowanego transportowca zostaje w porcie
+        $unloaded = $this->trimCargo();
+        $this->stockpiles[$islandId] = $this->stockpile($islandId)->add($refund)->add($unloaded);
+        $this->record($this->tick, LogEvent::ShipScrapped, [
+            'ship' => $ship->type->value,
+            'variant' => $ship->variant?->value,
+            'island' => $islandId,
+            'damaged' => $ship->isDamaged() ?: null,
+            'refund' => $refund->toArray(),
+            'unloaded' => $unloaded->isZero() ? null : $unloaded->toArray(),
+        ]);
+
+        return $refund;
+    }
+
     private function shipById(string $shipId): ?OwnedShip
     {
         foreach ($this->fleet as $ship) {

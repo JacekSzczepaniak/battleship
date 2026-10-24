@@ -50,6 +50,10 @@ export function logText(e: LogEntryDTO, tick?: number): string {
             const lost = e.lost ? `, za burtę: ${formatResources(e.lost)}` : '';
             return `Zdobyty ${prizeLabel(e).toLowerCase()} rozebrany — do ładowni: ${formatResources(e.refund ?? { wood: 0, steel: 0, gold: 0 }, 'nic')}${lost}.`;
         }
+        case 'ship-scrapped': {
+            const unloaded = e.unloaded ? `; z ładowni zostało w porcie: ${formatResources(e.unloaded)}` : '';
+            return `Złomowano: ${prizeLabel(e).toLowerCase()}${e.damaged ? ' (uszkodzony)' : ''} — do magazynu (${island}): ${formatResources(e.refund ?? { wood: 0, steel: 0, gold: 0 }, 'nic')}${unloaded}.`;
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 <!--
     Flota (zakładka Rejsu, #111): jednostki zgrupowane po typie i wariancie —
-    liczba sztuk, rola, długość segmentami i stan. Remont uszkodzonego statku
-    grupy w stoczni portu; powód blokady liczy widok (zna wyspy i magazyny).
+    liczba sztuk, rola, długość segmentami i stan. Remont i złomowanie (#124)
+    statku grupy w stoczni portu; powód blokady liczy widok (zna wyspy i magazyny).
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -11,6 +11,7 @@ import {
 } from '../api/expeditionApi';
 import { VARIANTS, carriedWeapon } from '../lib/ships';
 import { formatResources } from '../lib/resources';
+import ScrapButton from './ScrapButton.vue';
 
 const props = defineProps<{
     fleet: FleetShipDTO[];
@@ -19,10 +20,13 @@ const props = defineProps<{
     unescortedConvoy: boolean;
     // powód blokady remontu; null = można remontować
     repairBlock: (ship: FleetShipDTO) => string | null;
+    // powód blokady złomowania; null = można złomować
+    scrapBlock: (ship: FleetShipDTO) => string | null;
 }>();
 
 const emit = defineEmits<{
     repair: [ship: FleetShipDTO];
+    scrap: [ship: FleetShipDTO];
 }>();
 
 // od największego kadłuba, jak w składzie bitewnym
@@ -34,6 +38,7 @@ interface Group {
     count: number;
     length: number;
     role: string;
+    sound: FleetShipDTO[];
     damaged: FleetShipDTO[];
 }
 
@@ -43,16 +48,21 @@ const groups = computed<Group[]>(() => {
         const key = `${ship.type}:${ship.variant ?? ''}`;
         let group = byKey.get(key);
         if (!group) {
-            group = { key, label: fleetShipLabel(ship), count: 0, length: ship.length, role: role(ship), damaged: [] };
+            group = { key, label: fleetShipLabel(ship), count: 0, length: ship.length, role: role(ship), sound: [], damaged: [] };
             byKey.set(key, group);
         }
         group.count++;
-        if (ship.damaged) group.damaged.push(ship);
+        (ship.damaged ? group.damaged : group.sound).push(ship);
     }
     return [...byKey.values()].sort((a, b) => ORDER.indexOf(a.key.split(':')[0]) - ORDER.indexOf(b.key.split(':')[0]) || a.label.localeCompare(b.label));
 });
 
 const damagedCount = computed(() => props.fleet.filter(s => s.damaged).length);
+
+/** Statek do złomowania: pierwszy bez blokady domeny (np. nie z nierozliczonej bitwy). */
+function scrapCandidate(ships: FleetShipDTO[]): FleetShipDTO {
+    return ships.find(s => s.scrapBlock === null) ?? ships[0];
+}
 
 function role(ship: FleetShipDTO): string {
     const type = props.shipTypes.find(t => t.type === ship.type);
@@ -100,6 +110,10 @@ function unitsLabel(n: number): string {
                         Remont 1 szt. ({{ formatResources(g.damaged[0].repairCost) }})
                     </button>
                     <span v-if="repairBlock(g.damaged[0])" class="block">{{ repairBlock(g.damaged[0]) }}</span>
+                    <ScrapButton :ship="scrapCandidate(g.damaged)" :busy="busy" :block="scrapBlock(scrapCandidate(g.damaged))" @scrap="emit('scrap', $event)" />
+                </div>
+                <div v-if="g.sound.length" class="repair">
+                    <ScrapButton :ship="scrapCandidate(g.sound)" :busy="busy" :block="scrapBlock(scrapCandidate(g.sound))" @scrap="emit('scrap', $event)" />
                 </div>
             </li>
         </ul>

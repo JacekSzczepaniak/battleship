@@ -59,7 +59,7 @@
                 <div class="sep"></div>
                 <div class="tick">
                     <div class="kicker">Tik</div>
-                    <div class="tick-n">{{ expedition.world.tick }}</div>
+                    <div ref="tickEl" class="tick-n">{{ expedition.world.tick }}</div>
                 </div>
             </section>
 
@@ -190,7 +190,18 @@
             </section>
 
             <div class="main">
-                <SeaMap :expedition="expedition" :busy="busy || !!encounter" :note="encounter ? 'Spotkanie czeka na decyzję — rejs stoi.' : seaMsg" :gate-status="gateStatus" @sail="onSail" />
+                <SeaMap
+                    ref="seaMap"
+                    :expedition="mapView?.expedition ?? expedition"
+                    :busy="busy || !!encounter"
+                    :note="sailing ? voyageNote : encounter ? 'Spotkanie czeka na decyzję — rejs stoi.' : seaMsg"
+                    :gate-status="gateStatus"
+                    :masked="mapView?.masked"
+                    :fleet-hidden="mapView?.fleetHidden"
+                    :animating="sailing"
+                    @sail="onSail"
+                    @skip="skipVoyage"
+                />
 
                 <!-- Panel kontekstowy: zakładka w hashu adresu (#wyspa, #flota, #badania, #dziennik) -->
                 <section ref="panelEl" class="panel">
@@ -669,7 +680,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
     buildBuilding, buildShip, createProfile, decideEncounter, decidePrize, getExpedition, passGate, repairShip, sail, scrapShip, sellShip, settleBattle, startEncounterBattle, startGuardianBattle, startIslandBattle, startSiege,
@@ -696,6 +707,10 @@ import MarketPanel from '../components/MarketPanel.vue';
 import SeaMap from '../components/SeaMap.vue';
 import SettlementPanel from '../components/SettlementPanel.vue';
 import TechTreePanel from '../components/TechTreePanel.vue';
+import type { Cell, FxBoard } from '../fx/board';
+import { FxSequencer, isCancelled, type FxToken } from '../fx/core';
+import { fxMode } from '../fx/speed';
+import { playGate, playVoyage, revealReduced } from '../fx/voyage';
 import { canDefend, defenseHint, FULL_FLAG_BONUS, pendingLabel, routeWarning, ticksLabel } from '../lib/counterattack';
 import {
     RESOURCES, addResources, covers, formatResources, isEmpty, missing, totalResources,
@@ -823,14 +838,126 @@ const currentPort = computed<TradePortDTO | null>(
     () => (expedition.value?.world.tradePort?.present ? expedition.value.world.tradePort : null)
 );
 
-const placeKey = computed(() => currentIsland.value?.id ?? currentPort.value?.id ?? currentGate.value?.id ?? null);
-
-/** Rejs albo brama: świeży stan, a dokowanie przy wyspie lub wpłynięcie na sektor bramy przełącza panel na miejsce floty. */
-async function reloadAfterVoyage(profileId: string) {
-    const before = placeKey.value;
-    expedition.value = await getExpedition(profileId);
-    if (placeKey.value && placeKey.value !== before) setTab('wyspa');
+/** Miejsce floty w stanie wyprawy: wyspa w porcie, port handlowy albo sektor bramy. */
+function placeOf(exp: ExpeditionDTO | null): { key: string; name: string; label: string } | null {
+    if (!exp) return null;
+    const island = exp.islands.find(i => i.present);
+    if (island) return { key: island.id, name: island.name, label: `Zadokowano · wyspa ${island.name}` };
+    const port = exp.world.tradePort?.present ? exp.world.tradePort : null;
+    if (port) return { key: port.id, name: port.name, label: `Zadokowano · port ${port.name}` };
+    const gate = exp.world.gates.find(g => g.present);
+    return gate ? { key: gate.id, name: gate.name, label: `Na sektorze bramy · ${gate.name}` } : null;
 }
+
+// --- Animacja rejsu (#146) ---
+
+const fx = new FxSequencer();
+const seaMap = ref<InstanceType<typeof SeaMap> | null>(null);
+const tickEl = ref<HTMLElement | null>(null);
+const sailing = ref(false);
+const voyageNote = ref('');
+/** Mapa w trakcie animacji: nowy stan z sektorami pod mgłą, flota w overlayu. Reszta ekranu czeka. */
+const mapView = ref<{ expedition: ExpeditionDTO; masked: Set<string>; fleetHidden: boolean } | null>(null);
+
+interface VoyageHooks {
+    /** Flota wpływa na nowe miejsce (wyspa, port, brama). */
+    docks: boolean;
+    onReveal: (keys: string[]) => void;
+    onArrive: () => void;
+    /** Mapa przełącza się na nowy stan (brama: nowy akwen); geometria po przerysowaniu. */
+    swap: () => Promise<FxBoard | null>;
+}
+
+/**
+ * Rejs albo brama: nowy stan jest już pobrany, animacja tylko opóźnia jego
+ * pokazanie. Po kroku zapis stanu (TIK, baner, spotkanie); dokowanie przy
+ * wyspie, porcie lub na sektorze bramy przełącza panel na zakładkę miejsca.
+ * „Wył.” — od razu wynik, prefers-reduced-motion — wynik z fade 150 ms.
+ */
+async function showVoyage(
+    next: ExpeditionDTO, discovered: string[], parts: string[], note: string, arrivedLabel: string | null,
+    play: ((tok: FxToken, board: FxBoard, hooks: VoyageHooks) => Promise<void>) | null,
+    startOnNext: boolean,
+) {
+    const before = placeOf(expedition.value);
+    const after = placeOf(next);
+    const docks = !!after && after.key !== before?.key;
+    let arrived = false;
+    const arrive = () => {
+        if (arrived) return;
+        arrived = true;
+        expedition.value = next;
+        if (sailing.value) tickEl.value?.animate([{ transform: 'scale(1.35)', color: 'var(--info)' }, { transform: 'scale(1)' }], { duration: 400, easing: 'ease-out' });
+    };
+    const finish = () => {
+        arrive();
+        mapView.value = null;
+        seaMsg.value = [arrivedLabel ?? (docks ? after!.label : ''), ...parts].filter(Boolean).join(' · ');
+        if (docks) setTab('wyspa');
+    };
+
+    const mode = fxMode();
+    if (mode === 'off' || !play) {
+        finish();
+        return;
+    }
+    const tok = fx.begin();
+    if (mode === 'reduced') {
+        finish();
+        await nextTick();
+        const board = seaMap.value?.fxBoard();
+        if (board) revealReduced(tok, board, discovered);
+        fx.end(tok);
+        return;
+    }
+
+    const view = (exp: ExpeditionDTO, masked: string[]) => ({ expedition: exp, masked: new Set(masked), fleetHidden: true });
+    sailing.value = true;
+    voyageNote.value = `${note} · Kliknij mapę albo Esc — pomiń animację.`;
+    mapView.value = startOnNext ? view(next, discovered) : view(expedition.value!, []);
+    try {
+        await nextTick();
+        const board = seaMap.value?.fxBoard();
+        if (board) {
+            await play(tok, board, {
+                docks,
+                onReveal: keys => keys.forEach(k => mapView.value?.masked.delete(k)),
+                onArrive: arrive,
+                swap: async () => {
+                    mapView.value = view(next, discovered);
+                    await nextTick();
+                    return seaMap.value?.fxBoard() ?? null;
+                },
+            });
+        }
+    } catch (e) {
+        if (!isCancelled(e)) {
+            try { console.warn('[Expedition.fx]', e); } catch {}
+        }
+    } finally {
+        fx.end(tok);
+        sailing.value = false;
+        finish();
+        // znaczniki efektów schodzą dopiero, gdy mapa pokazuje już nowy stan
+        await nextTick();
+        seaMap.value?.fxBoard()?.clear();
+    }
+}
+
+/** Klik w mapę albo Esc w trakcie animacji: od razu wynik. */
+function skipVoyage() {
+    if (sailing.value) fx.cancel();
+}
+
+function onVoyageKey(e: KeyboardEvent) {
+    if (sailing.value && e.key === 'Escape') skipVoyage();
+}
+
+onMounted(() => window.addEventListener('keydown', onVoyageKey));
+onBeforeUnmount(() => {
+    window.removeEventListener('keydown', onVoyageKey);
+    fx.cancel();
+});
 
 const counterattack = computed(() => expedition.value?.counterattack ?? { pending: null, last: null });
 // cel na innym akwenie niż flota (#109): czas do uderzenia wobec drogi przez bramę
@@ -897,13 +1024,24 @@ function guardianFleet(guardian: Pick<GuardianDTO, 'fleet'> | { fleet: ShipTypeN
 
 async function onSail(x: number, y: number) {
     const profileId = getProfileId();
-    if (!profileId) return;
+    const start = expedition.value?.world.position;
+    if (!profileId || !start) return;
     busy.value = true;
     error.value = '';
     try {
         const result = await sail(profileId, x, y);
-        seaMsg.value = voyageMessage(result).join(' · ');
-        await reloadAfterVoyage(profileId);
+        const next = await getExpedition(profileId);
+        const from: Cell = [start.x, start.y];
+        const to: Cell = [x, y];
+        const after = placeOf(next);
+        const target = after && after.key !== placeOf(expedition.value)?.key ? after.name : sectorLabel({ x, y });
+        // w jednym rejsie najwyżej jedno zdarzenie: sztorm albo spotkanie — rejs staje z banerem
+        const stopped = !!result.event || !!result.encounter;
+        await showVoyage(next, result.discoveredNow, voyageMessage(result), `Kurs na ${target} · 1 tik`, null,
+            (tok, board, hooks) => playVoyage(tok, board, {
+                from, to, discovered: result.discoveredNow, onReveal: hooks.onReveal, onArrive: hooks.onArrive,
+                stopped, docks: hooks.docks,
+            }), true);
     } catch (e: any) {
         error.value = e?.message ?? 'Żegluga nie powiodła się';
     } finally {
@@ -927,9 +1065,15 @@ async function onPassGate(gate: GateDTO) {
     error.value = '';
     try {
         const result = await passGate(profileId, gate.id);
-        seaMsg.value = voyageMessage(result).join(' · ');
+        const next = await getExpedition(profileId);
         squadPick.value = null;
-        await reloadAfterVoyage(profileId);
+        const at = gate.position;
+        const stopped = !!result.event || !!result.encounter;
+        await showVoyage(next, result.discoveredNow, voyageMessage(result), `${gate.name} → ${gate.to.name} · 1 tik`, `Za bramą · ${next.world.sea.name}`,
+            at ? (tok, board, hooks) => playGate(tok, board, {
+                at: [at.x, at.y], to: [result.position.x, result.position.y], discovered: result.discoveredNow,
+                swap: hooks.swap, onReveal: hooks.onReveal, onArrive: hooks.onArrive, stopped,
+            }) : null, false);
     } catch (e: any) {
         error.value = e?.message ?? 'Przejście przez bramę nie powiodło się';
     } finally {

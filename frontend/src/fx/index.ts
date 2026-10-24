@@ -4,3 +4,4 @@ export * from './core';
 export * from './board';
 export * from './effects';
 export * from './weapons';
+export * from './voyage';

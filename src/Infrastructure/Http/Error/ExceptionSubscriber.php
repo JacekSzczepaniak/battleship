@@ -178,6 +178,9 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             'Gate already open' => ['GATE_ALREADY_OPEN', 409],
             'Gate guarded: defeat the guardian first' => ['GATE_GUARDED', 409],
             'Not at gate' => ['NOT_AT_GATE', 409],
+            // port handlowy i rynek (#140)
+            'Trade port not found' => ['TRADE_PORT_NOT_FOUND', 404],
+            'Not at trade port' => ['NOT_AT_TRADE_PORT', 409],
             // zestawy floty (#125)
             'Fleet preset not found' => ['FLEET_PRESET_NOT_FOUND', 404],
             'Fleet preset limit exceeded' => ['FLEET_PRESET_LIMIT', 409],

@@ -14,13 +14,17 @@ use App\Application\Expedition\RepairShip;
 use App\Application\Expedition\Sail;
 use App\Application\Expedition\SaveFleetPreset;
 use App\Application\Expedition\ScrapShip;
+use App\Application\Expedition\SellShip;
 use App\Application\Expedition\SettleBattle;
 use App\Application\Expedition\StartGuardianBattle;
 use App\Application\Expedition\StartIslandBattle;
 use App\Application\Expedition\StartResearch;
 use App\Application\Expedition\StartSiege;
+use App\Application\Expedition\TradeAtPort;
 use App\Application\Expedition\TransferCargo;
 use App\Domain\Expedition\BuildingType;
+use App\Domain\Expedition\MarketGood;
+use App\Domain\Expedition\MarketSide;
 use App\Domain\Expedition\OwnedShip;
 use App\Domain\Expedition\PrizeDecision;
 use App\Domain\Expedition\Resources;
@@ -57,6 +61,8 @@ final class ExpeditionController
         private RenameFleetPreset $renameFleetPreset,
         private DeleteFleetPreset $deleteFleetPreset,
         private ScrapShip $scrapShip,
+        private TradeAtPort $tradeAtPort,
+        private SellShip $sellShip,
     ) {
     }
 
@@ -205,6 +211,32 @@ final class ExpeditionController
             'stockpile' => $outcome['stockpile']->toArray(),
             'cargo' => $outcome['cargo']->toArray(),
         ]);
+    }
+
+    /** Rynek portu handlowego (#140): {side: buy|sell, good: wood|steel, gold: int ≥ 1} — porcje po 1 złoto. */
+    #[Route('/{id}/trade-ports/{portId}/trade', name: 'api_profiles_trade', methods: ['POST'])]
+    public function trade(string $id, string $portId, Request $request): JsonResponse
+    {
+        $this->assertUuid($id, 'profile');
+        $payload = $this->jsonPayload($request);
+
+        $side = MarketSide::tryFrom((string) ($payload['side'] ?? ''));
+        $good = MarketGood::tryFrom((string) ($payload['good'] ?? ''));
+        $gold = $payload['gold'] ?? null;
+        if (null === $side || null === $good || !is_int($gold) || $gold < 1) {
+            throw new ApiException('Missing or invalid fields: side:buy|sell, good:wood|steel, gold:int>=1', 'VALIDATION_ERROR', 400);
+        }
+
+        return new JsonResponse($this->tradeAtPort->handle($id, $portId, $side, $good, $gold));
+    }
+
+    /** Sprzedaż statku za złoto w porcie handlowym (#140). */
+    #[Route('/{id}/trade-ports/{portId}/ships/{shipId}/sell', name: 'api_profiles_sell_ship', methods: ['POST'])]
+    public function sellShip(string $id, string $portId, string $shipId): JsonResponse
+    {
+        $this->assertUuid($id, 'profile');
+
+        return new JsonResponse($this->sellShip->handle($id, $portId, $shipId));
     }
 
     /** Decyzja o statku zdobytym abordażem (#118): {decision: join|scrap|study}; study = zbadaj konstrukcję (#121). */

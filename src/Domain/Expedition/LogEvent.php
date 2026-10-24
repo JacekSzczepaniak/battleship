@@ -56,4 +56,10 @@ enum LogEvent: string
 
     /** Kapitan zezłomował statek w stoczni; zwrot trafił do magazynu wyspy (#124). */
     case ShipScrapped = 'ship-scrapped';
+
+    /** Transakcja na rynku portu handlowego: kupno albo sprzedaż drewna lub stali za złoto (#140). */
+    case MarketTrade = 'market-trade';
+
+    /** Kapitan sprzedał statek za złoto w porcie handlowym (#140). */
+    case ShipSold = 'ship-sold';
 }

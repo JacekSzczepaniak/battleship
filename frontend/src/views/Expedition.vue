@@ -251,6 +251,31 @@
                         </template>
 
                         <!-- Brama akwenu (#107): położenie, powód blokady, strażnik, przejście -->
+                        <!-- Port handlowy (#140): neutralna wyspa — bez bitwy i bandery, rynek w zakładce Rynek -->
+                        <template v-else-if="currentPort">
+                            <div>
+                                <div class="tags">
+                                    <span class="tag own">Port handlowy</span>
+                                    <span class="tag">Sektor {{ sectorLabel(currentPort.position!) }} · zadokowano</span>
+                                    <span class="tag">neutralna wyspa · bez bitwy i bandery</span>
+                                </div>
+                                <h2 class="place-name">{{ currentPort.name }}</h2>
+                                <p class="desc">{{ currentPort.description }}</p>
+                            </div>
+                            <div class="block">
+                                <div class="kicker">Rynek</div>
+                                <p class="muted">Stały kurs akwenu: 1 złoto kupi {{ currentPort.rate.wood.buy }} drewna albo {{ currentPort.rate.steel.buy }} stali; sprzedaż po połowie ceny. Tu sprzedasz też statek za złoto.</p>
+                                <button class="btn btn-primary act" @click="setTab('rynek')">⚖️ Otwórz rynek</button>
+                            </div>
+                            <CargoPanel
+                                :island="currentPort"
+                                :cargo="expedition.profile.cargo"
+                                :capacity="expedition.profile.cargoCapacity"
+                                :busy="busy"
+                                @transfer="onTransfer"
+                            />
+                        </template>
+
                         <template v-else-if="currentGate">
                             <div>
                                 <div class="tags">
@@ -334,8 +359,8 @@
                         </template>
 
                         <!-- Przegląd akwenu: na morzu wprost, w porcie i przy bramie zwinięty -->
-                        <component :is="currentIsland || currentGate ? 'details' : 'div'" class="overview">
-                            <summary v-if="currentIsland || currentGate">Wyspy i bramy akwenu</summary>
+                        <component :is="currentIsland || currentPort || currentGate ? 'details' : 'div'" class="overview">
+                            <summary v-if="currentIsland || currentPort || currentGate">Wyspy i bramy akwenu</summary>
                             <div v-if="expedition.world.flags.length > 1" class="block">
                                 <div class="kicker">Bandery na akwenach</div>
                                 <ul class="flags-by-sea">
@@ -502,6 +527,21 @@
                         </div>
                     </div>
 
+                    <!-- RYNEK (#140): tylko w porcie handlowym -->
+                    <div v-else-if="activeTab === 'rynek' && currentPort" class="tab-body" role="tabpanel">
+                        <div class="kicker">Rynek · {{ currentPort.name }}</div>
+                        <MarketPanel
+                            :port="currentPort"
+                            :cargo="expedition.profile.cargo"
+                            :capacity="expedition.profile.cargoCapacity"
+                            :fleet="expedition.fleet"
+                            :ship-types="expedition.shipTypes"
+                            :busy="busy"
+                            @trade="onTrade"
+                            @sell-ship="onSellShip"
+                        />
+                    </div>
+
                     <!-- FLOTA -->
                     <div v-else-if="activeTab === 'flota'" class="tab-body" role="tabpanel">
                         <FleetPanel
@@ -548,11 +588,11 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
-    buildBuilding, buildShip, createProfile, decidePrize, getExpedition, passGate, repairShip, sail, scrapShip, settleBattle, startGuardianBattle, startIslandBattle, startSiege,
-    startResearch, transferCargo,
+    buildBuilding, buildShip, createProfile, decidePrize, getExpedition, passGate, repairShip, sail, scrapShip, sellShip, settleBattle, startGuardianBattle, startIslandBattle, startSiege,
+    startResearch, trade, transferCargo,
     BUILDING_ICONS, BUILDING_LABELS, RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, SHIP_VARIANT_LABELS, SHIP_VARIANT_NAMES, TECH_LABELS, fleetShipLabel,
-    type BuildingTypeName, type TechnologyName, type ExpeditionDTO, type FleetShipDTO, type GateDTO, type GuardianDTO, type IslandDTO,
-    type PrizeDTO, type PrizeDecisionName, type RankName, type ResourcesDTO, type SailResultDTO, type SeaThemeDTO, type ShipTypeDTO, type ShipVariantDTO, type ShipVariantName,
+    type BuildingTypeName, type TechnologyName, type ExpeditionDTO, type TradePortDTO, type FleetShipDTO, type GateDTO, type GuardianDTO, type IslandDTO,
+    type MarketGoodName, type MarketSideName, type PrizeDTO, type PrizeDecisionName, type RankName, type ResourcesDTO, type SailResultDTO, type SeaThemeDTO, type ShipTypeDTO, type ShipVariantDTO, type ShipVariantName,
 } from '../api/expeditionApi';
 import { ApiError } from '../api/http';
 import {
@@ -567,6 +607,7 @@ import CargoPanel from '../components/CargoPanel.vue';
 import FleetPresetPicker from '../components/FleetPresetPicker.vue';
 import FleetPanel from '../components/FleetPanel.vue';
 import ScrapButton from '../components/ScrapButton.vue';
+import MarketPanel from '../components/MarketPanel.vue';
 import SeaMap from '../components/SeaMap.vue';
 import SettlementPanel from '../components/SettlementPanel.vue';
 import TechTreePanel from '../components/TechTreePanel.vue';
@@ -611,8 +652,8 @@ const cargoSegments = computed(() => {
 
 // --- Panel z zakładkami (#111): aktywna zakładka w hashu adresu ---
 
-type TabId = 'wyspa' | 'budynki' | 'stocznia' | 'flota' | 'badania' | 'dziennik';
-const TAB_IDS: TabId[] = ['wyspa', 'budynki', 'stocznia', 'flota', 'badania', 'dziennik'];
+type TabId = 'wyspa' | 'budynki' | 'stocznia' | 'rynek' | 'flota' | 'badania' | 'dziennik';
+const TAB_IDS: TabId[] = ['wyspa', 'budynki', 'stocznia', 'rynek', 'flota', 'badania', 'dziennik'];
 
 const activeTab = ref<TabId>('flota');
 const panelEl = ref<HTMLElement | null>(null);
@@ -634,9 +675,9 @@ watch(() => route.hash, hash => {
     if (id) activeTab.value = id;
 });
 
-/** Domyślna zakładka: w porcie albo na sektorze bramy — miejsce floty, na morzu — flota. */
+/** Domyślna zakładka: w porcie (także handlowym) albo na sektorze bramy — miejsce floty, na morzu — flota. */
 function defaultTab(): TabId {
-    return currentIsland.value || currentGate.value ? 'wyspa' : 'flota';
+    return currentIsland.value || currentPort.value || currentGate.value ? 'wyspa' : 'flota';
 }
 
 const researchDone = computed(() => expedition.value?.research.technologies.filter(t => t.state === 'researched').length ?? 0);
@@ -646,10 +687,12 @@ const tabs = computed(() => {
     const island = currentIsland.value;
     const current = exp?.research.current ?? null;
     return [
-        { id: 'wyspa' as TabId, label: island?.name ?? currentGate.value?.name ?? 'Akwen', badge: '', live: false },
+        { id: 'wyspa' as TabId, label: island?.name ?? currentPort.value?.name ?? currentGate.value?.name ?? 'Akwen', badge: '', live: false },
         // #130: budynki pod banderą (postawione/możliwe na tej wyspie), stocznia tam, gdzie jest
         ...(island?.owned ? [{ id: 'budynki' as TabId, label: 'Budynki', badge: `${island.buildings.length}/${buildingSlots.value}`, live: false }] : []),
         ...(island && island.shipyardLevel > 0 ? [{ id: 'stocznia' as TabId, label: 'Stocznia', badge: `poz. ${island.shipyardLevel}`, live: false }] : []),
+        // #140: rynek w porcie handlowym akwenu
+        ...(currentPort.value ? [{ id: 'rynek' as TabId, label: 'Rynek', badge: '', live: false }] : []),
         { id: 'flota' as TabId, label: 'Flota', badge: String(exp?.fleet.length ?? ''), live: false },
         { id: 'badania' as TabId, label: 'Badania', badge: `${researchDone.value}/${exp?.research.technologies.length ?? 0}`, live: !!current && !current.paused },
         { id: 'dziennik' as TabId, label: 'Dziennik', badge: '', live: false },
@@ -690,7 +733,12 @@ const currentGate = computed<GateDTO | null>(
     () => expedition.value?.world.gates.find(g => g.present) ?? null
 );
 
-const placeKey = computed(() => currentIsland.value?.id ?? currentGate.value?.id ?? null);
+/** Port handlowy na sektorze floty (#140). */
+const currentPort = computed<TradePortDTO | null>(
+    () => (expedition.value?.world.tradePort?.present ? expedition.value.world.tradePort : null)
+);
+
+const placeKey = computed(() => currentIsland.value?.id ?? currentPort.value?.id ?? currentGate.value?.id ?? null);
 
 /** Rejs albo brama: świeży stan, a dokowanie przy wyspie lub wpłynięcie na sektor bramy przełącza panel na miejsce floty. */
 async function reloadAfterVoyage(profileId: string) {
@@ -966,10 +1014,39 @@ function onStartResearch(technology: TechnologyName) {
     return inPort((profileId, island) => startResearch(profileId, island.id, technology), 'Badanie nie ruszyło');
 }
 
-/** Jedno przeniesienie = jedno dokowanie = 1 tik (#49). */
+/** Jedno przeniesienie = jedno dokowanie = 1 tik (#49); magazyn ma też port handlowy (#140). */
 function onTransfer(direction: 'load' | 'unload', amount: ResourcesDTO) {
     if (isEmpty(amount)) return;
+    if (currentPort.value) {
+        return inTradePort((profileId, port) => transferCargo(profileId, port.id, direction, amount), 'Przeładunek nie powiódł się');
+    }
     return inPort((profileId, island) => transferCargo(profileId, island.id, direction, amount), 'Przeładunek nie powiódł się');
+}
+
+/** Akcja w porcie handlowym (#140): wywołanie API i świeży stan wyprawy. */
+async function inTradePort(action: (profileId: string, port: TradePortDTO) => Promise<unknown>, failure: string) {
+    const profileId = getProfileId();
+    const port = currentPort.value;
+    if (!profileId || !port) return;
+    busy.value = true;
+    error.value = '';
+    try {
+        await action(profileId, port);
+        expedition.value = await getExpedition(profileId);
+    } catch (e: any) {
+        error.value = e?.message ?? failure;
+    } finally {
+        busy.value = false;
+    }
+}
+
+/** Kupno albo sprzedaż towaru na rynku — 1 tik (#140). */
+function onTrade(side: MarketSideName, good: MarketGoodName, gold: number) {
+    return inTradePort((profileId, port) => trade(profileId, port.id, side, good, gold), 'Transakcja nie powiodła się');
+}
+
+function onSellShip(ship: FleetShipDTO) {
+    return inTradePort((profileId, port) => sellShip(profileId, port.id, ship.id), 'Sprzedaż statku nie powiodła się');
 }
 
 // --- zdobycz z abordażu (#118): opcje decyzji; „zbadaj konstrukcję” tylko dla nieznanego wariantu (#121) ---

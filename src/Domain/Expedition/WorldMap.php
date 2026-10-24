@@ -30,6 +30,7 @@ final class WorldMap
      * @param array<string, Island>             $deposits    wyspy ze złożem (klucz: id)
      * @param array<string, bool>               $safeHarbors bezpieczne przystanie (klucz: id) — kontrataki ich nie dotyczą
      * @param array<string, array{x:int,y:int}> $gates       sektory bram akwenu (klucz: id bramy)
+     * @param array{x:int,y:int}|null           $tradePort   sektor portu handlowego (#140); null = akwen bez portu
      */
     private function __construct(
         private array $islands,
@@ -38,16 +39,19 @@ final class WorldMap
         private SeaTheme $theme,
         private string $seaId,
         private array $gates,
+        private ?string $tradePortId = null,
+        private ?array $tradePort = null,
     ) {
     }
 
     /**
-     * @param list<string>           $islandIds wyspy w kolejności trasy
-     * @param list<Island>           $deposits  definicje wysp: złoża i bezpieczne przystanie — nie zmieniają rozkładu wysp
-     * @param SeaTheme               $theme     motyw akwenu; domyślny = Morze Rozbitków
-     * @param array<string, SeaEdge> $gates     bramy akwenu (klucz: id bramy) i krawędź, na której leżą
+     * @param list<string>           $islandIds   wyspy w kolejności trasy
+     * @param list<Island>           $deposits    definicje wysp: złoża i bezpieczne przystanie — nie zmieniają rozkładu wysp
+     * @param SeaTheme               $theme       motyw akwenu; domyślny = Morze Rozbitków
+     * @param array<string, SeaEdge> $gates       bramy akwenu (klucz: id bramy) i krawędź, na której leżą
+     * @param string|null            $tradePortId port handlowy akwenu (#140) — osobny rzut, nie zmienia rozkładu wysp ani bram
      */
-    public static function generate(int $seed, array $islandIds, array $deposits = [], SeaTheme $theme = new SeaTheme(), string $seaId = Sea::START, array $gates = []): self
+    public static function generate(int $seed, array $islandIds, array $deposits = [], SeaTheme $theme = new SeaTheme(), string $seaId = Sea::START, array $gates = [], ?string $tradePortId = null): self
     {
         $state = $seed & 0x7FFFFFFF;
         $next = static function (int $mod) use (&$state): int {
@@ -83,7 +87,40 @@ final class WorldMap
             $gateSectors[$gateId] = self::gateSector($seed, (string) $gateId, $edge, [...array_values($islands), ...array_values($gateSectors)]);
         }
 
-        return new self($islands, $withDeposit, $safeHarbors, $theme, $seaId, $gateSectors);
+        $tradePort = null !== $tradePortId
+            ? self::tradePortSector($seed, $tradePortId, array_values($islands), array_values($gateSectors))
+            : null;
+
+        return new self($islands, $withDeposit, $safeHarbors, $theme, $seaId, $gateSectors, $tradePortId, $tradePort);
+    }
+
+    /**
+     * Sektor portu handlowego (#140): miejsce z seeda akwenu i id portu we
+     * wnętrzu mapy (krawędzie zostają bramom), przesunięte dalej, gdy sektor
+     * zajmuje brama albo wyspa lub jej sąsiedztwo. Wyspy nie stoją obok
+     * siebie, więc ich znaczniki na mapie mogą wychodzić na sąsiednią wodę
+     * (#131) — port też ich nie zasłania.
+     *
+     * @param list<array{x:int,y:int}> $islands
+     * @param list<array{x:int,y:int}> $gates
+     *
+     * @return array{x:int,y:int}
+     */
+    private static function tradePortSector(int $seed, string $portId, array $islands, array $gates): array
+    {
+        $width = self::WIDTH - 2;
+        $cells = $width * (self::HEIGHT - 2);
+        $offset = crc32("{$seed}:{$portId}") % $cells;
+        for ($i = 0; $i < $cells; ++$i) {
+            $cell = ($offset + $i) % $cells;
+            $sector = ['x' => 1 + $cell % $width, 'y' => 1 + intdiv($cell, $width)];
+            $nearIsland = array_filter($islands, static fn (array $pos) => max(abs($pos['x'] - $sector['x']), abs($pos['y'] - $sector['y'])) <= 1);
+            if ([] === $nearIsland && !in_array($sector, $gates, true)) {
+                return $sector;
+            }
+        }
+
+        throw new \DomainException('No free sector for trade port');
     }
 
     /**
@@ -231,6 +268,18 @@ final class WorldMap
     public function gatePosition(string $gateId): ?array
     {
         return $this->gates[$gateId] ?? null;
+    }
+
+    /** Id portu handlowego akwenu (#140); null = akwen bez portu. */
+    public function tradePortId(): ?string
+    {
+        return $this->tradePortId;
+    }
+
+    /** @return array{x:int,y:int}|null sektor portu handlowego; null = akwen bez portu */
+    public function tradePortPosition(): ?array
+    {
+        return $this->tradePort;
     }
 
     /** Id bramy na sektorze; null = brak bramy. */

@@ -121,6 +121,8 @@ final class GetExpedition
             // złomowanie (#124): zwrot do magazynu wyspy i blokada domeny; stocznię w porcie sprawdza widok
             'scrapValue' => $profile->scrapValue($ship)->toArray(),
             'scrapBlock' => $profile->scrapBlocker($ship)?->value,
+            // sprzedaż w porcie handlowym akwenu (#140): złoto za statek; null = akwen bez portu
+            'saleValue' => null !== $sea->tradePort ? $profile->shipSaleValue($ship, $sea->tradePort->rate) : null,
         ], $profile->fleet());
 
         $shipTypes = array_map(static fn (ShipType $type) => [
@@ -200,6 +202,8 @@ final class GetExpedition
                 'visited' => $profile->visitedSectors(),
                 'atIsland' => $world->islandAt($position['x'], $position['y']),
                 'atGate' => $world->gateAt($position['x'], $position['y']),
+                // port handlowy akwenu (#140): neutralna wyspa z rynkiem; null = akwen bez portu
+                'tradePort' => $this->tradePortView($profile, $sea, $world),
                 // bramy akwenu (#107): sektor po odkryciu, cel, blokada i strażnik
                 'gates' => $this->gatesView($profile, $sea, $world),
                 // szansa z motywu akwenu; Mapy sztormowe (Epic G) ją połowią
@@ -237,6 +241,35 @@ final class GetExpedition
 
             return ['tick' => $entry->tick, 'event' => $entry->event->value] + $data + $names;
         }, array_reverse($profile->log()));
+    }
+
+    /**
+     * Port handlowy akwenu floty (#140). Sektor widać dopiero po odkryciu,
+     * jak wyspy; kurs (towar za 1 złoto) z mnożnikiem ceny kapitana.
+     *
+     * @return array<string,mixed>|null
+     */
+    private function tradePortView(CaptainProfile $profile, Sea $sea, WorldMap $world): ?array
+    {
+        $port = $sea->tradePort;
+        $pos = $world->tradePortPosition();
+        if (null === $port || null === $pos) {
+            return null;
+        }
+        $discovered = $profile->isDiscovered($pos['x'], $pos['y']);
+
+        return [
+            'id' => $port->id,
+            'name' => $port->name,
+            'description' => $port->description,
+            'discovered' => $discovered,
+            'position' => $discovered ? $pos : null,
+            'present' => $discovered && $pos === $profile->position(),
+            'rate' => $port->rate->toArray($profile->marketPricePercent()),
+            // mnożnik ceny w procentach (100 = kurs bazowy); pod reputację z #142
+            'pricePercent' => $profile->marketPricePercent(),
+            'stockpile' => $profile->stockpile($port->id)->toArray(),
+        ];
     }
 
     /**
@@ -435,6 +468,7 @@ final class GetExpedition
 
     private function islandName(string $islandId): string
     {
-        return $this->islands->byId($islandId)->name ?? $islandId;
+        // port handlowy nie należy do katalogu wysp (#140)
+        return $this->islands->byId($islandId)->name ?? $this->seas->tradePort($islandId)->name ?? $islandId;
     }
 }

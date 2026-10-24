@@ -6,7 +6,8 @@ namespace App\Domain\Expedition;
  * Stały graf akwenów: Morze Rozbitków (katalog wysp plastra A/B, motyw
  * 20% / 1 / ×1, na którym gra działa jak przed akwenami) i za strzeżoną
  * cieśniną Ocean Sztormów (40% / 1 / ×2, #107), a za otwartym oceanem na
- * jego wschodniej krawędzi Morze Mgieł (10% / 0 / ×2, #108).
+ * jego wschodniej krawędzi Morze Mgieł (10% / 0 / ×2, #108). Każdy akwen
+ * ma neutralny port handlowy z katalogu swoich wysp (#140).
  */
 final class StaticSeaGraph implements SeaGraph
 {
@@ -28,10 +29,12 @@ final class StaticSeaGraph implements SeaGraph
     public function __construct(StaticIslandCatalog $shipwreckIslands, ?array $seas = null, ?array $passages = null)
     {
         if (null === $seas) {
+            $stormIslands = new StormOceanIslandCatalog();
+            $mistIslands = new MistSeaIslandCatalog();
             $this->seas = [
-                new Sea(Sea::START, 'Morze Rozbitków', new SeaTheme(stormChance: 20, visibility: 1, depositMultiplier: 1), $shipwreckIslands),
-                new Sea(self::STORM_OCEAN, 'Ocean Sztormów', new SeaTheme(stormChance: 40, visibility: 1, depositMultiplier: 2), new StormOceanIslandCatalog(), [ShipVariant::KuterTorpedowy, ShipVariant::CiezkiNiszczyciel]),
-                new Sea(self::MIST_SEA, 'Morze Mgieł', new SeaTheme(stormChance: 10, visibility: 0, depositMultiplier: 2), new MistSeaIslandCatalog(), [ShipVariant::LotniskowiecEskortowy]),
+                new Sea(Sea::START, 'Morze Rozbitków', new SeaTheme(stormChance: 20, visibility: 1, depositMultiplier: 1), $shipwreckIslands, tradePort: $shipwreckIslands->tradePort()),
+                new Sea(self::STORM_OCEAN, 'Ocean Sztormów', new SeaTheme(stormChance: 40, visibility: 1, depositMultiplier: 2), $stormIslands, [ShipVariant::KuterTorpedowy, ShipVariant::CiezkiNiszczyciel], $stormIslands->tradePort()),
+                new Sea(self::MIST_SEA, 'Morze Mgieł', new SeaTheme(stormChance: 10, visibility: 0, depositMultiplier: 2), $mistIslands, [ShipVariant::LotniskowiecEskortowy], $mistIslands->tradePort()),
             ];
             $strait = self::guardedStrait();
             // otwarty ocean: bez bitwy, otwiera go technologia (#108)
@@ -54,8 +57,12 @@ final class StaticSeaGraph implements SeaGraph
         if (count($seaIds) !== count(array_unique($seaIds))) {
             throw new \InvalidArgumentException('Sea ids must be unique');
         }
-        // wyspy szuka się po id w całym świecie (bandery, magazyny, budynki), więc id nie mogą się powtarzać między akwenami
-        $islandIds = array_merge(...array_map(static fn (Sea $sea) => array_map(static fn (Island $i) => $i->id, $sea->islands->all()), $this->seas));
+        // wyspy szuka się po id w całym świecie (bandery, magazyny, budynki), więc id nie mogą się powtarzać między akwenami;
+        // magazyn ma też port handlowy (#140), więc jego id liczy się razem z wyspami
+        $islandIds = array_merge(...array_map(static fn (Sea $sea) => [
+            ...array_map(static fn (Island $i) => $i->id, $sea->islands->all()),
+            ...(null !== $sea->tradePort ? [$sea->tradePort->id] : []),
+        ], $this->seas));
         if (count($islandIds) !== count(array_unique($islandIds))) {
             throw new \InvalidArgumentException('Island ids must be unique across seas');
         }
@@ -139,6 +146,17 @@ final class StaticSeaGraph implements SeaGraph
         foreach ($this->passagesFrom($fromSeaId) as $passage) {
             if ($passage->gate->id === $gateId) {
                 return $passage;
+            }
+        }
+
+        return null;
+    }
+
+    public function tradePort(string $portId): ?TradePort
+    {
+        foreach ($this->seas as $sea) {
+            if (null !== $sea->tradePort && $sea->tradePort->id === $portId) {
+                return $sea->tradePort;
             }
         }
 

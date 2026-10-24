@@ -18,7 +18,7 @@ final class TransferCargo
 
     /**
      * Załadunek (magazyn wyspy → ładownia) albo rozładunek (ładownia → magazyn)
-     * w porcie wyspy, na której kapitan STOI. Każda operacja to dokowanie
+     * w porcie wyspy (także portu handlowego, #140), na której kapitan STOI. Każda operacja to dokowanie
      * i kosztuje tik; pojemność i stany egzekwuje domena.
      *
      * @return array{cargo: array{wood:int, steel:int, gold:int}, cargoCapacity: int,
@@ -30,17 +30,26 @@ final class TransferCargo
         if (null === $profile) {
             throw new \DomainException('Profile not found');
         }
-        $island = $this->islands->byId($islandId);
-        if (null === $island) {
-            throw new \DomainException('Island not found');
-        }
-        if (!$profile->isAt($this->worldFactory->worldFor($profile), $island->id)) {
-            throw new \DomainException('Not at island');
+        $world = $this->worldFactory->worldFor($profile);
+        // magazyn ma też port handlowy akwenu floty (#140)
+        $port = $this->worldFactory->seaFor($profile)->tradePort;
+        if (null !== $port && $port->id === $islandId) {
+            if (!$profile->isAtTradePort($world)) {
+                throw new \DomainException('Not at trade port');
+            }
+        } else {
+            $island = $this->islands->byId($islandId);
+            if (null === $island) {
+                throw new \DomainException('Island not found');
+            }
+            if (!$profile->isAt($world, $island->id)) {
+                throw new \DomainException('Not at island');
+            }
         }
 
         match ($direction) {
-            'load' => $profile->loadCargo($island->id, $amount),
-            'unload' => $profile->unloadCargo($island->id, $amount),
+            'load' => $profile->loadCargo($islandId, $amount),
+            'unload' => $profile->unloadCargo($islandId, $amount),
             default => throw new \InvalidArgumentException('Direction must be load|unload'),
         };
         $this->profiles->save($profile);
@@ -48,7 +57,7 @@ final class TransferCargo
         return [
             'cargo' => $profile->cargo()->toArray(),
             'cargoCapacity' => $profile->cargoCapacity(),
-            'stockpile' => $profile->stockpile($island->id)->toArray(),
+            'stockpile' => $profile->stockpile($islandId)->toArray(),
             'tick' => $profile->tick(),
         ];
     }

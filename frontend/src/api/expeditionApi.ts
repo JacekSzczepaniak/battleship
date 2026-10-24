@@ -140,6 +140,8 @@ export interface FleetShipDTO {
     // wymóg stoczni w porcie sprawdza widok
     scrapValue: ResourcesDTO;
     scrapBlock: ScrapBlockCode | null;
+    // sprzedaż w porcie handlowym akwenu (#140): złoto za statek (blokady jak przy złomowaniu); null = akwen bez portu
+    saleValue: number | null;
 }
 
 // Domain/Expedition/ScrapBlock
@@ -272,6 +274,8 @@ export interface WorldDTO {
     // brama na sektorze floty (#107)
     atGate: string | null;
     gates: GateDTO[];
+    // port handlowy akwenu (#140): neutralna wyspa z rynkiem; null = akwen bez portu
+    tradePort: TradePortDTO | null;
     // szansa sztormu akwenu z Mapami sztormowymi (połowa) albo bez nich
     stormChance: number;
     // najdalszy sektor osiągalny w jednym rejsie (większa z różnic x i y); Żegluga dwusektorowa: 2
@@ -280,6 +284,25 @@ export interface WorldDTO {
     tick: number;
     // bandery na akwenach, które kapitan zna (#109): pełna bandera działa przy obronie wyspy swojego akwenu
     flags: SeaFlagDTO[];
+}
+
+// Domain/Expedition/MarketGood i MarketSide (#140)
+export type MarketGoodName = 'wood' | 'steel';
+export type MarketSideName = 'buy' | 'sell';
+
+// port handlowy (#140): sektor widać po odkryciu, jak wyspy; kurs = towar za 1 złoto
+export interface TradePortDTO {
+    id: string;
+    name: string;
+    description: string;
+    discovered: boolean;
+    position: { x: number; y: number } | null;
+    present: boolean;
+    // buy: ile towaru kupuje 1 złoto; sell: ile towaru trzeba oddać za 1 złoto (połowa ceny kupna)
+    rate: Record<MarketGoodName, { buy: number; sell: number }>;
+    // mnożnik ceny w procentach (100 = kurs bazowy); pod reputację z #142
+    pricePercent: number;
+    stockpile: ResourcesDTO;
 }
 
 export interface SeaFlagDTO {
@@ -418,7 +441,8 @@ export type BattleKindName = 'capture' | 'defense' | 'guardian' | 'siege';
 export type LogEventName =
     | 'storm' | 'island-captured' | 'island-lost' | 'island-defended' | 'island-plundered' | 'counterattack-announced'
     | 'research-completed' | 'ship-built' | 'building-built' | 'gate-opened' | 'gate-passed'
-    | 'ship-boarded' | 'prize-decided' | 'island-besieged' | 'siege-failed' | 'ship-scrapped';
+    | 'ship-boarded' | 'prize-decided' | 'island-besieged' | 'siege-failed' | 'ship-scrapped'
+    | 'market-trade' | 'ship-sold';
 
 export interface LogEntryDTO {
     tick: number;
@@ -451,6 +475,12 @@ export interface LogEntryDTO {
     // złomowanie (#124): zwrot w refund; ładunek ponad pojemność floty został w magazynie wyspy
     damaged?: boolean;
     unloaded?: ResourcesDTO;
+    // rynek portu handlowego (#140): transakcja i sprzedaż statku (złoto w gold)
+    side?: MarketSideName;
+    good?: MarketGoodName;
+    paid?: ResourcesDTO;
+    received?: ResourcesDTO;
+    gold?: number;
 }
 
 // decyzja o statku zdobytym abordażem (#118); study = zbadaj konstrukcję (#121)
@@ -595,6 +625,32 @@ export interface ScrapShipDTO {
 
 export async function scrapShip(profileId: string, islandId: string, shipId: string): Promise<ScrapShipDTO> {
     return http.post<ScrapShipDTO>(`/profiles/${profileId}/ships/${shipId}/scrap`, { islandId });
+}
+
+export interface TradeDTO {
+    paid: ResourcesDTO;
+    received: ResourcesDTO;
+    cargo: ResourcesDTO;
+    cargoCapacity: number;
+    stockpile: ResourcesDTO;
+    tick: number;
+}
+
+/** Kupno albo sprzedaż towaru w porcjach po 1 złoto w porcie handlowym (#140); kosztuje tik. */
+export async function trade(profileId: string, portId: string, side: MarketSideName, good: MarketGoodName, gold: number): Promise<TradeDTO> {
+    return http.post<TradeDTO>(`/profiles/${profileId}/trade-ports/${portId}/trade`, { side, good, gold });
+}
+
+export interface SellShipDTO {
+    gold: number;
+    cargo: ResourcesDTO;
+    cargoCapacity: number;
+    tick: number;
+}
+
+/** Sprzedaż statku za złoto w porcie handlowym (#140); kosztuje tik. */
+export async function sellShip(profileId: string, portId: string, shipId: string): Promise<SellShipDTO> {
+    return http.post<SellShipDTO>(`/profiles/${profileId}/trade-ports/${portId}/ships/${shipId}/sell`);
 }
 
 export interface BuildBuildingDTO {

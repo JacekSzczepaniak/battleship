@@ -11,7 +11,8 @@ import type { IslandDTO, ResourcesDTO } from '../api/expeditionApi';
 import { RESOURCES, isEmpty, totalResources, type ResourceKey } from '../lib/resources';
 
 const props = defineProps<{
-    island: IslandDTO;
+    // wyspa albo port handlowy (#140) — panel potrzebuje tylko magazynu
+    island: Pick<IslandDTO, 'stockpile'>;
     cargo: ResourcesDTO;
     capacity: number;
     busy: boolean;

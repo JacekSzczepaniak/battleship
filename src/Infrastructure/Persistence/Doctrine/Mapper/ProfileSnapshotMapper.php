@@ -4,6 +4,8 @@ namespace App\Infrastructure\Persistence\Doctrine\Mapper;
 
 use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\CaptainProfile;
+use App\Domain\Expedition\Encounter;
+use App\Domain\Expedition\EncounterType;
 use App\Domain\Expedition\FleetPreset;
 use App\Domain\Expedition\LogEntry;
 use App\Domain\Expedition\LogEvent;
@@ -74,6 +76,8 @@ final class ProfileSnapshotMapper
             'besieged' => $profile->besiegedIslands(),
             // zapisane zestawy floty z rozmieszczeniem (#125)
             'fleetPresets' => array_map(static fn (FleetPreset $preset) => $preset->toArray(), $profile->fleetPresets()),
+            // spotkanie z rejsu czekające na decyzję (#141); null = droga wolna
+            'encounter' => $profile->encounter()?->toArray(),
         ];
     }
 
@@ -102,6 +106,10 @@ final class ProfileSnapshotMapper
             // potyczka na twierdzy (#120): wygrana oblega wyspę zamiast stawiać banderę
             if (!empty($battle['stronghold'])) {
                 $entry['stronghold'] = true;
+            }
+            // bitwa spotkania na morzu (#141): merchant | pirate
+            if (isset($battle['encounter'])) {
+                $entry['encounter'] = (string) $battle['encounter'];
             }
             $battles[(string) $gameId] = $entry;
         }
@@ -172,7 +180,25 @@ final class ProfileSnapshotMapper
             besieged: array_map('intval', (array) ($state['besieged'] ?? [])),
             // brak klucza = profil sprzed zestawów floty, bez zestawów
             fleetPresets: $this->fleetPresetsFrom($state),
+            // brak klucza = profil sprzed spotkań, droga wolna
+            encounter: $this->encounterFrom($state),
         );
+    }
+
+    /**
+     * Spotkanie czekające na decyzję (#141); nieczytelny wpis = brak spotkania.
+     *
+     * @param array<string,mixed> $state
+     */
+    private function encounterFrom(array $state): ?Encounter
+    {
+        $encounter = $state['encounter'] ?? null;
+        $type = is_array($encounter) ? EncounterType::tryFrom((string) ($encounter['type'] ?? '')) : null;
+        if (null === $type || !isset($encounter['sea'], $encounter['x'], $encounter['y'])) {
+            return null;
+        }
+
+        return new Encounter($type, (int) ($encounter['tick'] ?? 0), (string) $encounter['sea'], (int) $encounter['x'], (int) $encounter['y']);
     }
 
     /**

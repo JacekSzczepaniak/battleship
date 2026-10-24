@@ -14,6 +14,7 @@ use App\Domain\Shared\ProfileId;
 use App\Kernel;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Tests\Support\Encounters;
 
 final class TwoSectorSailingApiTest extends WebTestCase
 {
@@ -46,6 +47,8 @@ final class TwoSectorSailingApiTest extends WebTestCase
         $after = $this->expedition($client, $sailor)['world'];
         self::assertSame($world['tick'] + 1, $after['tick']);
         self::assertContains("{$target['x']}:{$target['y']}", $after['visited']);
+        // rejs mógł trafić na spotkanie (#141), które zatrzymałoby dalszą żeglugę
+        Encounters::dismiss(static::getContainer()->get(ProfileRepository::class), $sailor);
 
         // dalej niż zasięg
         $this->post($client, "/api/profiles/$sailor/sail", $this->away($after, 3));

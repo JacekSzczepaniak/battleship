@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\WorldMap;
+use Tests\Support\Encounters;
 
 const SEA_ISLANDS = ['zatoka-rozbitka', 'mielizny', 'wyspa-sygnalowa', 'archipelag-mgiel', 'ciesnina-sztormow', 'twierdza-admiralicji'];
 
@@ -101,7 +102,11 @@ it('sztormy są deterministyczne — bliźniacze profile mają ten sam los', fun
     foreach ($route as $step) {
         $eventA = $a->sail($step['x'], $step['y'], $world)['event'];
         $eventB = $b->sail($step['x'], $step['y'], $world)['event'];
-        expect($eventA)->toBe($eventB);
+        expect($eventA)->toBe($eventB)
+            ->and($a->encounter()?->toArray())->toBe($b->encounter()?->toArray());
+        // spotkanie (#141) zatrzymałoby trasę
+        Encounters::evade($a);
+        Encounters::evade($b);
     }
 });
 
@@ -114,6 +119,7 @@ it('na odwiedzonym sektorze nie ma sztormów', function () {
     $target = ['x' => $start['x'] + ($start['x'] < WorldMap::WIDTH - 1 ? 1 : -1), 'y' => $start['y']];
 
     $profile->sail($target['x'], $target['y'], $world);
+    Encounters::evade($profile);
     // powrót po własnych śladach — sektor startowy jest odkryty
     $back = $profile->sail($start['x'], $start['y'], $world);
 
@@ -213,7 +219,9 @@ it('drugie wpłynięcie na ten sam sektor jest bezpieczne', function () {
         $b = ['x' => $a['x'] + ($a['x'] < WorldMap::WIDTH - 1 ? 1 : -1), 'y' => $a['y']];
 
         $profile->sail($b['x'], $b['y'], $world);
+        Encounters::evade($profile);
         $profile->sail($a['x'], $a['y'], $world);
+        Encounters::evade($profile);
         $again = $profile->sail($b['x'], $b['y'], $world);
 
         expect($again['event'])->toBeNull();

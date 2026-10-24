@@ -35,7 +35,10 @@ const kicker = computed(() => {
     if (!r) return '';
     const e = r.expedition;
     if (!e) return `${r.fort ? 'OBLĘŻENIE · TRENING' : 'BITWA TRENINGOWA'} · ${r.board.w}×${r.board.h}`;
-    const kind = e.kind === 'guardian' ? 'CIEŚNINA' : e.settle.kind === 'siege' ? 'OBLĘŻENIE' : e.settle.defense ? 'OBRONA' : 'BITWA';
+    const kind = e.kind === 'guardian' ? 'CIEŚNINA'
+        : e.settle.encounter === 'merchant' ? 'NAPAD'
+        : e.settle.encounter === 'pirate' ? 'PIRACI'
+        : e.settle.kind === 'siege' ? 'OBLĘŻENIE' : e.settle.defense ? 'OBRONA' : 'BITWA';
     return `${kind} · ${e.islandName.toUpperCase()}${e.seaName ? ` · ${e.seaName.toUpperCase()}` : ''}`;
 });
 
@@ -58,6 +61,18 @@ const description = computed(() => {
             ? `${r.expedition.islandName} poszedł na dno — cieśnina stoi otworem w obie strony.`
                 + (damaged ? ' Jednostki zatopione w boju trzeba wyremontować w stoczni.' : ' Cała flota przetrwała bitwę.')
             : `${r.expedition.islandName} utrzymał cieśninę. Jednostki zatopione w tej bitwie przepadły — XP zostaje na zawsze, a próbę możesz powtórzyć.`;
+    }
+    // spotkanie na morzu (#141): napad na handlarza albo walka z piratem
+    if (r.expedition.settle.encounter) {
+        const repairs = damaged ? ' Jednostki zatopione w boju trzeba wyremontować w stoczni.' : ' Cała flota przetrwała bitwę.';
+        if (r.expedition.settle.encounter === 'merchant') {
+            return won.value
+                ? `Eskorta handlarza poszła na dno — jego towary są Twoje. Kupcy zapamiętają ten napad.${repairs}`
+                : 'Eskorta obroniła handlarza. Jednostki zatopione w tej bitwie przepadły — XP zostaje na zawsze.';
+        }
+        return won.value
+            ? `Piraci rozbici — ich złoto i stal są Twoje.${repairs}`
+            : 'Piraci wygrali bitwę. Jednostki zatopione w tej bitwie przepadły — XP zostaje na zawsze.';
     }
     if (r.expedition.settle.kind === 'siege') {
         return won.value
@@ -157,6 +172,7 @@ const lootNote = computed(() => {
     if (!e) return '';
     if (isEmpty(e.settle.loot)) return 'Bez łupu z tej bitwy.';
     if (e.settle.stockpile) return `Łup trafił do magazynu wyspy ${e.islandName} — załadujesz go w porcie (1 tik).`;
+    if (e.settle.encounter) return 'Łup trafił do ładowni — na pełnym morzu nie ma magazynu, więc to, co się nie mieści, idzie za burtę.';
     return e.kind === 'guardian'
         ? 'Łup trafił do ładowni — przy cieśninie nie ma magazynu, więc to, co się nie mieści, idzie za burtę.'
         : 'Łup trafił do ładowni.';
@@ -215,7 +231,8 @@ const shipyardLabel = computed(() => {
 const canRepeat = computed(() => {
     const e = exp.value;
     // wyspa pod banderą nie jest areną (#78): po zdobyciu i po obronie nie ma czego powtarzać; strażnik walczy do pierwszej przegranej
-    return !e || (!e.settle.captured && !e.settle.defense && !e.settle.gateOpened);
+    // spotkanie (#141) jest jednorazowe — po bitwie handlarz i piraci odpływają
+    return !e || (!e.settle.captured && !e.settle.defense && !e.settle.gateOpened && !e.settle.encounter);
 });
 
 /** „1 jednostka”, „3 jednostki”, „27 jednostek”. */
@@ -406,7 +423,7 @@ onMounted(load);
                             <p class="loot-note">{{ lootNote }}</p>
                             <p v-if="!isEmpty(exp.settle.cargoLost)" class="cargo-lost">
                                 <PackageX :size="15" />
-                                Za burtą: {{ formatResources(exp.settle.cargoLost) }} — {{ exp.kind === 'guardian' ? 'łup i ładunek ponad pojemność floty' : 'ładunek ponad pojemność floty po stratach' }}.
+                                Za burtą: {{ formatResources(exp.settle.cargoLost) }} — {{ exp.kind === 'guardian' || exp.settle.encounter ? 'łup i ładunek ponad pojemność floty' : 'ładunek ponad pojemność floty po stratach' }}.
                             </p>
                         </template>
                         <p v-else class="muted loot-note">Trening nie daje łupów ani XP. Bitwy o wyspy rozegrasz z portu, gdy staniesz przy wyspie.</p>

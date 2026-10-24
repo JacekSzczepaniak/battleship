@@ -419,6 +419,28 @@ Spotkania na morzu jak sztormy: deterministycznie z `seed+tik`.
 - **Reputacja** = wybór stylu gry (kupiec ↔ korsarz); pole projektujemy
   od razu, mechaniki dowozimy później.
 
+✅ (#141) Spotkania na morzu. Rejs bez sztormu kończy się spotkaniem
+z szansą 8% (z seeda i tiku, jak sztorm), nigdy na sektorze wyspy ani
+bramy; w jednym rejsie najwyżej sztorm albo spotkanie. 60% to handlarz,
+40% pirat. Spotkanie zatrzymuje rejs do decyzji, a baner na ekranie Rejs
+podaje skutki każdego wyboru z góry.
+- **Handlarz:** handel na miejscu jednym zleceniem za 1 tik (kupno
+  i sprzedaż drewna i stali za złoto z ładowni po kursie portu akwenu
+  z mnożnikiem ceny 125%), napad albo minięcie bez skutków. Zlecenie idzie
+  w sztukach: kupno płaci za każdą zaczętą porcję, sprzedaż dostaje złoto
+  za pełne.
+- **Pirat:** walka, ucieczka (1 tik i 20% każdego surowca w ładowni) albo
+  okup w złocie z ładowni: 10 / 25 / 35 na Morzu Rozbitków / Oceanie
+  Sztormów / Morzu Mgieł.
+- **Bitwa spotkania** (napad, walka) toczy się na otwartym morzu w trybie
+  fun, z abordażem. Wróg ma stały skład akwenu: pirat 8 / 14 / 17 pól,
+  handlarz z transportowcem i eskortą 8 / 10 / 12 pól, na planszy 8×8 /
+  10×10 / 11×11. Łup trafia do ładowni, nadmiar idzie za burtę; przegrana
+  daje ¼ XP bez łupu. Pirat: 10 stali i 15 złota / 20 i 25 / 25 i 35.
+  Napad: 30 drewna, 15 stali, 10 złota / 35, 35, 20 / 45, 35, 30.
+- Napad i pokonanie pirata zapisują się w rejestrze bitew (`encounter`)
+  i w dzienniku; reputację policzy #142.
+
 ## Filar VII — Questy
 
 - **Ekspedycja w głąb lądu** (dzikie wyspy): press-your-luck — idziesz

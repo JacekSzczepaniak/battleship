@@ -15,6 +15,7 @@ use App\Domain\Shared\ProfileId;
 use App\Kernel;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Tests\Support\Encounters;
 
 /** Uszkodzony statek zachowuje ładownię (#92): pływa i wozi, nie walczy. */
 final class DamagedShipCargoApiTest extends WebTestCase
@@ -56,7 +57,7 @@ final class DamagedShipCargoApiTest extends WebTestCase
         self::assertResponseIsSuccessful();
         self::assertSame(['wood' => 30, 'steel' => 0, 'gold' => 0], $loaded['cargo']);
 
-        // rejs do stoczni w Zatoce Rozbitka — żegluga nie wymaga sprawnej floty
+        // rejs do stoczni w Zatoce Rozbitka — żegluga nie wymaga sprawnej floty; spotkanie (#141) zdejmujemy
         $position = $world->islandPosition('mielizny');
         $shipyard = $world->islandPosition('zatoka-rozbitka');
         while ($position !== $shipyard) {
@@ -66,6 +67,7 @@ final class DamagedShipCargoApiTest extends WebTestCase
             ];
             $this->post($client, "/api/profiles/$profileId/sail", $position);
             self::assertResponseIsSuccessful();
+            Encounters::dismiss(static::getContainer()->get(ProfileRepository::class), $profileId);
         }
 
         // remont płaci ładownia (magazyn Zatoki pusty): 2 × 8 drewna

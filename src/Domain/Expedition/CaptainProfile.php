@@ -50,7 +50,7 @@ final class CaptainProfile
     /** Dziennik kapitana (#111) trzyma tyle ostatnich wpisów. */
     public const LOG_LIMIT = 50;
 
-    /** @var array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int, stronghold?: bool}> klucz: gameId */
+    /** @var array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int, stronghold?: bool, encounter?: string}> klucz: gameId */
     private array $battles = [];
 
     /**
@@ -196,6 +196,9 @@ final class CaptainProfile
 
     /** Tik = akcja morska (rejs, bitwa); zegar świata — GAME_DESIGN.md, filar II. */
     private int $tick = 0;
+
+    /** Spotkanie z rejsu czekające na decyzję (#141); null = droga wolna. */
+    private ?Encounter $encounter = null;
 
     private function __construct(
         private ProfileId $id,
@@ -1093,11 +1096,17 @@ final class CaptainProfile
      *
      * Dochód kartograficzny trafia do ładowni; nadmiar ponad pojemność przepada.
      *
-     * @return array{discoveredNow: list<string>, cartography: int, cartographyLost: int, event: array<string,mixed>|null}
+     * Rejs bez sztormu może skończyć się spotkaniem z handlarzem albo
+     * piratem (#141); dopóki kapitan nie zdecyduje, flota nie płynie dalej.
+     *
+     * @return array{discoveredNow: list<string>, cartography: int, cartographyLost: int, event: array<string,mixed>|null, encounter: array{type:string, tick:int, sea:string, x:int, y:int}|null}
      */
     public function sail(int $x, int $y, WorldMap $world): array
     {
         $this->ensureWorldState($world);
+        if (null !== $this->encounter) {
+            throw new \DomainException('Encounter pending');
+        }
 
         if (!$world->isInside($x, $y)) {
             throw new \DomainException('Sector out of bounds');
@@ -1121,7 +1130,11 @@ final class CaptainProfile
             ? [[$position['x'] + ($x <=> $position['x']), $position['y'] + ($y <=> $position['y'])]]
             : [];
 
-        return $this->arrive($x, $y, $world, $passed);
+        $outcome = $this->arrive($x, $y, $world, $passed);
+        // w jednym rejsie najwyżej jedno zdarzenie: sztorm albo spotkanie
+        $outcome['encounter'] = null === $outcome['event'] ? $this->rollEncounter($x, $y, $world)?->toArray() : null;
+
+        return $outcome;
     }
 
     /**
@@ -1391,6 +1404,176 @@ final class CaptainProfile
         return $gold;
     }
 
+    // --- Spotkania na morzu (#141) ---
+
+    public function encounter(): ?Encounter
+    {
+        return $this->encounter;
+    }
+
+    /**
+     * Spotkanie po rejsie: około 8% szansy z seeda i tiku, jak sztorm. Nie na
+     * sektorze wyspy ani bramy. 60% handlarz, 40% pirat.
+     */
+    private function rollEncounter(int $x, int $y, WorldMap $world): ?Encounter
+    {
+        if (null !== $world->islandAt($x, $y) || null !== $world->gateAt($x, $y)) {
+            return null;
+        }
+        if (crc32("{$this->worldSeed}:{$this->tick}:encounter") % 100 >= EncounterCatalog::CHANCE) {
+            return null;
+        }
+
+        $type = crc32("{$this->worldSeed}:{$this->tick}:encounter-type") % 100 < EncounterCatalog::MERCHANT_SHARE
+            ? EncounterType::Merchant
+            : EncounterType::Pirate;
+        $this->encounter = new Encounter($type, $this->tick, $this->sea, $x, $y);
+        $this->record($this->tick, LogEvent::EncounterMet, ['encounter' => $type->value]);
+
+        return $this->encounter;
+    }
+
+    private function pendingEncounter(EncounterType $type): Encounter
+    {
+        $encounter = $this->encounter ?? throw new \DomainException('No encounter pending');
+        if ($encounter->type !== $type) {
+            throw new \DomainException('Not available in this encounter');
+        }
+
+        return $encounter;
+    }
+
+    /** Co zabierze ucieczka przed piratem: procent każdego surowca w ładowni, w dół. */
+    public function fleeCargoLoss(): Resources
+    {
+        $percent = EncounterCatalog::FLEE_CARGO_PERCENT;
+
+        return new Resources(
+            intdiv($this->cargo->wood * $percent, 100),
+            intdiv($this->cargo->steel * $percent, 100),
+            intdiv($this->cargo->gold * $percent, 100),
+        );
+    }
+
+    /**
+     * Decyzja bez bitwy i bez zlecenia: minięcie handlarza (bez skutków),
+     * ucieczka przed piratem (tik i część ładunku) albo okup w złocie
+     * z ładowni. Kończy spotkanie.
+     *
+     * @return array{cargoLost: Resources, goldPaid: int}
+     */
+    public function decideEncounter(EncounterDecision $decision): array
+    {
+        $cargoLost = Resources::none();
+        $goldPaid = 0;
+        switch ($decision) {
+            case EncounterDecision::Pass:
+                $encounter = $this->pendingEncounter(EncounterType::Merchant);
+                break;
+            case EncounterDecision::Flee:
+                $encounter = $this->pendingEncounter(EncounterType::Pirate);
+                $cargoLost = $this->fleeCargoLoss();
+                $this->cargo = $this->cargo->subtract($cargoLost);
+                $this->tick += EncounterCatalog::FLEE_TICKS;
+                break;
+            case EncounterDecision::Ransom:
+                $encounter = $this->pendingEncounter(EncounterType::Pirate);
+                $goldPaid = EncounterCatalog::ransom($encounter->sea);
+                if ($this->cargo->gold < $goldPaid) {
+                    throw new \DomainException('Not enough gold for ransom');
+                }
+                $this->cargo = $this->cargo->subtract(new Resources(gold: $goldPaid));
+                break;
+        }
+
+        $this->encounter = null;
+        $this->record($this->tick, LogEvent::EncounterResolved, [
+            'encounter' => $encounter->type->value,
+            'decision' => $decision->value,
+            'cargoLost' => $cargoLost->isZero() ? null : $cargoLost->toArray(),
+            'gold' => $goldPaid > 0 ? $goldPaid : null,
+        ]);
+
+        return ['cargoLost' => $cargoLost, 'goldPaid' => $goldPaid];
+    }
+
+    /**
+     * Ceny handlarza: mnożnik ceny rynku (#140, później z reputacją #142)
+     * podniesiony o marżę handlarza.
+     */
+    public function merchantPrices(MarketRate $rate): MerchantPrices
+    {
+        return new MerchantPrices($rate, intdiv($this->marketPricePercent() * (100 + EncounterCatalog::MERCHANT_WORSE_PERCENT), 100));
+    }
+
+    /**
+     * Handel na miejscu z handlarzem: jedno zlecenie sprzedaży i kupna
+     * drewna i stali za złoto z ładowni, po kursie rynku akwenu z marżą
+     * handlarza. Rozliczane naraz (złoto ze sprzedaży opłaca kupno),
+     * kosztuje tik i kończy spotkanie. Wynik musi się zmieścić w ładowni.
+     *
+     * @return array{goldReceived: int, goldPaid: int}
+     */
+    public function tradeWithMerchant(Resources $sell, Resources $buy, MarketRate $rate): array
+    {
+        $encounter = $this->pendingEncounter(EncounterType::Merchant);
+        if (0 !== $sell->gold || 0 !== $buy->gold) {
+            throw new \DomainException('Merchant trades wood and steel for gold');
+        }
+        if ($sell->isZero() && $buy->isZero()) {
+            throw new \DomainException('Empty trade order');
+        }
+
+        $prices = $this->merchantPrices($rate);
+        $goldReceived = $prices->sellValue($sell);
+        $goldPaid = $prices->buyCost($buy);
+        $cargo = $this->cargo->subtract($sell)
+            ->add(new Resources(gold: $goldReceived))
+            ->subtract(new Resources(gold: $goldPaid))
+            ->add($buy);
+        if ($cargo->total() > $this->cargoCapacity()) {
+            throw new \DomainException('Cargo capacity exceeded');
+        }
+
+        $this->cargo = $cargo;
+        $this->tick += EncounterCatalog::TRADE_TICKS;
+        $this->encounter = null;
+        $this->record($this->tick, LogEvent::EncounterResolved, [
+            'encounter' => $encounter->type->value,
+            'decision' => 'trade',
+            'sold' => $sell->isZero() ? null : $sell->toArray(),
+            'bought' => $buy->isZero() ? null : $buy->toArray(),
+            'goldReceived' => $goldReceived,
+            'goldPaid' => $goldPaid,
+        ]);
+
+        return ['goldReceived' => $goldReceived, 'goldPaid' => $goldPaid];
+    }
+
+    /**
+     * Rejestruje bitwę spotkania: napad na handlarza albo walkę z piratem.
+     * W rejestrze zamiast wyspy stoi akwen, a rodzaj spotkania pod kluczem
+     * 'encounter' (pod reputację, #142). Start bitwy kończy spotkanie —
+     * porzucona bitwa nie blokuje rejsu.
+     *
+     * @param list<string> $shipIds statki, które wypłynęły (do rozliczenia strat)
+     */
+    public function startEncounterBattle(GameId $gameId, array $shipIds = []): Encounter
+    {
+        $encounter = $this->encounter ?? throw new \DomainException('No encounter pending');
+        $this->registerBattle($encounter->sea, $gameId, BattleKind::Encounter, $shipIds);
+        $this->battles[(string) $gameId]['encounter'] = $encounter->type->value;
+        $this->encounter = null;
+
+        return $encounter;
+    }
+
+    /** Rodzaj spotkania, którego bitwę toczy dana gra; null = gra spoza spotkania. */
+    public function encounterFor(GameId $gameId): ?EncounterType
+    {
+        return EncounterType::tryFrom($this->battles[(string) $gameId]['encounter'] ?? '');
+    }
+
     // --- Bitwy ---
 
     /**
@@ -1527,8 +1710,9 @@ final class CaptainProfile
      * wygrana zostawia banderę, przegrana odbiera wyspę i połowę magazynu
      * (przed łupem za porażkę). Wygrana ze strażnikiem otwiera bramę na stałe;
      * jego łup trafia do ładowni, bo przy bramie nie ma magazynu — nadmiar
-     * przepada. Wygrana potyczka na twierdzy oblega wyspę, a banderę stawia
-     * wygrane oblężenie; przegrane zostawia oblężenie (#120). Straty dotykają floty —
+     * przepada; tak samo łup bitwy spotkania na morzu (#141). Wygrana potyczka
+     * na twierdzy oblega wyspę, a banderę stawia wygrane oblężenie; przegrane
+     * zostawia oblężenie (#120). Straty dotykają floty —
      * zatopione statki po wygranej wymagają remontu, po przegranej są stracone;
      * ładunek ponad nową pojemność przepada. Idempotentne: druga próba zwraca zera.
      *
@@ -1573,7 +1757,7 @@ final class CaptainProfile
         [$captured, $defense] = match ($kind) {
             BattleKind::Capture => [$won && $free && !$stronghold, null],
             BattleKind::Defense => [false, $this->settleDefense($key, $won)],
-            BattleKind::Guardian => [false, null],
+            BattleKind::Guardian, BattleKind::Encounter => [false, null],
             BattleKind::Siege => [$won && $free, null],
         };
         // potyczka na twierdzy oblega wyspę (#120)
@@ -1600,14 +1784,19 @@ final class CaptainProfile
             $this->counterattackCalmFrom = $this->tick;
             $this->record($this->tick, LogEvent::IslandCaptured, ['island' => $battle['island']]);
         }
-        if (BattleKind::Guardian !== $kind) {
+        // na morzu nie ma magazynu: łup strażnika i spotkania ładuje flota
+        $atSea = in_array($kind, [BattleKind::Guardian, BattleKind::Encounter], true);
+        if (!$atSea) {
             $this->stockpiles[$battle['island']] = $this->stockpile($battle['island'])->add($loot);
+        }
+        if (BattleKind::Encounter === $kind) {
+            $this->record($this->tick, LogEvent::EncounterBattle, ['encounter' => $battle['encounter'] ?? null, 'result' => $result, 'sea' => $battle['island']]);
         }
 
         [$lost, $damaged] = $this->applyLosses($battle['ships'] ?? [], $result, $sunkLengths, $sunkVariants);
         $cargoLost = $this->trimCargo();
-        if (BattleKind::Guardian === $kind) {
-            // łup strażnika ładuje flota, która przetrwała bitwę
+        if ($atSea) {
+            // łup strażnika i spotkania ładuje flota, która przetrwała bitwę
             [$fit, $overflow] = $loot->fitInto($this->cargoCapacity() - $this->cargo->total());
             $this->cargo = $this->cargo->add($fit);
             $cargoLost = $cargoLost->add($overflow);
@@ -1617,7 +1806,11 @@ final class CaptainProfile
         if ('won' === $result && null !== $boardedType) {
             $prize = Prize::capture($boardedType, $boardedVariant, $this->tick);
             $this->prizes[$prize->id] = $prize;
-            $place = BattleKind::Guardian === $kind ? 'gate' : 'island';
+            $place = match ($kind) {
+                BattleKind::Guardian => 'gate',
+                BattleKind::Encounter => 'sea',
+                default => 'island',
+            };
             $this->record($this->tick, LogEvent::ShipBoarded, ['ship' => $boardedType->value, 'variant' => $boardedVariant?->value, $place => $battle['island']]);
         }
 
@@ -1960,7 +2153,7 @@ final class CaptainProfile
         return $this->unplacedResources;
     }
 
-    /** @return array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int, stronghold?: bool}> */
+    /** @return array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int, stronghold?: bool, encounter?: string}> */
     public function battles(): array
     {
         return $this->battles;
@@ -1989,6 +2182,7 @@ final class CaptainProfile
      * @param list<Prize>                                                                                                                                   $prizes       statki zdobyte abordażem, czekające na decyzję (#118)
      * @param array<string, int>                                                                                                                            $besieged     oblężone twierdze: id wyspy → tik wygranej potyczki (#120)
      * @param list<FleetPreset>                                                                                                                             $fleetPresets zapisane zestawy floty (#125)
+     * @param Encounter|null                                                                                                                                $encounter    spotkanie czekające na decyzję (#141)
      */
     public static function fromSnapshot(
         ProfileId $id,
@@ -2018,6 +2212,7 @@ final class CaptainProfile
         array $prizes = [],
         array $besieged = [],
         array $fleetPresets = [],
+        ?Encounter $encounter = null,
     ): self {
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
@@ -2062,6 +2257,7 @@ final class CaptainProfile
         $self->counterattackCalmFrom = $counterattacks['calmFrom'] ?? max([0, ...array_values($ownedIslands)]);
         $self->counterattackRolledTo = $counterattacks['rolledTo'] ?? $self->tick;
         $self->lastCounterattack = $counterattacks['last'] ?? null;
+        $self->encounter = $encounter;
 
         return $self;
     }

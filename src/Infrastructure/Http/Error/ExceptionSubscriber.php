@@ -181,6 +181,14 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             // port handlowy i rynek (#140)
             'Trade port not found' => ['TRADE_PORT_NOT_FOUND', 404],
             'Not at trade port' => ['NOT_AT_TRADE_PORT', 409],
+            // spotkania na morzu (#141)
+            'Encounter pending' => ['ENCOUNTER_PENDING', 409],
+            'No encounter pending' => ['NO_ENCOUNTER', 409],
+            'Not available in this encounter' => ['ENCOUNTER_CHOICE_UNAVAILABLE', 409],
+            'Not enough gold for ransom' => ['NOT_ENOUGH_GOLD', 409],
+            'Merchant trades wood and steel for gold' => ['VALIDATION_ERROR', 400],
+            'No market on this sea' => ['NO_MARKET', 409],
+            'Empty trade order' => ['VALIDATION_ERROR', 400],
             // zestawy floty (#125)
             'Fleet preset not found' => ['FLEET_PRESET_NOT_FOUND', 404],
             'Fleet preset limit exceeded' => ['FLEET_PRESET_LIMIT', 409],

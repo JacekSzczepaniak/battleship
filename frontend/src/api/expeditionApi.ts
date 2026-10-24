@@ -325,6 +325,8 @@ export interface SailResultDTO {
     cargoCapacity: number;
     atIsland: string | null;
     atGate: string | null;
+    // spotkanie z handlarzem albo piratem (#141): rejs stoi do decyzji; skutki wyborów w ExpeditionDTO.encounter
+    encounter?: { type: EncounterTypeName; tick: number; sea: string; x: number; y: number } | null;
 }
 
 // przejście przez bramę (#107): jak rejs, plus akwen docelowy i zegar
@@ -436,13 +438,14 @@ export interface ResearchDTO {
 
 // dziennik kapitana (#111): rodzaj zdarzenia (Domain/Expedition/LogEvent) z danymi; treść składa lib/eventLog
 // rodzaj bitwy w rejestrze profilu (Domain/Expedition/BattleKind)
-export type BattleKindName = 'capture' | 'defense' | 'guardian' | 'siege';
+export type BattleKindName = 'capture' | 'defense' | 'guardian' | 'siege' | 'encounter';
 
 export type LogEventName =
     | 'storm' | 'island-captured' | 'island-lost' | 'island-defended' | 'island-plundered' | 'counterattack-announced'
     | 'research-completed' | 'ship-built' | 'building-built' | 'gate-opened' | 'gate-passed'
     | 'ship-boarded' | 'prize-decided' | 'island-besieged' | 'siege-failed' | 'ship-scrapped'
-    | 'market-trade' | 'ship-sold';
+    | 'market-trade' | 'ship-sold'
+    | 'encounter-met' | 'encounter-resolved' | 'encounter-battle';
 
 export interface LogEntryDTO {
     tick: number;
@@ -469,7 +472,7 @@ export interface LogEntryDTO {
     building?: BuildingTypeName;
     // decyzja o zdobyczy (#118): rozbiórka podaje zwrot i to, co nie zmieściło się w ładowni,
     // a zbadanie konstrukcji (#121) odblokowaną technologię (pole technology)
-    decision?: PrizeDecisionName;
+    decision?: PrizeDecisionName | EncounterDecisionName | 'trade';
     refund?: ResourcesDTO;
     lost?: ResourcesDTO;
     // złomowanie (#124): zwrot w refund; ładunek ponad pojemność floty został w magazynie wyspy
@@ -481,6 +484,16 @@ export interface LogEntryDTO {
     paid?: ResourcesDTO;
     received?: ResourcesDTO;
     gold?: number;
+    // spotkanie na morzu (#141): rodzaj; przy rozstrzygnięciu decision (pass|flee|ransom|trade), przy bitwie result
+    encounter?: EncounterTypeName;
+    result?: 'won' | 'lost';
+    sea?: string;
+    seaName?: string;
+    // okup w złocie (pole gold); handel: sprzedane i kupione surowce z zapłatą w złocie
+    sold?: ResourcesDTO;
+    bought?: ResourcesDTO;
+    goldReceived?: number;
+    goldPaid?: number;
 }
 
 // decyzja o statku zdobytym abordażem (#118); study = zbadaj konstrukcję (#121)
@@ -514,6 +527,72 @@ export async function decidePrize(profileId: string, prizeId: string, decision: 
     return http.post<DecidePrizeDTO>(`/profiles/${profileId}/prizes/${prizeId}`, { decision });
 }
 
+// spotkania na morzu (#141): kogo flota spotkała i wybór bez bitwy (handel i bitwa mają własne akcje)
+export type EncounterTypeName = 'merchant' | 'pirate';
+export type EncounterDecisionName = 'pass' | 'flee' | 'ransom';
+
+// spotkanie czekające na decyzję, ze skutkami wyborów podanymi z góry
+export interface EncounterDTO {
+    type: EncounterTypeName;
+    tick: number;
+    sea: { id: string; name: string };
+    position: { x: number; y: number };
+    // bitwa: napad na handlarza albo walka z piratem; łup do ładowni, za przegraną tylko XP
+    battle: {
+        name: string;
+        mode: 'classic' | 'fun';
+        fleet: ShipTypeName[];
+        board: { w: number; h: number };
+        squadLimit: number;
+        xpWin: number;
+        xpLoss: number;
+        lootWin: ResourcesDTO;
+        lootLoss: ResourcesDTO;
+    };
+    // handel u handlarza: towar za 1 złoto u handlarza (rate) i w porcie akwenu (portRate, #140), marża w %;
+    // zlecenie w sztukach — kupno płaci za każdą zaczętą porcję, sprzedaż dostaje złoto za pełne
+    trade: {
+        rate: Record<MarketGoodName, { buy: number; sell: number }>;
+        portRate: Record<MarketGoodName, { buy: number; sell: number }>;
+        worsePercent: number;
+        ticks: number;
+    } | null;
+    // pirat: ucieczka (tiki i ładunek, który zabierze) i okup w złocie z ładowni
+    flee: { ticks: number; cargoLost: ResourcesDTO } | null;
+    ransom: { gold: number; affordable: boolean } | null;
+}
+
+export interface ResolveEncounterDTO {
+    decision: EncounterDecisionName;
+    cargoLost: ResourcesDTO;
+    goldPaid: number;
+    cargo: ResourcesDTO;
+    tick: number;
+}
+
+export interface MerchantTradeDTO {
+    goldReceived: number;
+    goldPaid: number;
+    cargo: ResourcesDTO;
+    tick: number;
+}
+
+export type TradeOrder = { wood: number; steel: number };
+
+export async function decideEncounter(profileId: string, decision: EncounterDecisionName): Promise<ResolveEncounterDTO> {
+    return http.post<ResolveEncounterDTO>(`/profiles/${profileId}/encounter/decide`, { decision });
+}
+
+/** Jedno zlecenie u handlarza: sprzedaż i kupno drewna i stali za złoto z ładowni; 1 tik. */
+export async function tradeWithMerchant(profileId: string, sell: TradeOrder, buy: TradeOrder): Promise<MerchantTradeDTO> {
+    return http.post<MerchantTradeDTO>(`/profiles/${profileId}/encounter/trade`, { sell, buy });
+}
+
+/** Napad na handlarza albo walka z piratem; bez `shipIds` skład domyślny w limicie planszy spotkania. */
+export async function startEncounterBattle(profileId: string, shipIds?: string[]): Promise<CreateGameResponse> {
+    return http.post<CreateGameResponse>(`/profiles/${profileId}/encounter/battle`, shipIds ? { shipIds } : {});
+}
+
 export interface ExpeditionDTO {
     profile: ExpeditionProfileDTO;
     fleet: FleetShipDTO[];
@@ -524,6 +603,8 @@ export interface ExpeditionDTO {
     islands: IslandDTO[];
     world: WorldDTO;
     counterattack: { pending: PendingCounterattackDTO | null; last: LastCounterattackDTO | null };
+    // spotkanie z rejsu czekające na decyzję (#141); null = droga wolna
+    encounter: EncounterDTO | null;
     research: ResearchDTO;
     // od najnowszego wpisu, najwyżej 50
     log: LogEntryDTO[];
@@ -575,6 +656,8 @@ export interface SettleResultDTO {
     gateOpened: boolean;
     // abordaż (#118): zdobyty statek czeka na decyzję na ekranie Rejs; null = bez udanego abordażu
     prize: Omit<PrizeDTO, 'length' | 'scrapValue' | 'studyTechnology'> | null;
+    // bitwa spotkania (#141): merchant = napad, pirate = walka z piratem; null = inna bitwa
+    encounter: EncounterTypeName | null;
 }
 
 export async function createProfile(name: string): Promise<ProfileDTO> {

@@ -81,7 +81,7 @@
 
             <!-- Trwająca bitwa -->
             <section v-if="pendingBattle" class="alert pending">
-                <span>⚔️ Trwa bitwa {{ pendingBattle.kind === 'guardian' ? 'ze strażnikiem:' : 'o' }} <strong>{{ pendingBattle.islandName }}</strong>.</span>
+                <span>⚔️ Trwa bitwa {{ pendingBattle.kind === 'guardian' || pendingBattle.kind === 'encounter' ? 'z:' : 'o' }} <strong>{{ pendingBattle.islandName }}</strong>.</span>
                 <router-link class="btn btn-small btn-primary" :to="{ name: 'game', params: { id: pendingBattle.gameId } }">
                     Wróć do bitwy
                 </router-link>
@@ -105,8 +105,92 @@
                 <span v-if="prizeOverflow(prize)" class="prize-warn">⚠️ Ładownia pomieści {{ cargoFree }} — przy rozbiórce {{ prizeOverflow(prize) }} pójdzie za burtę. Rozładuj ją najpierw w porcie, decyzja poczeka.</span>
             </section>
 
+            <!-- Spotkanie na morzu (#141): rejs stoi do decyzji, skutki każdego wyboru podane z góry -->
+            <section v-if="encounter" class="alert encounter" :class="encounter.type">
+                <strong>{{ encounter.type === 'pirate' ? '🏴‍☠️ Piraci na kursie' : '⚖️ Handlarz na kursie' }}</strong>
+                <span class="muted">Sektor {{ sectorLabel(encounter.position) }} · {{ encounter.sea.name }} · rejs czeka na Twoją decyzję.</span>
+                <div class="encounter-options">
+                    <div class="encounter-option">
+                        <div class="kicker">{{ encounter.type === 'pirate' ? 'Walka' : 'Napad' }}</div>
+                        <span class="muted">{{ encounter.battle.name }}: {{ guardianFleet(encounter.battle) }} · plansza {{ encounter.battle.board.w }}×{{ encounter.battle.board.h }} · bronie specjalne</span>
+                        <span>🏆 +{{ encounter.battle.xpWin }} XP, {{ formatResources(encounter.battle.lootWin) }} do ładowni</span>
+                        <span class="muted">porażka: +{{ encounter.battle.xpLoss }} XP, bez łupu · zatopione statki przepadają · nadmiar łupu ponad ładownię idzie za burtę</span>
+                        <span v-if="encounter.type === 'merchant'" class="muted">Napad zapisuje się w dzienniku — kupcy go zapamiętają.</span>
+                        <div class="squad">
+                            <span :class="{ over: activeCells > encounter.battle.squadLimit }">
+                                skład: {{ squadCells(squadFor(encounter.battle)) }} / {{ encounter.battle.squadLimit }} pól
+                                <template v-if="activeCells > encounter.battle.squadLimit"> · flota ma {{ activeCells }} pól — część nie stanie do bitwy</template>
+                            </span>
+                            <button v-if="activeCells > encounter.battle.squadLimit || leavesShipsInPort(encounter.battle)" class="btn btn-small btn-secondary" @click="togglePicker(encounter.battle)">
+                                {{ squadPick ? 'skład domyślny' : 'wybierz skład' }}
+                            </button>
+                            <ul v-if="squadPick" class="squad-pick">
+                                <li v-for="ship in activeShips" :key="ship.id">
+                                    <label :class="{ off: !squadPick.has(ship.id) && squadCells(squadFor(encounter.battle)) + ship.length > encounter.battle.squadLimit }">
+                                        <input
+                                            type="checkbox"
+                                            :checked="squadPick.has(ship.id)"
+                                            :disabled="!squadPick.has(ship.id) && squadCells(squadFor(encounter.battle)) + ship.length > encounter.battle.squadLimit"
+                                            @change="toggleShip(ship.id)"
+                                        />
+                                        {{ SHIP_ICONS[ship.type] }} {{ fleetShipLabel(ship) }} · {{ fieldsLabel(ship.length) }}
+                                    </label>
+                                </li>
+                            </ul>
+                            <span v-if="convoyBlocked(encounter.battle)" class="over">⚠️ konwój bez eskorty nie stanie do bitwy — dobierz kuter, niszczyciel albo lotniskowiec</span>
+                        </div>
+                        <button
+                            class="btn btn-small btn-primary"
+                            :disabled="busy || starting !== null || pendingBattle !== null || squadFor(encounter.battle).length === 0 || convoyBlocked(encounter.battle)"
+                            @click="onStartEncounter"
+                        >{{ starting === 'encounter' ? 'Stawianie żagli…' : encounter.type === 'pirate' ? '⚔️ Walcz z piratami' : '⚔️ Napadnij handlarza' }}</button>
+                    </div>
+
+                    <template v-if="encounter.type === 'merchant' && encounter.trade">
+                        <div class="encounter-option">
+                            <div class="kicker">Handel na miejscu · {{ encounter.trade.ticks }} tik</div>
+                            <span class="muted">Ceny o {{ encounter.trade.worsePercent }}% gorsze niż w porcie. Za 1 złoto kupisz {{ encounter.trade.rate.wood.buy }} drewna albo {{ encounter.trade.rate.steel.buy }} stali (w porcie {{ encounter.trade.portRate.wood.buy }} i {{ encounter.trade.portRate.steel.buy }}), a sprzedasz za nie {{ encounter.trade.rate.wood.sell }} drewna albo {{ encounter.trade.rate.steel.sell }} stali (w porcie {{ encounter.trade.portRate.wood.sell }} i {{ encounter.trade.portRate.steel.sell }}).</span>
+                            <div class="trade-grid">
+                                <span></span><span class="muted">sprzedaj</span><span class="muted">kup</span>
+                                <span class="trade-res"><span class="res-dot" style="background: var(--res-wood)"></span> drewno</span>
+                                <input v-model.number="tradeSell.wood" type="number" min="0" :max="expedition.profile.cargo.wood" />
+                                <input v-model.number="tradeBuy.wood" type="number" min="0" />
+                                <span class="trade-res"><span class="res-dot" style="background: var(--res-steel)"></span> stal</span>
+                                <input v-model.number="tradeSell.steel" type="number" min="0" :max="expedition.profile.cargo.steel" />
+                                <input v-model.number="tradeBuy.steel" type="number" min="0" />
+                            </div>
+                            <span>
+                                złoto: +{{ tradePreview.received }} za sprzedaż, −{{ tradePreview.paid }} za kupno
+                                · w ładowni po handlu {{ tradePreview.load }} / {{ expedition.profile.cargoCapacity }}
+                            </span>
+                            <span v-if="tradePreview.problem" class="over">⚠️ {{ tradePreview.problem }}</span>
+                            <button class="btn btn-small btn-primary" :disabled="busy || !!tradePreview.problem" @click="onMerchantTrade">⚖️ Handluj</button>
+                        </div>
+                        <div class="encounter-option">
+                            <div class="kicker">Minięcie</div>
+                            <span class="muted">Bez skutków i bez tiku — każdy płynie w swoją stronę.</span>
+                            <button class="btn btn-small btn-secondary" :disabled="busy" @click="onDecideEncounter('pass')">⛵ Płyń dalej</button>
+                        </div>
+                    </template>
+
+                    <template v-if="encounter.type === 'pirate' && encounter.flee && encounter.ransom">
+                        <div class="encounter-option">
+                            <div class="kicker">Ucieczka · {{ encounter.flee.ticks }} tik</div>
+                            <span class="muted">Piraci dopadną część ładunku: {{ formatResources(encounter.flee.cargoLost, 'nic — ładownia jest pusta') }} za burtą (20% każdego surowca).</span>
+                            <button class="btn btn-small btn-secondary" :disabled="busy" @click="onDecideEncounter('flee')">💨 Uciekaj</button>
+                        </div>
+                        <div class="encounter-option">
+                            <div class="kicker">Okup</div>
+                            <span class="muted">{{ encounter.ransom.gold }} złota z ładowni — bez tiku i bez strat we flocie.</span>
+                            <span v-if="!encounter.ransom.affordable" class="over">⚠️ W ładowni jest {{ expedition.profile.cargo.gold }} złota — za mało na okup.</span>
+                            <button class="btn btn-small btn-secondary" :disabled="busy || !encounter.ransom.affordable" @click="onDecideEncounter('ransom')">🪙 Zapłać {{ encounter.ransom.gold }} złota</button>
+                        </div>
+                    </template>
+                </div>
+            </section>
+
             <div class="main">
-                <SeaMap :expedition="expedition" :busy="busy" :note="seaMsg" :gate-status="gateStatus" @sail="onSail" />
+                <SeaMap :expedition="expedition" :busy="busy || !!encounter" :note="encounter ? 'Spotkanie czeka na decyzję — rejs stoi.' : seaMsg" :gate-status="gateStatus" @sail="onSail" />
 
                 <!-- Panel kontekstowy: zakładka w hashu adresu (#wyspa, #flota, #badania, #dziennik) -->
                 <section ref="panelEl" class="panel">
@@ -588,10 +672,10 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
-    buildBuilding, buildShip, createProfile, decidePrize, getExpedition, passGate, repairShip, sail, scrapShip, sellShip, settleBattle, startGuardianBattle, startIslandBattle, startSiege,
-    startResearch, trade, transferCargo,
+    buildBuilding, buildShip, createProfile, decideEncounter, decidePrize, getExpedition, passGate, repairShip, sail, scrapShip, sellShip, settleBattle, startEncounterBattle, startGuardianBattle, startIslandBattle, startSiege,
+    startResearch, trade, tradeWithMerchant, transferCargo,
     BUILDING_ICONS, BUILDING_LABELS, RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, SHIP_VARIANT_LABELS, SHIP_VARIANT_NAMES, TECH_LABELS, fleetShipLabel,
-    type BuildingTypeName, type TechnologyName, type ExpeditionDTO, type TradePortDTO, type FleetShipDTO, type GateDTO, type GuardianDTO, type IslandDTO,
+    type BuildingTypeName, type EncounterDecisionName, type ShipTypeName, type TechnologyName, type ExpeditionDTO, type TradePortDTO, type FleetShipDTO, type GateDTO, type GuardianDTO, type IslandDTO,
     type MarketGoodName, type MarketSideName, type PrizeDTO, type PrizeDecisionName, type RankName, type ResourcesDTO, type SailResultDTO, type SeaThemeDTO, type ShipTypeDTO, type ShipVariantDTO, type ShipVariantName,
 } from '../api/expeditionApi';
 import { ApiError } from '../api/http';
@@ -603,6 +687,7 @@ import { defaultSquad, isUnescortedConvoy, squadCells } from '../lib/squad';
 import { VARIANTS, carriedWeapon, columnLabel, fieldsLabel } from '../lib/ships';
 import { depositLabel, depositState, whereToFind } from '../lib/economy';
 import { logText, logTone } from '../lib/eventLog';
+import { buyCost, sellValue } from '../lib/merchant';
 import CargoPanel from '../components/CargoPanel.vue';
 import FleetPresetPicker from '../components/FleetPresetPicker.vue';
 import FleetPanel from '../components/FleetPanel.vue';
@@ -804,7 +889,7 @@ function gateBlockText(gate: GateDTO): string {
 }
 
 /** „Lotniskowiec, 2× Niszczyciel, 2× Kuter, 3× Tratwa”. */
-function guardianFleet(guardian: GuardianDTO): string {
+function guardianFleet(guardian: Pick<GuardianDTO, 'fleet'> | { fleet: ShipTypeName[] }): string {
     const counts = new Map<string, number>();
     guardian.fleet.forEach(t => counts.set(SHIP_LABELS[t], (counts.get(SHIP_LABELS[t]) ?? 0) + 1));
     return [...counts].map(([name, n]) => (n > 1 ? `${n}× ${name}` : name)).join(', ');
@@ -1264,6 +1349,85 @@ async function onStartGuardian(gate: GateDTO) {
         starting.value = null;
     }
 }
+
+// --- Spotkania na morzu (#141): handlarz i pirat ---
+
+const encounter = computed(() => expedition.value?.encounter ?? null);
+
+const tradeSell = ref({ wood: 0, steel: 0 });
+const tradeBuy = ref({ wood: 0, steel: 0 });
+watch(() => encounter.value?.tick, () => {
+    tradeSell.value = { wood: 0, steel: 0 };
+    tradeBuy.value = { wood: 0, steel: 0 };
+});
+
+const amount = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0);
+
+/** Zlecenie u handlarza: złoto za sprzedaż i kupno, ładunek po handlu i powód blokady (jak domena). */
+const tradePreview = computed(() => {
+    const trade = encounter.value?.trade;
+    const profile = expedition.value?.profile;
+    const sell = { wood: amount(tradeSell.value.wood), steel: amount(tradeSell.value.steel) };
+    const buy = { wood: amount(tradeBuy.value.wood), steel: amount(tradeBuy.value.steel) };
+    if (!trade || !profile) return { sell, buy, received: 0, paid: 0, load: 0, problem: 'brak handlarza' };
+    const received = sellValue(trade, sell);
+    const paid = buyCost(trade, buy);
+    const cargo = profile.cargo;
+    const load = totalResources(cargo) - sell.wood - sell.steel + buy.wood + buy.steel + received - paid;
+    let problem = '';
+    if (sell.wood + sell.steel + buy.wood + buy.steel === 0) problem = 'wpisz, co sprzedajesz albo kupujesz';
+    else if (sell.wood > cargo.wood || sell.steel > cargo.steel) problem = 'nie masz tyle w ładowni';
+    else if (cargo.gold + received < paid) problem = `zabraknie złota: potrzeba ${paid}, będzie ${cargo.gold + received}`;
+    else if (load > profile.cargoCapacity) problem = `ładownia nie pomieści: ${load} / ${profile.cargoCapacity}`;
+    return { sell, buy, received, paid, load, problem };
+});
+
+async function onMerchantTrade() {
+    const profileId = getProfileId();
+    if (!profileId) return;
+    busy.value = true;
+    error.value = '';
+    try {
+        await tradeWithMerchant(profileId, tradePreview.value.sell, tradePreview.value.buy);
+        expedition.value = await getExpedition(profileId);
+    } catch (e: any) {
+        error.value = e?.message ?? 'Handel nie powiódł się';
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function onDecideEncounter(decision: EncounterDecisionName) {
+    const profileId = getProfileId();
+    if (!profileId) return;
+    busy.value = true;
+    error.value = '';
+    try {
+        await decideEncounter(profileId, decision);
+        expedition.value = await getExpedition(profileId);
+    } catch (e: any) {
+        error.value = e?.message ?? 'Decyzja nie powiodła się';
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function onStartEncounter() {
+    const profileId = getProfileId();
+    const current = encounter.value;
+    if (!profileId || !current) return;
+    starting.value = 'encounter';
+    error.value = '';
+    try {
+        const shipIds = squadPick.value ? [...squadPick.value] : undefined;
+        const game = await startEncounterBattle(profileId, shipIds);
+        setCurrentBattle({ profileId, gameId: game.id, islandId: current.sea.id, islandName: current.battle.name, kind: 'encounter', presetId: squadPresetId.value ?? undefined });
+        await router.push({ name: 'place-fleet', params: { id: game.id } });
+    } catch (e: any) {
+        error.value = e?.message ?? 'Nie udało się rozpocząć bitwy';
+        starting.value = null;
+    }
+}
 </script>
 
 <style scoped>
@@ -1314,6 +1478,14 @@ h2, h3 { font-family: var(--font-head); }
 .prize { border-color: var(--accent); }
 .prize-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
 .prize-warn { flex-basis: 100%; font: 500 12px var(--font-mono); color: var(--warn); }
+.encounter.pirate { border-color: var(--danger); }
+.encounter.merchant { border-color: var(--info); }
+.encounter-options { flex-basis: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.encounter-option { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-card); background: var(--bg-panel); }
+.encounter-option .over { color: var(--warn); font: 500 12px var(--font-mono); }
+.trade-grid { display: grid; grid-template-columns: auto 80px 80px; gap: 4px 8px; align-items: center; }
+.trade-res { display: inline-flex; align-items: center; gap: 6px; }
+.trade-grid input { width: 80px; padding: 4px 6px; border: 1px solid var(--line-btn); border-radius: 6px; background: var(--bg-card); color: var(--text); }
 
 /* mapa + panel */
 .main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }

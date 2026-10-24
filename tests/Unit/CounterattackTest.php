@@ -12,6 +12,7 @@ use App\Domain\Expedition\WorldMap;
 use App\Domain\Shared\GameId;
 use App\Domain\Shared\ProfileId;
 use App\Infrastructure\Persistence\Doctrine\Mapper\ProfileSnapshotMapper;
+use Tests\Support\Encounters;
 
 const COUNTERATTACK_SEED = 7;
 
@@ -57,6 +58,8 @@ function passTick(CaptainProfile $profile): void
     $home = $world->islandPosition('wyspa-sygnalowa');
     $target = $profile->position() === $home ? shuttleSector($world) : $home;
     $profile->sail($target['x'], $target['y'], $world);
+    // spotkanie (#141) nie zatrzymuje odmierzania tików
+    Encounters::evade($profile);
     $profile->ensureWorldState($world);
 }
 

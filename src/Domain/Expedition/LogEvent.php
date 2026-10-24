@@ -62,4 +62,13 @@ enum LogEvent: string
 
     /** Kapitan sprzedał statek za złoto w porcie handlowym (#140). */
     case ShipSold = 'ship-sold';
+
+    /** Spotkanie w rejsie: handlarz albo pirat czeka na decyzję (#141). */
+    case EncounterMet = 'encounter-met';
+
+    /** Spotkanie rozstrzygnięte bez bitwy: handel, minięcie, ucieczka albo okup (#141). */
+    case EncounterResolved = 'encounter-resolved';
+
+    /** Rozliczona bitwa spotkania: napad na handlarza albo walka z piratem (#141, pod reputację #142). */
+    case EncounterBattle = 'encounter-battle';
 }

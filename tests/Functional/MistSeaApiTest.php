@@ -17,6 +17,7 @@ use App\Domain\Shared\ProfileId;
 use App\Kernel;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Tests\Support\Encounters;
 
 /** Nawigacja oceaniczna, otwarty ocean i Morze Mgieł (#108) przez API. */
 final class MistSeaApiTest extends WebTestCase
@@ -109,6 +110,8 @@ final class MistSeaApiTest extends WebTestCase
         $expected = ["0:{$arrival['y']}", "1:{$arrival['y']}", "2:{$arrival['y']}"];
         sort($expected);
         self::assertSame($expected, $discovered);
+        // rejs mógł trafić na spotkanie (#141), które zatrzymałoby dalszą żeglugę
+        Encounters::dismiss(static::getContainer()->get(ProfileRepository::class), $profileId);
 
         $this->post($client, "/api/profiles/$profileId/sail", $arrival);
         $home = $this->post($client, "/api/profiles/$profileId/gates/".self::GATE.'/pass');

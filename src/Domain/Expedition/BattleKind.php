@@ -21,4 +21,7 @@ enum BattleKind: string
 
     /** Oblężenie fortu oblężonej twierdzy — wygrana stawia banderę (#120). */
     case Siege = 'siege';
+
+    /** Bitwa spotkania na otwartym morzu: napad na handlarza albo walka z piratem (#141). */
+    case Encounter = 'encounter';
 }

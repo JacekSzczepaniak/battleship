@@ -37,6 +37,8 @@ final class Sail
             'cartography' => $outcome['cartography'],
             'cartographyLost' => $outcome['cartographyLost'],
             'event' => $outcome['event'],
+            // spotkanie z handlarzem albo piratem (#141): rejs stoi do decyzji; szczegóły w /expedition
+            'encounter' => $outcome['encounter'],
             'cargo' => $profile->cargo()->toArray(),
             'cargoCapacity' => $profile->cargoCapacity(),
             'atIsland' => $world->islandAt($position['x'], $position['y']),

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Functional;
 
+use App\Domain\Expedition\ProfileRepository;
 use App\Kernel;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Tests\Support\Encounters;
 
 final class SailApiTest extends WebTestCase
 {
@@ -47,6 +49,8 @@ final class SailApiTest extends WebTestCase
         self::assertSame(['wood', 'steel', 'gold'], array_keys($sailed['cargo']));
         self::assertIsInt($sailed['cargoCapacity']);
         self::assertIsInt($sailed['cartographyLost']);
+        // rejs mógł trafić na spotkanie (#141), które zatrzymałoby dalszą żeglugę
+        Encounters::dismiss(static::getContainer()->get(ProfileRepository::class), $profileId);
 
         // 4) skok przez pół mapy → 409 SAIL_NOT_ADJACENT
         $this->post($client, "/api/profiles/$profileId/sail", [

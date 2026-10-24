@@ -183,7 +183,7 @@ Wszystkie ścieżki pod `/api`, JSON. Pełna lista: `docker compose exec app php
 | `POST` | `/games/{id}/board` | abordaż ostatniego statku wroga (#118): rzut k6, ⚡3, kończy turę, raz na bitwę; `422 BOARDING_NOT_AVAILABLE` poza bitwą wyprawy z energią, `422 BOARDING_NOT_LAST_SHIP`, `409 BOARDING_ALREADY_ATTEMPTED` |
 | `POST` | `/games/{id}/end-turn` | „Zakończ turę” bez ataku (tylko `fun`; w classic `422 END_TURN_NOT_AVAILABLE`) |
 | `POST` | `/profiles` | nowy profil kapitana |
-| `GET` | `/profiles/{id}/expedition` | profil, flota, typy statków i budynków, wyspy bieżącego akwenu (bandera, budynki), świat (akwen i jego motyw, bramy z powodem blokady i strażnikiem, port handlowy `tradePort` z kursem rynku i magazynem), statki zdobyte abordażem (`prizes`, ze zwrotem z rozbiórki i `studyTechnology` do zbadania konstrukcji), kontratak, drzewko badań, dziennik kapitana (50 ostatnich zdarzeń, od najnowszego), zapisane zestawy floty (`fleetPresets`) i skład nierozliczonych bitew (`battleSquads`: gameId → id statków) |
+| `GET` | `/profiles/{id}/expedition` | profil, flota, typy statków i budynków, wyspy bieżącego akwenu (bandera, budynki), świat (akwen i jego motyw, bramy z powodem blokady i strażnikiem, port handlowy `tradePort` z kursem rynku i magazynem), statki zdobyte abordażem (`prizes`, ze zwrotem z rozbiórki i `studyTechnology` do zbadania konstrukcji), kontratak, drzewko badań, dziennik kapitana (50 ostatnich zdarzeń, od najnowszego), zapisane zestawy floty (`fleetPresets`), spotkanie czekające na decyzję ze skutkami wyborów (`encounter`) i skład nierozliczonych bitew (`battleSquads`: gameId → id statków) |
 | `POST` | `/profiles/{id}/sail` | rejs za 1 tik: o jeden sektor, z Żeglugą dwusektorową także o dwa |
 | `POST` | `/profiles/{id}/islands/{islandId}/battle` | bitwa o wyspę albo obrona wyspy pod banderą (kapitan musi stać na wyspie) |
 | `POST` | `/profiles/{id}/islands/{islandId}/buildings` | budynek osady (`type`) na posiadanej wyspie |
@@ -191,6 +191,9 @@ Wszystkie ścieżki pod `/api`, JSON. Pełna lista: `docker compose exec app php
 | `POST` | `/profiles/{id}/islands/{islandId}/siege` | oblężenie fortu oblężonej twierdzy (po wygranej potyczce, flota przy wyspie); wygrana stawia banderę |
 | `POST` | `/profiles/{id}/gates/{gateId}/battle` | bitwa ze strażnikiem bramy (flota na sektorze bramy, ranga strażnika); wygrana otwiera bramę |
 | `POST` | `/profiles/{id}/gates/{gateId}/pass` | przejście przez otwartą bramę na sektor bramy drugiego akwenu, za 1 tik |
+| `POST` | `/profiles/{id}/encounter/decide` | decyzja przy spotkaniu na morzu: `decision` `pass` (minięcie handlarza), `flee` (ucieczka przed piratem: 1 tik i 20% ładunku) albo `ransom` (okup w złocie z ładowni); `409 NO_ENCOUNTER`, `409 ENCOUNTER_CHOICE_UNAVAILABLE`, `409 NOT_ENOUGH_GOLD` |
+| `POST` | `/profiles/{id}/encounter/trade` | handel z handlarzem jednym zleceniem za 1 tik: `sell` i `buy` (`{wood, steel}`) za złoto z ładowni, ceny o 25% gorsze niż w porcie |
+| `POST` | `/profiles/{id}/encounter/battle` | napad na handlarza albo walka z piratem (opcjonalnie `shipIds`); łup do ładowni. Dopóki spotkanie czeka, `/sail` zwraca `409 ENCOUNTER_PENDING` |
 | `POST` | `/profiles/{id}/battles/{gameId}/settle` | rozliczenie zakończonej bitwy |
 | `POST` | `/profiles/{id}/ships` | budowa statku w stoczni (`type`, `islandId`, opcjonalnie `variant` niszczyciela: `torpedowy`/`zwiadowczy`) |
 | `POST` | `/profiles/{id}/ships/{shipId}/repair` | remont statku |

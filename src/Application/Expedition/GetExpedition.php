@@ -4,6 +4,8 @@ namespace App\Application\Expedition;
 
 use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\CaptainProfile;
+use App\Domain\Expedition\EncounterCatalog;
+use App\Domain\Expedition\EncounterType;
 use App\Domain\Expedition\FleetPreset;
 use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\LogEntry;
@@ -39,8 +41,9 @@ final class GetExpedition
      * bieżącego akwenu z powodem blokady i strażnikiem (#107) oraz dziennik
      * kapitana (#111). Kontratak może celować w wyspę innego akwenu (#109):
      * zapowiedź podaje akwen celu i drogę floty, a świat — bandery per akwen.
+     * Spotkanie z rejsu (#141) przychodzi ze skutkami każdego wyboru.
      *
-     * @return array{profile: array<string,mixed>, fleet: list<array<string,mixed>>, shipTypes: list<array<string,mixed>>, buildingTypes: list<array<string,mixed>>, islands: list<array<string,mixed>>, world: array<string,mixed>, counterattack: array<string,mixed>, research: array<string,mixed>, log: list<array<string,mixed>>}
+     * @return array{profile: array<string,mixed>, fleet: list<array<string,mixed>>, shipTypes: list<array<string,mixed>>, buildingTypes: list<array<string,mixed>>, islands: list<array<string,mixed>>, world: array<string,mixed>, counterattack: array<string,mixed>, encounter: array<string,mixed>|null, research: array<string,mixed>, log: list<array<string,mixed>>}
      */
     public function handle(string $profileId): array
     {
@@ -216,6 +219,7 @@ final class GetExpedition
                 'flags' => $this->flagsView($profile, $world),
             ],
             'counterattack' => $this->counterattackView($profile, $world),
+            'encounter' => $this->encounterView($profile),
             'research' => $this->researchView($profile, $world),
             'log' => $this->logView($profile),
         ];
@@ -237,6 +241,7 @@ final class GetExpedition
                 'gateName' => isset($data['gate']) ? ($this->seas->gate((string) $data['gate'])->name ?? (string) $data['gate']) : null,
                 'fromName' => isset($data['from']) ? ($this->seas->sea((string) $data['from'])->name ?? (string) $data['from']) : null,
                 'toName' => isset($data['to']) ? ($this->seas->sea((string) $data['to'])->name ?? (string) $data['to']) : null,
+                'seaName' => isset($data['sea']) ? ($this->seas->sea((string) $data['sea'])->name ?? (string) $data['sea']) : null,
             ], static fn ($v) => null !== $v);
 
             return ['tick' => $entry->tick, 'event' => $entry->event->value] + $data + $names;
@@ -269,6 +274,55 @@ final class GetExpedition
             // mnożnik ceny w procentach (100 = kurs bazowy); pod reputację z #142
             'pricePercent' => $profile->marketPricePercent(),
             'stockpile' => $profile->stockpile($port->id)->toArray(),
+        ];
+    }
+
+    /**
+     * Spotkanie z rejsu czekające na decyzję (#141), ze skutkami wyborów
+     * podanymi z góry (zasada 4): flota i nagrody bitwy (napad albo walka),
+     * ceny handlarza, a u pirata koszt ucieczki i okup.
+     *
+     * @return array<string,mixed>|null
+     */
+    private function encounterView(CaptainProfile $profile): ?array
+    {
+        $encounter = $profile->encounter();
+        if (null === $encounter) {
+            return null;
+        }
+        $enemy = EncounterCatalog::fleet($encounter->type, $encounter->sea);
+        $pirate = EncounterType::Pirate === $encounter->type;
+        $rate = $this->seas->sea($encounter->sea)?->tradePort?->rate;
+        $ransom = EncounterCatalog::ransom($encounter->sea);
+
+        return [
+            'type' => $encounter->type->value,
+            'tick' => $encounter->tick,
+            'sea' => ['id' => $encounter->sea, 'name' => $this->seas->sea($encounter->sea)->name ?? $encounter->sea],
+            'position' => ['x' => $encounter->x, 'y' => $encounter->y],
+            // bitwa: napad na handlarza albo walka z piratem; za przegraną tylko XP
+            'battle' => [
+                'name' => $enemy->name,
+                'mode' => $enemy->mode,
+                'fleet' => array_map(static fn (ShipType $t) => $t->value, $enemy->fleet),
+                'board' => ['w' => $enemy->boardWidth, 'h' => $enemy->boardHeight],
+                'squadLimit' => $enemy->squadCellLimit(),
+                'xpWin' => $enemy->xpWin,
+                'xpLoss' => $enemy->xpLoss,
+                'lootWin' => $enemy->lootWin->toArray(),
+                'lootLoss' => $enemy->lootLoss->toArray(),
+            ],
+            // handel na miejscu: towar za 1 złoto u handlarza (rate) i w porcie akwenu (portRate, #140);
+            // zlecenie w sztukach, kupno płaci za każdą zaczętą porcję, sprzedaż dostaje za pełne
+            'trade' => $pirate || null === $rate ? null : [
+                'rate' => $rate->toArray($profile->merchantPrices($rate)->pricePercent),
+                'portRate' => $rate->toArray($profile->marketPricePercent()),
+                'worsePercent' => EncounterCatalog::MERCHANT_WORSE_PERCENT,
+                'ticks' => EncounterCatalog::TRADE_TICKS,
+            ],
+            // ucieczka: tiki i ładunek, który zabierze; okup: złoto z ładowni
+            'flee' => $pirate ? ['ticks' => EncounterCatalog::FLEE_TICKS, 'cargoLost' => $profile->fleeCargoLoss()->toArray()] : null,
+            'ransom' => $pirate ? ['gold' => $ransom, 'affordable' => $profile->cargo()->gold >= $ransom] : null,
         ];
     }
 

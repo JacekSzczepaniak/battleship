@@ -3,6 +3,7 @@
 namespace App\Application\Expedition;
 
 use App\Domain\Expedition\BattleKind;
+use App\Domain\Expedition\EncounterCatalog;
 use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\ProfileRepository;
 use App\Domain\Expedition\SeaGraph;
@@ -35,6 +36,8 @@ final class SettleBattle
      * łup ląduje w ładowni (#107). Udany abordaż zostawia zdobyty statek do
      * decyzji kapitana (#118). Na twierdzy wygrana potyczka płaci jak porażka
      * i oblega wyspę, a pełną stawkę i banderę daje wygrane oblężenie (#120).
+     * Bitwa spotkania na morzu płaci wg floty spotkania akwenu, łup ląduje
+     * w ładowni (#141).
      * Zatopione statki: wygrana → do remontu,
      * przegrana → stracone.
      *
@@ -45,7 +48,7 @@ final class SettleBattle
      *     lostShips:list<string>, damagedShips:list<string>, captured:bool, besieged:bool, kind:string,
      *     depositStarted:array{wood:int, steel:int, gold:int}|null,
      *     defense:array{held:bool, stockpileLost:array{wood:int, steel:int, gold:int}}|null, gateOpened:bool,
-     *     prize:array{id:string, type:string, variant:?string, tick:int}|null}
+     *     prize:array{id:string, type:string, variant:?string, tick:int}|null, encounter:?string}
      */
     public function handle(string $profileId, string $gameId): array
     {
@@ -65,15 +68,17 @@ final class SettleBattle
         }
 
         // bitwa ze strażnikiem: w rejestrze zamiast wyspy stoi brama
-        $guardian = null;
         $island = null;
         $kind = $profile->battleKindFor($game->id());
+        // bitwa spotkania (#141): w rejestrze zamiast wyspy stoi akwen
+        $encounter = $profile->encounterFor($game->id());
         if (BattleKind::Guardian === $kind) {
-            $guardian = $this->seas->gate($islandId)?->guardian() ?? throw new \DomainException('Gate not found');
+            $rewards = $this->seas->gate($islandId)?->guardian() ?? throw new \DomainException('Gate not found');
+        } elseif (BattleKind::Encounter === $kind) {
+            $rewards = EncounterCatalog::fleet($encounter ?? throw new \LogicException('Encounter battle without its encounter'), $islandId);
         } else {
-            $island = $this->islands->byId($islandId) ?? throw new \DomainException('Island not found');
+            $rewards = $island = $this->islands->byId($islandId) ?? throw new \DomainException('Island not found');
         }
-        $rewards = $guardian ?? $island;
 
         if (!$game->isFinished()) {
             throw new \DomainException('Battle not finished yet');
@@ -116,7 +121,7 @@ final class SettleBattle
             'rank' => $profile->rank()->value,
             'rankUp' => $outcome['xp'] > 0 && $profile->rank() !== $rankBefore,
             'loot' => $outcome['loot']->toArray(),
-            // łup leży w magazynie wyspy bitwy (strażnik: w ładowni, null); ładunek ponad pojemność po stratach przepadł
+            // łup leży w magazynie wyspy bitwy (strażnik i spotkanie: w ładowni, null); ładunek ponad pojemność po stratach przepadł
             'stockpile' => null !== $island ? $profile->stockpile($islandId)->toArray() : null,
             'cargo' => $profile->cargo()->toArray(),
             'cargoLost' => $outcome['cargoLost']->toArray(),
@@ -126,7 +131,7 @@ final class SettleBattle
             'captured' => $outcome['captured'],
             // wygrana potyczka obległa twierdzę — banderę da oblężenie (#120)
             'besieged' => $outcome['besieged'],
-            // rodzaj bitwy: capture|defense|guardian|siege
+            // rodzaj bitwy: capture|defense|guardian|siege|encounter
             'kind' => ($kind ?? BattleKind::Capture)->value,
             // zdobycie wyspy ze złożem uruchamia wydobycie: urobek na tik (odbita wyspa z tartakiem — podwojony)
             'depositStarted' => $outcome['captured'] && null !== $island && $island->hasDeposit() ? $profile->depositYield($island, $world->theme())->toArray() : null,
@@ -138,6 +143,8 @@ final class SettleBattle
             'gateOpened' => $outcome['gateOpened'],
             // abordaż (#118): zdobyty statek czeka w profilu na decyzję; null = bitwa bez udanego abordażu
             'prize' => $outcome['prize']?->toArray(),
+            // bitwa spotkania (#141): merchant = napad, pirate = walka; null = inna bitwa
+            'encounter' => $encounter?->value,
         ];
     }
 

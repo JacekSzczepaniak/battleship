@@ -63,6 +63,33 @@ export function logText(e: LogEntryDTO, tick?: number): string {
         }
         case 'ship-sold':
             return `Sprzedano: ${prizeLabel(e).toLowerCase()}${e.damaged ? ' (uszkodzony)' : ''} — do ładowni (${island}): ${formatResources({ wood: 0, steel: 0, gold: e.gold ?? 0 }, 'nic')}.`;
+        case 'encounter-met':
+            return e.encounter === 'pirate'
+                ? 'Piraci na kursie — walka, ucieczka albo okup. Rejs czeka na decyzję.'
+                : 'Handlarz na kursie — handel, napad albo minięcie. Rejs czeka na decyzję.';
+        case 'encounter-resolved':
+            return encounterResolvedText(e);
+        case 'encounter-battle':
+            if (e.encounter === 'pirate') {
+                return e.result === 'won' ? 'Piraci pokonani — łup w ładowni.' : 'Piraci wygrali bitwę — odpłynęli z tym, co zatopili.';
+            }
+            return e.result === 'won' ? 'Napad udany — towary handlarza w ładowni.' : 'Napad odparty — eskorta obroniła handlarza.';
+    }
+}
+
+// spotkanie rozstrzygnięte bez bitwy (#141)
+function encounterResolvedText(e: LogEntryDTO): string {
+    const none = { wood: 0, steel: 0, gold: 0 };
+    switch (e.decision) {
+        case 'flee': return `Ucieczka przed piratami — za burtą: ${formatResources(e.cargoLost ?? none, 'nic')}, stracony tik.`;
+        case 'ransom': return `Okup dla piratów: ${e.gold ?? 0} złota — odpłynęli.`;
+        case 'trade': {
+            const parts: string[] = [];
+            if (e.sold) parts.push(`sprzedane ${formatResources(e.sold)} za ${e.goldReceived ?? 0} złota`);
+            if (e.bought) parts.push(`kupione ${formatResources(e.bought)} za ${e.goldPaid ?? 0} złota`);
+            return `Handel z handlarzem: ${parts.join(', ')}.`;
+        }
+        default: return 'Handlarz minięty — każdy płynie w swoją stronę.';
     }
 }
 
@@ -75,6 +102,8 @@ export function logTone(e: LogEntryDTO): 'danger' | 'warn' | 'info' {
     switch (e.event) {
         case 'island-lost': case 'counterattack-announced': return 'danger';
         case 'storm': case 'island-plundered': case 'siege-failed': return 'warn';
+        case 'encounter-met': return e.encounter === 'pirate' ? 'warn' : 'info';
+        case 'encounter-battle': return e.result === 'lost' ? 'warn' : 'info';
         default: return 'info';
     }
 }

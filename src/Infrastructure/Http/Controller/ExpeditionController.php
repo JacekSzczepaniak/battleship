@@ -6,10 +6,13 @@ use App\Application\Expedition\BuildBuilding;
 use App\Application\Expedition\BuildShip;
 use App\Application\Expedition\CreateProfile;
 use App\Application\Expedition\DecidePrize;
+use App\Application\Expedition\DeleteFleetPreset;
 use App\Application\Expedition\GetExpedition;
 use App\Application\Expedition\PassGate;
+use App\Application\Expedition\RenameFleetPreset;
 use App\Application\Expedition\RepairShip;
 use App\Application\Expedition\Sail;
+use App\Application\Expedition\SaveFleetPreset;
 use App\Application\Expedition\ScrapShip;
 use App\Application\Expedition\SettleBattle;
 use App\Application\Expedition\StartGuardianBattle;
@@ -25,6 +28,7 @@ use App\Domain\Expedition\ShipType;
 use App\Domain\Expedition\ShipVariant;
 use App\Domain\Expedition\Technology;
 use App\Domain\Game\Game;
+use App\Domain\Game\Orientation;
 use App\Infrastructure\Http\Error\ApiException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -49,6 +53,9 @@ final class ExpeditionController
         private StartGuardianBattle $startGuardianBattle,
         private PassGate $passGate,
         private StartSiege $startSiege,
+        private SaveFleetPreset $saveFleetPreset,
+        private RenameFleetPreset $renameFleetPreset,
+        private DeleteFleetPreset $deleteFleetPreset,
         private ScrapShip $scrapShip,
     ) {
     }
@@ -269,6 +276,58 @@ final class ExpeditionController
         }
 
         return new JsonResponse($this->transferCargo->handle($id, $islandId, $direction, Resources::fromArray($amounts)));
+    }
+
+    /**
+     * Zapis zestawu floty (#125): {name, board: {w, h}, ships: [{shipId, x, y, o: H|V}]}.
+     * Zestaw o tej samej nazwie jest nadpisywany (200), nowy dostaje 201.
+     */
+    #[Route('/{id}/fleet-presets', name: 'api_profiles_save_fleet_preset', methods: ['POST'])]
+    public function saveFleetPreset(string $id, Request $request): JsonResponse
+    {
+        $this->assertUuid($id, 'profile');
+        $payload = $this->jsonPayload($request);
+
+        $name = $payload['name'] ?? null;
+        $width = $payload['board']['w'] ?? null;
+        $height = $payload['board']['h'] ?? null;
+        $ships = $payload['ships'] ?? null;
+        if (!is_string($name) || !is_int($width) || !is_int($height) || !is_array($ships) || !array_is_list($ships)) {
+            throw new ApiException('Missing or invalid fields: name:string, board:{w:int, h:int}, ships:list', 'VALIDATION_ERROR', 400);
+        }
+        $placements = [];
+        foreach ($ships as $ship) {
+            $orientation = is_array($ship) ? Orientation::tryFrom((string) ($ship['o'] ?? '')) : null;
+            if (null === $orientation || !is_string($ship['shipId'] ?? null) || !is_int($ship['x'] ?? null) || !is_int($ship['y'] ?? null)) {
+                throw new ApiException('Invalid field: ships[] must be {shipId:string, x:int, y:int, o:H|V}', 'VALIDATION_ERROR', 400);
+            }
+            $placements[] = ['shipId' => $ship['shipId'], 'x' => $ship['x'], 'y' => $ship['y'], 'o' => $orientation];
+        }
+
+        ['preset' => $preset, 'created' => $created] = $this->saveFleetPreset->handle($id, $name, $width, $height, $placements);
+
+        return new JsonResponse($preset->toArray(), $created ? 201 : 200);
+    }
+
+    #[Route('/{id}/fleet-presets/{presetId}', name: 'api_profiles_rename_fleet_preset', methods: ['PATCH'])]
+    public function renameFleetPreset(string $id, string $presetId, Request $request): JsonResponse
+    {
+        $this->assertUuid($id, 'profile');
+        $name = $this->jsonPayload($request)['name'] ?? null;
+        if (!is_string($name)) {
+            throw new ApiException('Missing or invalid field: name:string', 'VALIDATION_ERROR', 400);
+        }
+
+        return new JsonResponse($this->renameFleetPreset->handle($id, $presetId, $name)->toArray());
+    }
+
+    #[Route('/{id}/fleet-presets/{presetId}', name: 'api_profiles_delete_fleet_preset', methods: ['DELETE'])]
+    public function deleteFleetPreset(string $id, string $presetId): JsonResponse
+    {
+        $this->assertUuid($id, 'profile');
+        $this->deleteFleetPreset->handle($id, $presetId);
+
+        return new JsonResponse(null, 204);
     }
 
     /**

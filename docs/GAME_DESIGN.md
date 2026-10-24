@@ -40,7 +40,8 @@ gałęziach na 3 poziomach, niszczyciel zwiadowczy jako pierwszy wariant
 statku; 3 warianty tylko z abordażu, #121) · trzy akweny połączone strzeżoną cieśniną i otwartym oceanem
 (#106–#108) · UI flow
 bitwy: port → rozstawianie → bitwa → wynik oraz ekran Rejs z mapą zawsze
-widoczną, panelem z zakładkami i dziennikiem kapitana (#111)
+widoczną, panelem z zakładkami i dziennikiem kapitana (#111) · zapisane
+zestawy floty z rozmieszczeniem (#125, sekcja niżej)
 (projekt: `docs/design/ui-flow/`). Elementy projektu UI bez pokrycia
 w silniku czekają w zadaniach: trzy surowce w UI (#49), abordaż (#55), mapa akwenu jako
 łup (#56). Szczegóły: git log + testy, uruchomienie: `README.md`.
@@ -512,3 +513,21 @@ min dojdzie jako kolejny wariant tylko z abordażu, ścieżką z #121) · replay
 statystyki/osiągnięcia · daily challenge · PvP (tylko na czystym rulesecie,
 jeśli kiedykolwiek). Perki kapitanów przeniesione do Filaru VIII
 (specjalizacje).
+
+## Zestawy floty (#125) ✅
+
+Decyzje Jacka z 24.10.2026:
+
+- Profil trzyma najwyżej **5 zestawów** z nazwami. Zestaw to id statków floty,
+  ich pozycje i orientacja oraz rozmiar planszy, na której go zapisano.
+  Pozycje spełniają zasady rozstawiania. Zapis pod istniejącą nazwą
+  nadpisuje zestaw.
+- **Skład z zestawu wybiera się na ekranie Rejs**, przy składzie bitewnym,
+  bo skład jest częścią gry od jej startu. Zestaw bierze sprawne statki
+  w kolejności zapisu, do limitu pól. Statki utracone, złomowane,
+  w remoncie albo ponad limit są pomijane z komunikatem.
+- **Rozstawianie** ustawia statki zestawu wybranego do bitwy. Na planszy
+  tego samego rozmiaru wracają na zapisane pozycje. Statki, które się nie
+  mieszczą, czekają na ręczne ustawienie. Na planszy innego rozmiaru zestaw
+  daje sam skład. Na ekranie rozstawiania zestaw zapisuje się, wczytuje,
+  zmienia nazwę i usuwa. W treningu, gdzie nie ma statków profilu, zestawów nie ma.

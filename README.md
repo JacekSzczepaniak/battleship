@@ -183,7 +183,7 @@ Wszystkie ścieżki pod `/api`, JSON. Pełna lista: `docker compose exec app php
 | `POST` | `/games/{id}/board` | abordaż ostatniego statku wroga (#118): rzut k6, ⚡3, kończy turę, raz na bitwę; `422 BOARDING_NOT_AVAILABLE` poza bitwą wyprawy z energią, `422 BOARDING_NOT_LAST_SHIP`, `409 BOARDING_ALREADY_ATTEMPTED` |
 | `POST` | `/games/{id}/end-turn` | „Zakończ turę” bez ataku (tylko `fun`; w classic `422 END_TURN_NOT_AVAILABLE`) |
 | `POST` | `/profiles` | nowy profil kapitana |
-| `GET` | `/profiles/{id}/expedition` | profil, flota, typy statków i budynków, wyspy bieżącego akwenu (bandera, budynki), świat (akwen i jego motyw, bramy z powodem blokady i strażnikiem), statki zdobyte abordażem (`prizes`, ze zwrotem z rozbiórki i `studyTechnology` do zbadania konstrukcji), kontratak, drzewko badań, dziennik kapitana (50 ostatnich zdarzeń, od najnowszego) |
+| `GET` | `/profiles/{id}/expedition` | profil, flota, typy statków i budynków, wyspy bieżącego akwenu (bandera, budynki), świat (akwen i jego motyw, bramy z powodem blokady i strażnikiem), statki zdobyte abordażem (`prizes`, ze zwrotem z rozbiórki i `studyTechnology` do zbadania konstrukcji), kontratak, drzewko badań, dziennik kapitana (50 ostatnich zdarzeń, od najnowszego), zapisane zestawy floty (`fleetPresets`) i skład nierozliczonych bitew (`battleSquads`: gameId → id statków) |
 | `POST` | `/profiles/{id}/sail` | rejs za 1 tik: o jeden sektor, z Żeglugą dwusektorową także o dwa |
 | `POST` | `/profiles/{id}/islands/{islandId}/battle` | bitwa o wyspę albo obrona wyspy pod banderą (kapitan musi stać na wyspie) |
 | `POST` | `/profiles/{id}/islands/{islandId}/buildings` | budynek osady (`type`) na posiadanej wyspie |
@@ -196,5 +196,8 @@ Wszystkie ścieżki pod `/api`, JSON. Pełna lista: `docker compose exec app php
 | `POST` | `/profiles/{id}/ships/{shipId}/repair` | remont statku |
 | `POST` | `/profiles/{id}/ships/{shipId}/scrap` | złomowanie statku w stoczni portu (`islandId`, stocznia dowolnego poziomu): połowa kosztu budowy do magazynu wyspy, za uszkodzony mniej o koszt remontu, tratwa bez zwrotu; w odpowiedzi `refund`, `stockpile`, `cargo`; `409 NO_SHIPYARD`, `409 SHIP_IN_BATTLE` (statek w nierozliczonej bitwie), `409 LAST_SEAWORTHY_SHIP` (ostatnia sprawna jednostka) |
 | `POST` | `/profiles/{id}/prizes/{prizeId}` | decyzja o statku zdobytym abordażem: `decision` `join` (do floty jako uszkodzony) albo `scrap` (połowa kosztu budowy do ładowni, nadmiar przepada) albo `study` (zbadaj konstrukcję: statek przepada, wariant ze zdobyczy trafia do stoczni, w odpowiedzi `technology`); `404 PRIZE_NOT_FOUND`, `409 PRIZE_NOT_STUDIABLE` (wariant znany albo statek bez wariantu ze zdobyczy) |
+| `POST` | `/profiles/{id}/fleet-presets` | zapis zestawu floty z rozmieszczeniem: `name` (1–30 znaków), `board` `{w, h}`, `ships` `[{shipId, x, y, o: H\|V}]`; pozycje jak przy rozstawianiu (granice, statki się nie stykają); ta sama nazwa (bez względu na wielkość liter) nadpisuje zestaw (`200`), nowy dostaje `201`; `409 FLEET_PRESET_LIMIT` przy szóstym, `404 SHIP_NOT_FOUND` dla statku spoza floty |
+| `PATCH` | `/profiles/{id}/fleet-presets/{presetId}` | zmiana nazwy zestawu (`name`); `409 FLEET_PRESET_NAME_TAKEN`, `404 FLEET_PRESET_NOT_FOUND` |
+| `DELETE` | `/profiles/{id}/fleet-presets/{presetId}` | usunięcie zestawu (`204`) |
 
 Poza `/api`: `GET /healthz`.

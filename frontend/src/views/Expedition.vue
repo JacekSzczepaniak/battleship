@@ -169,6 +169,14 @@
                                     <button v-if="activeCells > islandTarget!.squadLimit || leavesShipsInPort(islandTarget!)" class="btn btn-small btn-secondary" @click="togglePicker(islandTarget!)">
                                         {{ squadPick ? 'skład domyślny' : 'wybierz skład' }}
                                     </button>
+                                    <FleetPresetPicker
+                                        v-if="expedition!.fleetPresets?.length"
+                                        :presets="expedition!.fleetPresets"
+                                        :fleet="expedition!.fleet"
+                                        :limit="islandTarget!.squadLimit"
+                                        :selected="squadPresetId"
+                                        @pick="onPickPreset"
+                                    />
                                     <ul v-if="squadPick" class="squad-pick">
                                         <li v-for="ship in activeShips" :key="ship.id">
                                             <label :class="{ off: !squadPick.has(ship.id) && squadCells(squadFor(islandTarget!)) + ship.length > islandTarget!.squadLimit }">
@@ -271,6 +279,14 @@
                                         <button v-if="activeCells > currentGate.guardian.squadLimit || leavesShipsInPort(currentGate.guardian)" class="btn btn-small btn-secondary" @click="togglePicker(currentGate.guardian)">
                                             {{ squadPick ? 'skład domyślny' : 'wybierz skład' }}
                                         </button>
+                                        <FleetPresetPicker
+                                            v-if="expedition!.fleetPresets?.length"
+                                            :presets="expedition!.fleetPresets"
+                                            :fleet="expedition!.fleet"
+                                            :limit="currentGate.guardian.squadLimit"
+                                            :selected="squadPresetId"
+                                            @pick="onPickPreset"
+                                        />
                                         <ul v-if="squadPick" class="squad-pick">
                                             <li v-for="ship in activeShips" :key="ship.id">
                                                 <label :class="{ off: !squadPick.has(ship.id) && squadCells(squadFor(currentGate.guardian)) + ship.length > currentGate.guardian.squadLimit }">
@@ -548,6 +564,7 @@ import { VARIANTS, carriedWeapon, columnLabel, fieldsLabel } from '../lib/ships'
 import { depositLabel, depositState, whereToFind } from '../lib/economy';
 import { logText, logTone } from '../lib/eventLog';
 import CargoPanel from '../components/CargoPanel.vue';
+import FleetPresetPicker from '../components/FleetPresetPicker.vue';
 import FleetPanel from '../components/FleetPanel.vue';
 import ScrapButton from '../components/ScrapButton.vue';
 import SeaMap from '../components/SeaMap.vue';
@@ -1080,6 +1097,10 @@ async function onCreateProfile() {
 type SquadTarget = { squadLimit: number };
 
 const squadPick = ref<Set<string> | null>(null);
+// zestaw floty, z którego wziął się skład (#125) — rozstawianie ustawi z niego statki,
+// które płyną; powrót do składu domyślnego go odpina
+const squadPresetId = ref<string | null>(null);
+watch(squadPick, pick => { if (pick === null) squadPresetId.value = null; });
 const activeShips = computed(() => (expedition.value?.fleet ?? []).filter(s => !s.damaged));
 const activeCells = computed(() => squadCells(activeShips.value));
 
@@ -1113,6 +1134,12 @@ function toggleShip(shipId: string) {
     squadPick.value = next;
 }
 
+/** Zestaw floty (#125) ustawia skład; bez zestawu skład wraca do domyślnego. */
+function onPickPreset(presetId: string | null, shipIds: string[] | null) {
+    squadPick.value = shipIds ? new Set(shipIds) : null;
+    squadPresetId.value = presetId;
+}
+
 async function onStartBattle(island: IslandDTO) {
     const profileId = getProfileId();
     if (!profileId) return;
@@ -1121,7 +1148,7 @@ async function onStartBattle(island: IslandDTO) {
     try {
         const shipIds = squadPick.value ? [...squadPick.value] : undefined;
         const game = await startIslandBattle(profileId, island.id, shipIds);
-        setCurrentBattle({ profileId, gameId: game.id, islandId: island.id, islandName: island.name });
+        setCurrentBattle({ profileId, gameId: game.id, islandId: island.id, islandName: island.name, presetId: squadPresetId.value ?? undefined });
         await router.push({ name: 'place-fleet', params: { id: game.id } });
     } catch (e: any) {
         error.value = e?.message ?? 'Nie udało się rozpocząć bitwy';
@@ -1137,7 +1164,7 @@ async function onStartSiege(island: IslandDTO) {
     try {
         const shipIds = squadPick.value ? [...squadPick.value] : undefined;
         const game = await startSiege(profileId, island.id, shipIds);
-        setCurrentBattle({ profileId, gameId: game.id, islandId: island.id, islandName: island.name, kind: 'siege' });
+        setCurrentBattle({ profileId, gameId: game.id, islandId: island.id, islandName: island.name, kind: 'siege', presetId: squadPresetId.value ?? undefined });
         await router.push({ name: 'place-fleet', params: { id: game.id } });
     } catch (e: any) {
         error.value = e?.message ?? 'Nie udało się rozpocząć oblężenia';
@@ -1153,7 +1180,7 @@ async function onStartGuardian(gate: GateDTO) {
     try {
         const shipIds = squadPick.value ? [...squadPick.value] : undefined;
         const game = await startGuardianBattle(profileId, gate.id, shipIds);
-        setCurrentBattle({ profileId, gameId: game.id, islandId: gate.id, islandName: gate.guardian.name, kind: 'guardian' });
+        setCurrentBattle({ profileId, gameId: game.id, islandId: gate.id, islandName: gate.guardian.name, kind: 'guardian', presetId: squadPresetId.value ?? undefined });
         await router.push({ name: 'place-fleet', params: { id: game.id } });
     } catch (e: any) {
         error.value = e?.message ?? 'Nie udało się rozpocząć bitwy';

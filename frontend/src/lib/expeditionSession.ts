@@ -12,6 +12,8 @@ export interface CurrentBattle {
     islandName: string;
     // oblężenie fortu twierdzy (#120); brak = bitwa o wyspę albo obrona
     kind?: 'guardian' | 'siege';
+    // zestaw floty, z którego wybrano skład (#125) — rozstawianie ustawi go samo
+    presetId?: string;
 }
 
 export function getProfileId(): string | null {

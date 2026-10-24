@@ -4,6 +4,7 @@ namespace App\Application\Expedition;
 
 use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\CaptainProfile;
+use App\Domain\Expedition\FleetPreset;
 use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\LogEntry;
 use App\Domain\Expedition\Prize;
@@ -174,6 +175,13 @@ final class GetExpedition
                 'scrapValue' => $prize->scrapValue()->toArray(),
                 'studyTechnology' => $profile->studyableTechnology($prize)?->value,
             ], $profile->prizes()),
+            // zapisane zestawy floty z rozmieszczeniem (#125)
+            'fleetPresets' => array_map(static fn (FleetPreset $preset) => $preset->toArray(), $profile->fleetPresets()),
+            // skład nierozliczonych bitew (gameId → id statków) — rozstawianie łączy statki planszy z flotą (#125)
+            'battleSquads' => (object) array_map(
+                static fn (array $battle) => $battle['ships'] ?? [],
+                array_filter($profile->battles(), static fn (array $battle) => !$battle['settled']),
+            ),
             'shipTypes' => $shipTypes,
             'buildingTypes' => $buildingTypes,
             'islands' => $islands,

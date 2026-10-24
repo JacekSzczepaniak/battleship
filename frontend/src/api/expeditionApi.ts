@@ -700,6 +700,23 @@ export async function repairShip(profileId: string, islandId: string, shipId: st
     return http.post<FleetShipDTO>(`/profiles/${profileId}/ships/${shipId}/repair`, { islandId });
 }
 
+// remont całej floty (#151): od najtańszego, pominięte statki z powodem (Domain/Expedition/RepairSkip)
+export type RepairSkipCode = 'shipyard-too-low' | 'not-enough-resources';
+
+export type RepairedShipDTO = Pick<FleetShipDTO, 'id' | 'type' | 'length' | 'variant' | 'damaged'>;
+
+export interface RepairFleetDTO {
+    repaired: RepairedShipDTO[];
+    skipped: { ship: RepairedShipDTO; reason: RepairSkipCode }[];
+    paid: ResourcesDTO;
+    stockpile: ResourcesDTO;
+    cargo: ResourcesDTO;
+}
+
+export async function repairFleet(profileId: string, islandId: string): Promise<RepairFleetDTO> {
+    return http.post<RepairFleetDTO>(`/profiles/${profileId}/fleet/repair`, { islandId });
+}
+
 export interface ScrapShipDTO {
     refund: ResourcesDTO;
     stockpile: ResourcesDTO;

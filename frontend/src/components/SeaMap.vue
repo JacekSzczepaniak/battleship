@@ -7,9 +7,12 @@
     Znaczniki wysp (#131): twierdza, stocznia z poziomem, złoże w kolorze
     surowca i budynki osady pod banderą — widoczne bez najeżdżania.
     Port handlowy (#140): zielona wyspa z kramem — rynek, bez bitwy i bandery.
+    Animacja rejsu (#146): nad komórkami leży warstwa efektów — `fxBoard()` daje
+    jej geometrię. W trakcie animacji sektory z `masked` stoją pod mgłą, a znacznik
+    floty rysuje overlay (`fleetHidden`); klik w mapę pomija animację.
 -->
 <script setup lang="ts">
-import { computed, type Component } from 'vue';
+import { computed, ref, type Component } from 'vue';
 import { Anchor, Axe, Castle, Coins, GraduationCap, Mountain, Pickaxe, Shield, Store, Trees, Wrench } from 'lucide-vue-next';
 import { BUILDING_LABELS, type BuildingTypeName, type ExpeditionDTO, type GateDTO, type IslandDTO } from '../api/expeditionApi';
 import { columnLabel } from '../lib/ships';
@@ -17,6 +20,8 @@ import { depositLabel, depositState } from '../lib/economy';
 import { RESOURCES, formatResources, isEmpty, type ResourceKey } from '../lib/resources';
 import { pendingLabel } from '../lib/counterattack';
 import { seaKicker } from '../lib/seas';
+import { boardFromGrid, type FxBoard } from '../fx/board';
+import { FX_SPEEDS, fxSpeed, setFxSpeed } from '../fx/speed';
 
 const props = defineProps<{
     expedition: ExpeditionDTO;
@@ -24,11 +29,27 @@ const props = defineProps<{
     // wynik ostatniego rejsu poza dziennikiem (kartografia)
     note: string;
     gateStatus: (gate: GateDTO) => string;
+    // animacja rejsu (#146): sektory jeszcze pod mgłą, flota w overlayu
+    masked?: ReadonlySet<string>;
+    fleetHidden?: boolean;
+    animating?: boolean;
 }>();
 
 const emit = defineEmits<{
     sail: [x: number, y: number];
+    skip: [];
 }>();
+
+const stage = ref<HTMLElement | null>(null);
+const gridEl = ref<HTMLElement | null>(null);
+const fxLayer = ref<HTMLElement | null>(null);
+
+function fxBoard(): FxBoard | null {
+    if (!stage.value || !gridEl.value || !fxLayer.value) return null;
+    return boardFromGrid(gridEl.value, fxLayer.value, stage.value, world.value.width, world.value.height);
+}
+
+defineExpose({ fxBoard });
 
 const world = computed(() => props.expedition.world);
 
@@ -96,16 +117,19 @@ const cells = computed<Cell[]>(() => {
     const port = w.tradePort?.position ? w.tradePort : null;
     const { x: px, y: py } = w.position;
     const pending = exp.counterattack.pending;
+    const masked = props.masked;
 
     const out: Cell[] = [];
     for (let y = 0; y < w.height; y++) {
         for (let x = 0; x < w.width; x++) {
             const key = `${x}:${y}`;
-            const discovered = fog.has(key);
-            const island = islandsByPos.get(key) ?? null;
-            const gate = gatesByPos.get(key) ?? null;
-            const atPort = !!port && port.position!.x === x && port.position!.y === y;
-            const here = x === px && y === py;
+            // sektor odkryty w trwającym rejsie: do odsłonięcia wygląda jak mgła
+            const hidden = !!masked?.has(key);
+            const discovered = fog.has(key) && !hidden;
+            const island = hidden ? null : islandsByPos.get(key) ?? null;
+            const gate = hidden ? null : gatesByPos.get(key) ?? null;
+            const atPort = !hidden && !!port && port.position!.x === x && port.position!.y === y;
+            const here = x === px && y === py && !props.fleetHidden;
             // osiągalne w jednym rejsie: większa z różnic x i y (#98), z Żeglugą dwusektorową do 2
             const distance = Math.max(Math.abs(x - px), Math.abs(y - py));
             const sailable = distance >= 1 && distance <= w.sailRange;
@@ -157,8 +181,23 @@ const rows = computed(() => Array.from({ length: world.value.height }, (_, y) =>
                 <h2>{{ world.sea.name }}</h2>
                 <div class="theme">{{ themeText }}</div>
             </div>
+            <div class="head-side">
             <div class="storm" :title="`Szansa sztormu przy pierwszym wpłynięciu na sektor; odwiedzone sektory są bezpieczne`">
                 sztorm w nieodwiedzonych: {{ world.stormChance }}%
+            </div>
+            <!-- prędkość wspólna z bitwą (#145) -->
+            <div class="fx-speed" role="radiogroup" aria-label="prędkość animacji rejsu">
+                <span class="kicker">ANIMACJE</span>
+                <button
+                    v-for="s in FX_SPEEDS"
+                    :key="s.value"
+                    class="fx-opt"
+                    :class="{ on: fxSpeed === s.value }"
+                    role="radio"
+                    :aria-checked="fxSpeed === s.value"
+                    @click="setFxSpeed(s.value)"
+                >{{ s.label }}</button>
+            </div>
             </div>
         </div>
 
@@ -166,7 +205,8 @@ const rows = computed(() => Array.from({ length: world.value.height }, (_, y) =>
             <div></div>
             <div class="axis cols"><span v-for="c in cols" :key="c">{{ c }}</span></div>
             <div class="axis rows"><span v-for="r in rows" :key="r">{{ r }}</span></div>
-            <div class="grid">
+            <div ref="stage" class="stage">
+            <div ref="gridEl" class="grid">
                 <button
                     v-for="cell in cells"
                     :key="cell.key"
@@ -197,6 +237,15 @@ const rows = computed(() => Array.from({ length: world.value.height }, (_, y) =>
                     <span v-if="cell.cls.here" class="fleet"></span>
                     <span v-if="cell.name" class="name">{{ cell.name }}</span>
                 </button>
+            </div>
+            <div
+                ref="fxLayer"
+                class="fx-layer"
+                :class="{ catch: animating }"
+                aria-hidden="true"
+                :title="animating ? 'Kliknij, aby pominąć animację' : undefined"
+                @click="animating && emit('skip')"
+            ></div>
             </div>
         </div>
 
@@ -240,6 +289,11 @@ const rows = computed(() => Array.from({ length: world.value.height }, (_, y) =>
 .kicker { font-size: 10px; letter-spacing: .24em; }
 h2 { margin: 2px 0 0; font: 700 24px var(--font-head); }
 .theme { margin-top: 2px; font: 500 11px var(--font-mono); color: var(--text-muted); }
+.head-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.fx-speed { display: flex; align-items: center; gap: 5px; }
+.fx-speed .kicker { margin-right: 3px; }
+.fx-opt { padding: 4px 9px; border-radius: 7px; border: 1px solid var(--line-btn); background: var(--bg-card-off); color: var(--text-muted); font: 600 11px var(--font-mono); cursor: pointer; }
+.fx-opt.on { border-color: var(--info); color: var(--info); background: var(--bg-card-active); }
 .storm { padding: 6px 11px; border-radius: 8px; background: #2a2418; border: 1px solid #5a4a28; font: 600 11px var(--font-mono); color: var(--warn); white-space: nowrap; }
 
 .frame { --cell: 42px; display: grid; grid-template-columns: 18px auto; grid-template-rows: 16px auto; gap: 6px; width: max-content; }
@@ -247,6 +301,10 @@ h2 { margin: 2px 0 0; font: 700 24px var(--font-head); }
 .axis.cols { grid-template-columns: repeat(var(--cols), var(--cell)); text-align: center; }
 .axis.rows { grid-template-rows: repeat(var(--rows), var(--cell)); }
 .axis.rows span { display: flex; align-items: center; justify-content: center; }
+.stage { position: relative; }
+/* nad wyspami (z-index 1) i nazwami po najechaniu */
+.fx-layer { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+.fx-layer.catch { pointer-events: auto; cursor: pointer; }
 .grid { display: grid; grid-template-columns: repeat(var(--cols), var(--cell)); gap: 4px; }
 
 .cell {

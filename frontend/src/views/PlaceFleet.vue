@@ -79,6 +79,38 @@
                 </ul>
             </div>
 
+            <!-- zestawy floty (#125): tylko w bitwie wyprawy — trening nie ma statków profilu -->
+            <div v-if="presetsReady" class="card presets">
+                <div class="kicker">ZESTAWY FLOTY · {{ presets.length }}/{{ FLEET_PRESET_LIMIT }}</div>
+                <ul v-if="presets.length">
+                    <li v-for="p in presets" :key="p.id">
+                        <template v-if="renamingId === p.id">
+                            <input ref="renameInput" v-model="renameText" class="name" :maxlength="FLEET_PRESET_NAME_MAX" @keydown.enter.prevent="confirmRename(p)" @keydown.esc.prevent="renamingId = null" />
+                            <button class="icon-btn" title="zapisz nazwę" :disabled="presetBusy" @click="confirmRename(p)"><Check :size="14" /></button>
+                            <button class="icon-btn" title="anuluj" @click="renamingId = null"><X :size="14" /></button>
+                        </template>
+                        <template v-else>
+                            <span class="preset-name" :title="p.name">{{ p.name }}</span>
+                            <span class="preset-size" :class="{ other: p.board.w !== width || p.board.h !== height }">{{ p.board.w }}×{{ p.board.h }}</span>
+                            <button class="icon-btn" title="wczytaj" :disabled="busy || presetBusy" @click="applyPreset(p)"><Download :size="14" /></button>
+                            <button class="icon-btn" title="zmień nazwę" :disabled="presetBusy" @click="startRename(p)"><Pencil :size="14" /></button>
+                            <button class="icon-btn" :class="{ danger: deletingId === p.id }" :title="deletingId === p.id ? 'kliknij jeszcze raz, żeby usunąć' : 'usuń'" :disabled="presetBusy" @click="removePreset(p)">
+                                <Trash2 :size="14" /><span v-if="deletingId === p.id" class="sure">usuń?</span>
+                            </button>
+                        </template>
+                    </li>
+                </ul>
+                <p v-else class="muted empty">Brak zapisanych zestawów.</p>
+                <div class="save-row">
+                    <input v-model="presetName" class="name" placeholder="nazwa zestawu" :maxlength="FLEET_PRESET_NAME_MAX" @keydown.enter.prevent="savePreset" />
+                    <button class="btn btn-small btn-secondary" :disabled="!canSavePreset" :title="saveBlocker" @click="savePreset">
+                        <Save :size="14" /> {{ overwriteTarget ? 'Nadpisz' : 'Zapisz' }}
+                    </button>
+                </div>
+                <p v-if="presetName.trim() && saveBlocker" class="preset-msg">{{ saveBlocker }}</p>
+                <p v-if="presetMsg" class="preset-msg" :class="{ bad: presetMsgBad }">{{ presetMsg }}</p>
+            </div>
+
             <div class="progress">
                 <div class="progress-head">
                     <span>Rozstawiono</span>
@@ -102,12 +134,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Anchor, Ban, Crosshair, Eraser, RotateCw, Shuffle } from 'lucide-vue-next';
+import { Anchor, Ban, Check, Crosshair, Download, Eraser, Pencil, RotateCw, Save, Shuffle, Trash2, X } from 'lucide-vue-next';
 import SeaGrid from '../components/SeaGrid.vue';
 import { createGame, getGame, placeFleet, type GameViewDTO, type Loadout, type PlayerFleetItem, type RulesetName } from '../api/gameApi';
-import { getCurrentBattle } from '../lib/expeditionSession';
+import { deleteFleetPreset, getExpedition, renameFleetPreset, saveFleetPreset, type FleetPresetDTO, type FleetShipDTO } from '../api/expeditionApi';
+import { getCurrentBattle, setCurrentBattle } from '../lib/expeditionSession';
+import {
+    FLEET_PRESET_LIMIT, FLEET_PRESET_NAME_MAX, missingMessage, presetErrorMessage, presetPlacements, slotShipIds,
+} from '../lib/fleetPresets';
 import { TRAINING_SIZES, getTrainingPrefs, setTrainingPrefs } from '../lib/battleSession';
 import { carriedWeapon, cellLabel, fieldsLabel, shipName, variantOf } from '../lib/ships';
 
@@ -179,6 +215,169 @@ async function load() {
         selectNext();
     } catch (e: any) {
         error.value = e?.message ?? 'Nie udało się wczytać gry';
+        return;
+    }
+    await loadPresets();
+}
+
+// --- zestawy floty (#125): skład z rozmieszczeniem zapisany w profilu ---
+
+const presets = ref<FleetPresetDTO[]>([]);
+const fleet = ref<FleetShipDTO[]>([]);
+// id statków floty, które płyną w tej bitwie — łączą statki planszy z flotą
+const squadIds = ref<string[]>([]);
+const presetName = ref('');
+const presetMsg = ref('');
+const presetMsgBad = ref(false);
+const presetBusy = ref(false);
+const renamingId = ref<string | null>(null);
+const renameText = ref('');
+const deletingId = ref<string | null>(null);
+// pole zmiany nazwy (ref w v-for — tablica, najwyżej jeden element)
+const renameInput = ref<HTMLInputElement[] | null>(null);
+
+// bitwa sprzed zapisu składu w profilu nie ma statków do powiązania — bez zestawów
+const presetsReady = computed(() => battle.value !== null && squadIds.value.length > 0);
+const overwriteTarget = computed(() => {
+    const name = presetName.value.trim().toLowerCase();
+    return name ? presets.value.find(p => p.name.toLowerCase() === name) ?? null : null;
+});
+// powód, dla którego zapis jest zablokowany ('' = można zapisać, gdy jest nazwa)
+const saveBlocker = computed(() => {
+    if (!allPlaced.value) return 'Zapis wymaga rozstawienia wszystkich statków.';
+    if (overwriteTarget.value === null && presets.value.length >= FLEET_PRESET_LIMIT) {
+        return `Limit ${FLEET_PRESET_LIMIT} zestawów: usuń któryś albo zapisz pod istniejącą nazwą.`;
+    }
+    return '';
+});
+const canSavePreset = computed(() => !saveBlocker.value && !presetBusy.value && presetName.value.trim() !== '');
+
+function setPresetMsg(text: string, bad = false) {
+    presetMsg.value = text;
+    presetMsgBad.value = bad;
+}
+
+async function loadPresets() {
+    const b = battle.value;
+    if (!b) return;
+    try {
+        const expedition = await getExpedition(b.profileId);
+        presets.value = expedition.fleetPresets ?? [];
+        fleet.value = expedition.fleet;
+        squadIds.value = expedition.battleSquads?.[b.gameId] ?? [];
+    } catch {
+        // bez profilu zestawy po prostu się nie pokażą — rozstawianie działa dalej
+        return;
+    }
+    // zestaw wybrany do bitwy na ekranie wyprawy ustawia się sam, raz
+    const chosen = b.presetId ? presets.value.find(p => p.id === b.presetId) : undefined;
+    if (b.presetId) setCurrentBattle({ ...b, presetId: undefined });
+    if (chosen && presetsReady.value && placedCount.value === 0) applyPreset(chosen);
+}
+
+/**
+ * Wczytanie zestawu: na planszy tego samego rozmiaru statki płynące w bitwie
+ * wracają na zapisane pozycje; brakujące są pomijane z komunikatem, a te, które
+ * się nie mieszczą, czekają na ręczne ustawienie. Na innym rozmiarze planszy
+ * zestaw dał już skład (ekran wyprawy) — pozycji się nie przenosi.
+ */
+function applyPreset(preset: FleetPresetDTO) {
+    error.value = '';
+    deletingId.value = null;
+    presetName.value = preset.name;
+    if (preset.board.w !== width.value || preset.board.h !== height.value) {
+        setPresetMsg(`„${preset.name}” zapisano na planszy ${preset.board.w}×${preset.board.h}, a ta ma ${width.value}×${height.value}. Wczytany jest sam skład, statki rozstaw ręcznie.`);
+        return;
+    }
+
+    for (const s of ships.value) s.placed = null;
+    const { placements, missing } = presetPlacements(preset, ships.value, fleet.value, squadIds.value);
+    let placed = 0;
+    for (const p of placements) {
+        const ship = ships.value.find(s => s.id === p.slotId);
+        if (ship && canPlace(ship, p.x, p.y, p.o)) {
+            ship.placed = { x: p.x, y: p.y, o: p.o };
+            placed++;
+        }
+    }
+    const manual = ships.value.length - placed;
+    setPresetMsg([
+        `Wczytano „${preset.name}”: ${placed} z ${ships.value.length} statków na pozycjach.`,
+        missingMessage(missing),
+        manual ? `Do ręcznego ustawienia: ${manual}.` : '',
+    ].filter(Boolean).join(' '), missing.length > 0);
+    selectNext();
+}
+
+async function savePreset() {
+    const b = battle.value;
+    if (!b || !canSavePreset.value) return;
+    const ids = slotShipIds(ships.value, fleet.value, squadIds.value);
+    if (ids.size !== ships.value.length) {
+        setPresetMsg('Nie udało się powiązać statków planszy z flotą — odśwież ekran.', true);
+        return;
+    }
+    presetBusy.value = true;
+    try {
+        const saved = await saveFleetPreset(b.profileId, presetName.value, { w: width.value, h: height.value },
+            ships.value.map(s => ({ shipId: ids.get(s.id)!, x: s.placed!.x, y: s.placed!.y, o: s.placed!.o === 'h' ? 'H' as const : 'V' as const })));
+        const i = presets.value.findIndex(p => p.id === saved.id);
+        if (i >= 0) presets.value.splice(i, 1, saved); else presets.value.push(saved);
+        presetName.value = saved.name;
+        setPresetMsg(i >= 0 ? `Nadpisano zestaw „${saved.name}”.` : `Zapisano zestaw „${saved.name}”.`);
+    } catch (e: any) {
+        setPresetMsg(presetErrorMessage(e, 'Nie udało się zapisać zestawu'), true);
+    } finally {
+        presetBusy.value = false;
+    }
+}
+
+function startRename(preset: FleetPresetDTO) {
+    deletingId.value = null;
+    renamingId.value = preset.id;
+    renameText.value = preset.name;
+    nextTick(() => renameInput.value?.[0]?.select());
+}
+
+async function confirmRename(preset: FleetPresetDTO) {
+    const b = battle.value;
+    const name = renameText.value.trim();
+    if (!b || !name) return;
+    if (name === preset.name) {
+        renamingId.value = null;
+        return;
+    }
+    presetBusy.value = true;
+    try {
+        const renamed = await renameFleetPreset(b.profileId, preset.id, name);
+        presets.value = presets.value.map(p => (p.id === renamed.id ? renamed : p));
+        renamingId.value = null;
+        setPresetMsg(`Zmieniono nazwę na „${renamed.name}”.`);
+    } catch (e: any) {
+        setPresetMsg(presetErrorMessage(e, 'Nie udało się zmienić nazwy'), true);
+    } finally {
+        presetBusy.value = false;
+    }
+}
+
+// pierwsze kliknięcie pyta (przycisk pokazuje „usuń?”), drugie usuwa
+async function removePreset(preset: FleetPresetDTO) {
+    const b = battle.value;
+    if (!b) return;
+    if (deletingId.value !== preset.id) {
+        deletingId.value = preset.id;
+        return;
+    }
+    presetBusy.value = true;
+    try {
+        await deleteFleetPreset(b.profileId, preset.id);
+        presets.value = presets.value.filter(p => p.id !== preset.id);
+        setPresetMsg(`Usunięto zestaw „${preset.name}”.`);
+    } catch (e: any) {
+        setPresetMsg(presetErrorMessage(e, 'Nie udało się usunąć zestawu'), true);
+    } finally {
+        deletingId.value = null;
+        presetBusy.value = false;
     }
 }
 
@@ -500,6 +699,32 @@ kbd { font: 600 10px var(--font-mono); padding: 1px 5px; border-radius: 4px; bor
 .rules ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; font: 400 13px var(--font-body); color: var(--text-2); }
 .rules li { display: flex; gap: 9px; align-items: flex-start; }
 .rules li svg { flex: none; margin-top: 3px; color: var(--info); }
+.presets { display: flex; flex-direction: column; gap: 10px; }
+.presets .kicker { letter-spacing: .18em; }
+.presets ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.presets li { display: flex; align-items: center; gap: 6px; font: 500 13px var(--font-body); }
+.preset-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.preset-size { font: 500 11px var(--font-mono); color: var(--text-muted); }
+.preset-size.other { color: var(--warn); }
+.icon-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 6px; border-radius: 6px;
+    background: var(--bg-card); border: 1px solid var(--line-btn); color: var(--text-2);
+    font: 600 10px var(--font-mono); cursor: pointer;
+}
+.icon-btn:hover:not(:disabled) { border-color: var(--info); color: var(--text); }
+.icon-btn:disabled { opacity: .5; cursor: not-allowed; }
+.icon-btn.danger { border-color: var(--danger); color: var(--danger); }
+.name {
+    flex: 1; min-width: 0;
+    padding: 6px 8px; border-radius: 6px;
+    background: var(--bg-card); border: 1px solid var(--line-btn); color: var(--text);
+    font: 500 12px var(--font-body);
+}
+.save-row { display: flex; gap: 6px; align-items: center; }
+.empty { margin: 0; font-size: 12px; }
+.preset-msg { margin: 0; font: 500 11px var(--font-mono); color: var(--text-2); }
+.preset-msg.bad { color: var(--warn); }
 .progress-head { display: flex; justify-content: space-between; font: 500 12px var(--font-mono); color: var(--text-muted); }
 .progress-head b { color: var(--text); }
 .track { height: 7px; border-radius: 4px; background: var(--bg-card); border: 1px solid var(--line-card); margin-top: 8px; overflow: hidden; }

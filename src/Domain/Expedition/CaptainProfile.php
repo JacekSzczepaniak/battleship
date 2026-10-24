@@ -2,6 +2,7 @@
 
 namespace App\Domain\Expedition;
 
+use App\Domain\Game\Orientation;
 use App\Domain\Shared\GameId;
 use App\Domain\Shared\ProfileId;
 
@@ -42,6 +43,9 @@ final class CaptainProfile
     private const COUNTERATTACK_CALM_TICKS = 8;
     private const COUNTERATTACK_CHANCE = 15;
     private const COUNTERATTACK_WARNING_TICKS = 12;
+
+    /** Zapisanych zestawów floty (#125) na profil. */
+    public const FLEET_PRESET_LIMIT = 5;
 
     /** Dziennik kapitana (#111) trzyma tyle ostatnich wpisów. */
     public const LOG_LIMIT = 50;
@@ -182,6 +186,13 @@ final class CaptainProfile
      * @var array<string, Prize>
      */
     private array $prizes = [];
+
+    /**
+     * Zapisane zestawy floty z rozmieszczeniem (#125), najwyżej FLEET_PRESET_LIMIT.
+     *
+     * @var array<string, FleetPreset> klucz: id zestawu
+     */
+    private array $fleetPresets = [];
 
     /** Tik = akcja morska (rejs, bitwa); zegar świata — GAME_DESIGN.md, filar II. */
     private int $tick = 0;
@@ -1649,6 +1660,72 @@ final class CaptainProfile
         return $sunk;
     }
 
+    // --- Zestawy floty (#125) ---
+
+    /** @return list<FleetPreset> zapisane zestawy w kolejności zapisu */
+    public function fleetPresets(): array
+    {
+        return array_values($this->fleetPresets);
+    }
+
+    /**
+     * Zapisuje zestaw floty: statki muszą być we flocie (sprawność nie gra roli —
+     * zestaw opisuje ulubione ustawienie, wczytanie pominie niesprawne), pozycje
+     * spełniają zasady planszy. Zestaw o tej samej nazwie (bez względu na
+     * wielkość liter) jest nadpisywany i zachowuje id; nowy ponad limit — odrzucany.
+     * Zapis nie kosztuje tiku: to porządek w kajucie, nie akcja morska.
+     *
+     * @param list<array{shipId: string, x: int, y: int, o: Orientation}> $placements
+     */
+    public function saveFleetPreset(string $name, int $boardWidth, int $boardHeight, array $placements): FleetPreset
+    {
+        $ships = [];
+        foreach ($placements as $placement) {
+            $ship = $this->shipById($placement['shipId']) ?? throw new \DomainException('Ship not found');
+            $ships[] = ['shipId' => $ship->id, 'type' => $ship->type] + $placement;
+        }
+
+        $existing = $this->fleetPresetNamed($name);
+        if (null === $existing && count($this->fleetPresets) >= self::FLEET_PRESET_LIMIT) {
+            throw new \DomainException('Fleet preset limit exceeded');
+        }
+
+        $preset = FleetPreset::create($existing?->id, $name, $boardWidth, $boardHeight, $ships);
+        $this->fleetPresets[$preset->id] = $preset;
+
+        return $preset;
+    }
+
+    public function renameFleetPreset(string $presetId, string $name): FleetPreset
+    {
+        $preset = $this->fleetPresets[$presetId] ?? throw new \DomainException('Fleet preset not found');
+        $other = $this->fleetPresetNamed($name);
+        if (null !== $other && $other->id !== $presetId) {
+            throw new \DomainException('Fleet preset name taken');
+        }
+
+        return $this->fleetPresets[$presetId] = $preset->renamed($name);
+    }
+
+    public function deleteFleetPreset(string $presetId): void
+    {
+        if (!isset($this->fleetPresets[$presetId])) {
+            throw new \DomainException('Fleet preset not found');
+        }
+        unset($this->fleetPresets[$presetId]);
+    }
+
+    private function fleetPresetNamed(string $name): ?FleetPreset
+    {
+        foreach ($this->fleetPresets as $preset) {
+            if ($preset->hasName($name)) {
+                return $preset;
+            }
+        }
+
+        return null;
+    }
+
     // --- Dziennik kapitana (#111) ---
 
     /** @return list<LogEntry> ostatnie zdarzenia, najstarsze pierwsze */
@@ -1740,6 +1817,7 @@ final class CaptainProfile
      * @param list<LogEntry>                                                                                                                                $log          dziennik kapitana, najstarsze pierwsze; profil sprzed dziennika zaczyna od pustego
      * @param list<Prize>                                                                                                                                   $prizes       statki zdobyte abordażem, czekające na decyzję (#118)
      * @param array<string, int>                                                                                                                            $besieged     oblężone twierdze: id wyspy → tik wygranej potyczki (#120)
+     * @param list<FleetPreset>                                                                                                                             $fleetPresets zapisane zestawy floty (#125)
      */
     public static function fromSnapshot(
         ProfileId $id,
@@ -1768,6 +1846,7 @@ final class CaptainProfile
         array $log = [],
         array $prizes = [],
         array $besieged = [],
+        array $fleetPresets = [],
     ): self {
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
@@ -1793,6 +1872,9 @@ final class CaptainProfile
         $self->besieged = array_diff_key($besieged, $ownedIslands);
         foreach ($prizes as $prize) {
             $self->prizes[$prize->id] = $prize;
+        }
+        foreach (array_slice($fleetPresets, 0, self::FLEET_PRESET_LIMIT) as $preset) {
+            $self->fleetPresets[$preset->id] = $preset;
         }
         usort($log, static fn (LogEntry $a, LogEntry $b) => $a->tick <=> $b->tick);
         $self->log = array_slice($log, -self::LOG_LIMIT);

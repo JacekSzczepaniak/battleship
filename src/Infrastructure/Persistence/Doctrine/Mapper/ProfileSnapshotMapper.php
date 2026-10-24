@@ -4,6 +4,7 @@ namespace App\Infrastructure\Persistence\Doctrine\Mapper;
 
 use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\CaptainProfile;
+use App\Domain\Expedition\FleetPreset;
 use App\Domain\Expedition\LogEntry;
 use App\Domain\Expedition\LogEvent;
 use App\Domain\Expedition\OwnedShip;
@@ -13,6 +14,7 @@ use App\Domain\Expedition\SeaState;
 use App\Domain\Expedition\ShipType;
 use App\Domain\Expedition\ShipVariant;
 use App\Domain\Expedition\Technology;
+use App\Domain\Game\Orientation;
 use App\Domain\Shared\ProfileId;
 
 final class ProfileSnapshotMapper
@@ -70,6 +72,8 @@ final class ProfileSnapshotMapper
             'prizes' => array_map(static fn (Prize $prize) => $prize->toArray(), $profile->prizes()),
             // twierdze oblężone po wygranej potyczce: id wyspy → tik (#120)
             'besieged' => $profile->besiegedIslands(),
+            // zapisane zestawy floty z rozmieszczeniem (#125)
+            'fleetPresets' => array_map(static fn (FleetPreset $preset) => $preset->toArray(), $profile->fleetPresets()),
         ];
     }
 
@@ -166,6 +170,8 @@ final class ProfileSnapshotMapper
             prizes: $this->prizesFrom($state),
             // brak klucza = profil sprzed oblężeń, żadna twierdza nie jest oblężona
             besieged: array_map('intval', (array) ($state['besieged'] ?? [])),
+            // brak klucza = profil sprzed zestawów floty, bez zestawów
+            fleetPresets: $this->fleetPresetsFrom($state),
         );
     }
 
@@ -186,6 +192,36 @@ final class ProfileSnapshotMapper
             }
             $variant = ShipVariant::tryFrom((string) ($prize['variant'] ?? ''));
             $out[] = new Prize((string) $prize['id'], $type, $variant?->type() === $type ? $variant : null, (int) ($prize['tick'] ?? 0));
+        }
+
+        return $out;
+    }
+
+    /**
+     * Zestawy floty (#125); zestaw z nieczytelnym wpisem statku jest pomijany w całości,
+     * bo częściowy zapis zmieniałby rozmieszczenie po cichu.
+     *
+     * @param array<string,mixed> $state
+     *
+     * @return list<FleetPreset>
+     */
+    private function fleetPresetsFrom(array $state): array
+    {
+        $out = [];
+        foreach ((array) ($state['fleetPresets'] ?? []) as $preset) {
+            if (!is_array($preset) || !isset($preset['id'], $preset['name'], $preset['board']['w'], $preset['board']['h']) || !is_array($preset['ships'] ?? null)) {
+                continue;
+            }
+            $ships = [];
+            foreach ($preset['ships'] as $ship) {
+                $type = is_array($ship) ? ShipType::tryFrom((string) ($ship['type'] ?? '')) : null;
+                $orientation = is_array($ship) ? Orientation::tryFrom((string) ($ship['o'] ?? '')) : null;
+                if (null === $type || null === $orientation || !isset($ship['shipId'], $ship['x'], $ship['y'])) {
+                    continue 2;
+                }
+                $ships[] = ['shipId' => (string) $ship['shipId'], 'type' => $type, 'x' => (int) $ship['x'], 'y' => (int) $ship['y'], 'o' => $orientation];
+            }
+            $out[] = new FleetPreset((string) $preset['id'], (string) $preset['name'], (int) $preset['board']['w'], (int) $preset['board']['h'], $ships);
         }
 
         return $out;

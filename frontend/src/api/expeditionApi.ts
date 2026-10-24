@@ -487,6 +487,26 @@ export interface ExpeditionDTO {
     research: ResearchDTO;
     // od najnowszego wpisu, najwyżej 50
     log: LogEntryDTO[];
+    // zapisane zestawy floty z rozmieszczeniem (#125), najwyżej 5
+    fleetPresets: FleetPresetDTO[];
+    // skład nierozliczonych bitew: gameId → id statków floty
+    battleSquads: Record<string, string[]>;
+}
+
+export interface FleetPresetShipDTO {
+    shipId: string;
+    // typ z chwili zapisu — statek mógł potem przepaść albo pójść na złom
+    type: ShipTypeName;
+    x: number;
+    y: number;
+    o: 'H' | 'V';
+}
+
+export interface FleetPresetDTO {
+    id: string;
+    name: string;
+    board: { w: number; h: number };
+    ships: FleetPresetShipDTO[];
 }
 
 export interface SettleResultDTO {
@@ -598,4 +618,19 @@ export async function transferCargo(
 
 export async function sail(profileId: string, x: number, y: number): Promise<SailResultDTO> {
     return http.post<SailResultDTO>(`/profiles/${profileId}/sail`, { x, y });
+}
+
+/** Zapis zestawu floty (#125); zestaw o tej samej nazwie jest nadpisywany. */
+export async function saveFleetPreset(
+    profileId: string, name: string, board: { w: number; h: number }, ships: Omit<FleetPresetShipDTO, 'type'>[],
+): Promise<FleetPresetDTO> {
+    return http.post<FleetPresetDTO>(`/profiles/${profileId}/fleet-presets`, { name, board, ships });
+}
+
+export async function renameFleetPreset(profileId: string, presetId: string, name: string): Promise<FleetPresetDTO> {
+    return http.patch<FleetPresetDTO>(`/profiles/${profileId}/fleet-presets/${presetId}`, { name });
+}
+
+export async function deleteFleetPreset(profileId: string, presetId: string): Promise<void> {
+    await http.delete<null>(`/profiles/${profileId}/fleet-presets/${presetId}`);
 }

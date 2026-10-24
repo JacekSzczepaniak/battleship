@@ -41,4 +41,7 @@ export const http = {
     get: <T>(p: string) => request<T>(p),
     post: <T>(p: string, body?: unknown) =>
         request<T>(p, { method: 'POST', body: JSON.stringify(body ?? {}) }),
+    patch: <T>(p: string, body?: unknown) =>
+        request<T>(p, { method: 'PATCH', body: JSON.stringify(body ?? {}) }),
+    delete: <T>(p: string) => request<T>(p, { method: 'DELETE' }),
 };

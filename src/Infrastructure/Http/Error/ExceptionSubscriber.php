@@ -175,6 +175,10 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             'Gate already open' => ['GATE_ALREADY_OPEN', 409],
             'Gate guarded: defeat the guardian first' => ['GATE_GUARDED', 409],
             'Not at gate' => ['NOT_AT_GATE', 409],
+            // zestawy floty (#125)
+            'Fleet preset not found' => ['FLEET_PRESET_NOT_FOUND', 404],
+            'Fleet preset limit exceeded' => ['FLEET_PRESET_LIMIT', 409],
+            'Fleet preset name taken' => ['FLEET_PRESET_NAME_TAKEN', 409],
             default => ['VALIDATION_ERROR', 400],
         };
     }

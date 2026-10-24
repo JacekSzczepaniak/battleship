@@ -10,6 +10,7 @@ use App\Application\Expedition\DeleteFleetPreset;
 use App\Application\Expedition\GetExpedition;
 use App\Application\Expedition\PassGate;
 use App\Application\Expedition\RenameFleetPreset;
+use App\Application\Expedition\RepairFleet;
 use App\Application\Expedition\RepairShip;
 use App\Application\Expedition\Sail;
 use App\Application\Expedition\SaveFleetPreset;
@@ -49,6 +50,7 @@ final class ExpeditionController
         private SettleBattle $settleBattle,
         private BuildShip $buildShip,
         private RepairShip $repairShip,
+        private RepairFleet $repairFleet,
         private DecidePrize $decidePrize,
         private Sail $sail,
         private TransferCargo $transferCargo,
@@ -190,6 +192,36 @@ final class ExpeditionController
         $ship = $this->repairShip->handle($id, $islandId, $shipId);
 
         return new JsonResponse($this->shipView($ship));
+    }
+
+    /**
+     * Remont całej floty w stoczni (#151): od najtańszego, dopóki starczy
+     * surowców; pominięte statki wracają z powodem.
+     */
+    #[Route('/{id}/fleet/repair', name: 'api_profiles_repair_fleet', methods: ['POST'])]
+    public function repairFleet(string $id, Request $request): JsonResponse
+    {
+        $this->assertUuid($id, 'profile');
+        $payload = $this->jsonPayload($request);
+
+        $islandId = $payload['islandId'] ?? null;
+        if (!is_string($islandId)) {
+            throw new ApiException('Missing or invalid field: islandId:string', 'VALIDATION_ERROR', 400);
+        }
+
+        $result = $this->repairFleet->handle($id, $islandId);
+        $repair = $result['repair'];
+
+        return new JsonResponse([
+            'repaired' => array_map(fn (OwnedShip $ship) => $this->shipView($ship), $repair->repaired),
+            'skipped' => array_map(fn (array $skip) => [
+                'ship' => $this->shipView($skip['ship']),
+                'reason' => $skip['reason']->value,
+            ], $repair->skipped),
+            'paid' => $repair->paid->toArray(),
+            'stockpile' => $result['stockpile']->toArray(),
+            'cargo' => $result['cargo']->toArray(),
+        ]);
     }
 
     /** Złomowanie statku w stoczni portu (#124): zwrot trafia do magazynu wyspy. */

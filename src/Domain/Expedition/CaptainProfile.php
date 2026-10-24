@@ -494,6 +494,49 @@ final class CaptainProfile
         return $ship;
     }
 
+    /**
+     * Remont całej floty w stoczni (#151): uszkodzone statki od najtańszego,
+     * każdy płacony jak pojedynczy remont (magazyn wyspy, potem ładownia).
+     * Statek, którego stocznia nie wyremontuje albo na który zabrakło surowców,
+     * zostaje uszkodzony, a remont idzie dalej — droższy statek może kosztować
+     * inne surowce. Obecność przy wyspie sprawdza warstwa aplikacji; akcja nie kosztuje tiku.
+     */
+    public function repairFleet(string $islandId, int $shipyardLevel): FleetRepair
+    {
+        $before = $this->stockpile($islandId)->add($this->cargo);
+        $repaired = [];
+        $skipped = [];
+        foreach ($this->repairQueue() as $ship) {
+            if ($shipyardLevel < $ship->type->requiredShipyardLevel()) {
+                $skipped[] = ['ship' => $ship, 'reason' => RepairSkip::ShipyardTooLow];
+                continue;
+            }
+            if (!$this->stockpile($islandId)->add($this->cargo)->covers($this->repairCost($ship->type))) {
+                $skipped[] = ['ship' => $ship, 'reason' => RepairSkip::NotEnoughResources];
+                continue;
+            }
+            $this->pay($islandId, $this->repairCost($ship->type));
+            $ship->repair();
+            $repaired[] = $ship;
+        }
+
+        return new FleetRepair($repaired, $skipped, $before->subtract($this->stockpile($islandId)->add($this->cargo)));
+    }
+
+    /**
+     * Uszkodzone statki w kolejności remontu: od najtańszego (suma surowców
+     * z Dokiem remontowym), przy równym koszcie w kolejności floty.
+     *
+     * @return list<OwnedShip>
+     */
+    public function repairQueue(): array
+    {
+        $damaged = array_values(array_filter($this->fleet, static fn (OwnedShip $s) => $s->isDamaged()));
+        usort($damaged, fn (OwnedShip $a, OwnedShip $b) => $this->repairCost($a->type)->total() <=> $this->repairCost($b->type)->total());
+
+        return $damaged;
+    }
+
     /** Koszt remontu statku danego typu: Dok remontowy daje połowę ceny, z zaokrągleniem w górę. */
     public function repairCost(ShipType $type): Resources
     {

@@ -556,6 +556,25 @@
 
                         <div class="block">
                             <div class="kicker">Remont</div>
+                            <!-- remont całej floty (#151): od najtańszego, dopóki starczy surowców i poziomu stoczni -->
+                            <div v-if="damagedGroups.length" class="ship">
+                                <span class="ship-name">🔧 Cała flota <span class="muted">(do remontu w tej stoczni: {{ fleetRepairShips.length }} z {{ damagedCount }})</span></span>
+                                <button
+                                    class="btn btn-small btn-primary"
+                                    :disabled="busy || fleetRepairBlock !== null"
+                                    :title="fleetRepairBlock ?? 'od najtańszego, dopóki starczy surowców'"
+                                    @click="onRepairFleet"
+                                >
+                                    Napraw całą flotę<template v-if="fleetRepairShips.length"> ({{ formatResources(fleetRepairCost) }})</template>
+                                </button>
+                                <span v-if="fleetRepairBlock" class="why">{{ fleetRepairBlock }}</span>
+                            </div>
+                            <div v-if="fleetRepairReport" class="repair-report" role="status">
+                                <p>{{ fleetRepairReport.headline }}</p>
+                                <ul v-if="fleetRepairReport.skipped.length">
+                                    <li v-for="s in fleetRepairReport.skipped" :key="s.id">{{ s.label }} — {{ s.reason }}</li>
+                                </ul>
+                            </div>
                             <ul v-if="damagedGroups.length" class="ships">
                                 <li v-for="g in damagedGroups" :key="g.key" class="ship">
                                     <span class="ship-name">{{ SHIP_ICONS[g.ships[0].type] }} {{ g.label }} <span class="muted">(uszkodzone: {{ g.ships.length }})</span></span>
@@ -683,11 +702,11 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
-    buildBuilding, buildShip, createProfile, decideEncounter, decidePrize, getExpedition, passGate, repairShip, sail, scrapShip, sellShip, settleBattle, startEncounterBattle, startGuardianBattle, startIslandBattle, startSiege,
+    buildBuilding, buildShip, createProfile, decideEncounter, decidePrize, getExpedition, passGate, repairFleet, repairShip, sail, scrapShip, sellShip, settleBattle, startEncounterBattle, startGuardianBattle, startIslandBattle, startSiege,
     startResearch, trade, tradeWithMerchant, transferCargo,
     BUILDING_ICONS, BUILDING_LABELS, RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, SHIP_VARIANT_LABELS, SHIP_VARIANT_NAMES, TECH_LABELS, fleetShipLabel,
     type BuildingTypeName, type EncounterDecisionName, type ShipTypeName, type TechnologyName, type ExpeditionDTO, type TradePortDTO, type FleetShipDTO, type GateDTO, type GuardianDTO, type IslandDTO,
-    type MarketGoodName, type MarketSideName, type PrizeDTO, type PrizeDecisionName, type RankName, type ResourcesDTO, type SailResultDTO, type SeaThemeDTO, type ShipTypeDTO, type ShipVariantDTO, type ShipVariantName,
+    type MarketGoodName, type MarketSideName, type PrizeDTO, type PrizeDecisionName, type RankName, type RepairFleetDTO, type ResourcesDTO, type SailResultDTO, type SeaThemeDTO, type ShipTypeDTO, type ShipVariantDTO, type ShipVariantName,
 } from '../api/expeditionApi';
 import { ApiError } from '../api/http';
 import {
@@ -1195,6 +1214,62 @@ const damagedGroups = computed(() => {
     return [...byKey.values()];
 });
 
+const damagedCount = computed(() => (expedition.value?.fleet ?? []).filter(s => s.damaged).length);
+
+/** Remont całej floty (#151): uszkodzone statki, które ta stocznia wyremontuje — od najtańszego, jak w domenie. */
+const fleetRepairShips = computed(() => {
+    const island = currentIsland.value;
+    const types = expedition.value?.shipTypes ?? [];
+    if (!island) return [];
+    return (expedition.value?.fleet ?? [])
+        .filter(s => s.damaged && island.shipyardLevel >= (types.find(t => t.type === s.type)?.requiredShipyardLevel ?? Infinity))
+        .sort((a, b) => totalResources(a.repairCost) - totalResources(b.repairCost));
+});
+
+const fleetRepairCost = computed(() => fleetRepairShips.value.reduce((sum, s) => addResources(sum, s.repairCost), { wood: 0, steel: 0, gold: 0 }));
+
+/** Powód blokady przycisku: stocznia nie wyremontuje żadnego statku albo nie starcza na żaden; null = można. */
+const fleetRepairBlock = computed((): string | null => {
+    const island = currentIsland.value;
+    if (!island) return 'dopłyń do portu ze stocznią';
+    if (!fleetRepairShips.value.length) {
+        const types = expedition.value?.shipTypes ?? [];
+        const levels = (expedition.value?.fleet ?? []).filter(s => s.damaged).map(s => types.find(t => t.type === s.type)?.requiredShipyardLevel ?? 0);
+        return shipyardMissing(island, Math.min(...levels));
+    }
+    return fleetRepairShips.value.every(s => repairBlock(s) !== null) ? repairBlock(fleetRepairShips.value[0]) : null;
+});
+
+/** Podsumowanie ostatniego remontu całej floty: ile wyremontowano, które statki zostały i dlaczego. */
+const fleetRepairResult = ref<RepairFleetDTO | null>(null);
+
+const fleetRepairReport = computed(() => {
+    const result = fleetRepairResult.value;
+    const island = currentIsland.value;
+    const profile = expedition.value?.profile;
+    if (!result || !island || !profile) return null;
+    const types = expedition.value?.shipTypes ?? [];
+    const available = addResources(island.stockpile, profile.cargo);
+    const repaired = result.repaired.length;
+    const headline = repaired
+        ? `Wyremontowano ${repaired} szt. za ${formatResources(result.paid)}.${result.skipped.length ? ` Zostały uszkodzone: ${result.skipped.length} szt.` : ''}`
+        : `Nic nie wyremontowano. Zostały uszkodzone: ${result.skipped.length} szt.`;
+    const skipped = result.skipped.map(({ ship, reason }) => {
+        const cost = expedition.value?.fleet.find(s => s.id === ship.id)?.repairCost ?? { wood: 0, steel: 0, gold: 0 };
+        return {
+            id: ship.id,
+            label: `${SHIP_ICONS[ship.type]} ${fleetShipLabel(ship)}`,
+            reason: reason === 'shipyard-too-low'
+                ? shipyardMissing(island, types.find(t => t.type === ship.type)?.requiredShipyardLevel ?? 0)
+                : `zabrakło surowców (${formatResources(cost)}): ${withSources(available, cost)}`,
+        };
+    });
+    return { headline, skipped };
+});
+
+// podsumowanie dotyczy stoczni, przy której flota stała
+watch(() => currentIsland.value?.id, () => { fleetRepairResult.value = null; });
+
 // złomowanie (#124): sprawne i uszkodzone osobno, bo oddają różny zwrot
 const scrapGroups = computed(() => {
     const byKey = new Map<string, { key: string; label: string; ships: FleetShipDTO[] }>();
@@ -1316,7 +1391,14 @@ async function onDecidePrize(prize: PrizeDTO, decision: PrizeDecisionName) {
     }
 }
 
+function onRepairFleet() {
+    return inPort(async (profileId, island) => {
+        fleetRepairResult.value = await repairFleet(profileId, island.id);
+    }, 'Remont floty nie powiódł się');
+}
+
 function onRepair(ship: FleetShipDTO) {
+    fleetRepairResult.value = null;
     return inPort((profileId, island) => repairShip(profileId, island.id, ship.id), 'Remont nie powiódł się');
 }
 
@@ -1665,6 +1747,9 @@ h2, h3 { font-family: var(--font-head); }
 .ship-name { flex: 1 1 14rem; font: 600 14px var(--font-head); }
 .ship-name .muted { font: 500 11px var(--font-mono); }
 .why { flex-basis: 100%; font: 500 11px var(--font-mono); color: var(--text-muted); }
+.repair-report { margin: 4px 0 10px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line-card); background: var(--bg-panel); font-size: 13px; }
+.repair-report p { margin: 0; }
+.repair-report ul { margin: 6px 0 0; padding-left: 18px; color: var(--text-muted); }
 
 /* przegląd akwenu */
 .overview { display: flex; flex-direction: column; gap: 18px; }

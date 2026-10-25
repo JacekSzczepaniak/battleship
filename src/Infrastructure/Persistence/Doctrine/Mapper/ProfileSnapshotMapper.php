@@ -87,6 +87,8 @@ final class ProfileSnapshotMapper
             'inland' => $profile->inlandExpedition()?->toArray(),
             'wildVisits' => $profile->wildVisits(),
             'artifacts' => $profile->artifacts(),
+            // reputacja kupiec ↔ korsarz (#142)
+            'reputation' => $profile->reputation()->value,
         ];
     }
 
@@ -199,6 +201,8 @@ final class ProfileSnapshotMapper
             inland: $this->inlandFrom($state),
             wildVisits: array_map('intval', (array) ($state['wildVisits'] ?? [])),
             artifacts: array_map('intval', (array) ($state['artifacts'] ?? [])),
+            // brak klucza = profil sprzed reputacji, start od 0
+            reputation: (int) ($state['reputation'] ?? 0),
         );
     }
 

@@ -204,6 +204,8 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             'Wild island needs rest' => ['WILD_ISLAND_RESTING', 409],
             'No inland expedition' => ['NO_INLAND_EXPEDITION', 409],
             'No deeper stage' => ['NO_DEEPER_STAGE', 409],
+            // reputacja (#142): embargo dla korsarza
+            'Embargo: no trade with a corsair' => ['EMBARGO', 409],
             // zestawy floty (#125)
             'Fleet preset not found' => ['FLEET_PRESET_NOT_FOUND', 404],
             'Fleet preset limit exceeded' => ['FLEET_PRESET_LIMIT', 409],

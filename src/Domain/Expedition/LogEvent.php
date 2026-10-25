@@ -86,4 +86,7 @@ enum LogEvent: string
 
     /** Artefakt albo legenda z ekspedycji: technologia działa od razu (#144). */
     case ArtifactFound = 'artifact-found';
+
+    /** Reputacja przekroczyła próg: kupiec, neutralny, korsarz albo embargo (#142). */
+    case ReputationTier = 'reputation-tier';
 }

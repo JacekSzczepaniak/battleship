@@ -13,6 +13,7 @@ use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\LogEntry;
 use App\Domain\Expedition\Prize;
 use App\Domain\Expedition\ProfileRepository;
+use App\Domain\Expedition\Reputation;
 use App\Domain\Expedition\Sea;
 use App\Domain\Expedition\SeaGraph;
 use App\Domain\Expedition\ShipType;
@@ -185,6 +186,8 @@ final class GetExpedition
                     'name' => $this->seas->sea($seaId)->name ?? $seaId,
                     'tick' => $tick,
                 ], array_keys($profile->seaCharts()), array_values($profile->seaCharts())),
+                // reputacja kupiec ↔ korsarz (#142): stan, skutki i progi podane z góry (zasada 4)
+                'reputation' => self::reputationView($profile->reputation()),
             ],
             'fleet' => $fleet,
             // statki zdobyte abordażem, czekające na decyzję (#118); scrapValue = zwrot z rozbiórki,
@@ -289,8 +292,12 @@ final class GetExpedition
             'position' => $discovered ? $pos : null,
             'present' => $discovered && $pos === $profile->position(),
             'rate' => $port->rate->toArray($profile->marketPricePercent()),
-            // mnożnik ceny w procentach (100 = kurs bazowy); pod reputację z #142
+            // kurs bazowy akwenu: kupno liczy się od całego zlecenia (#142), więc front potrzebuje go do podglądu
+            'baseRate' => $port->rate->toArray(),
+            // mnożnik ceny w procentach (100 = kurs bazowy) z reputacji (#142)
             'pricePercent' => $profile->marketPricePercent(),
+            // embargo (#142): port odmawia handlu, sprzedaży statku i mapy
+            'embargo' => $profile->isUnderEmbargo(),
             'stockpile' => $profile->stockpile($port->id)->toArray(),
             // mapa akwenu na sprzedaż (#143); null = port bez mapy
             'chart' => null !== $port->chart ? [
@@ -374,6 +381,7 @@ final class GetExpedition
         }
         $enemy = EncounterCatalog::fleet($encounter->type, $encounter->sea);
         $pirate = EncounterType::Pirate === $encounter->type;
+        $merchant = EncounterType::Merchant === $encounter->type;
         $rate = $this->seas->sea($encounter->sea)?->tradePort?->rate;
         $ransom = EncounterCatalog::ransom($encounter->sea);
 
@@ -396,7 +404,7 @@ final class GetExpedition
             ],
             // handel na miejscu: towar za 1 złoto u handlarza (rate) i w porcie akwenu (portRate, #140);
             // zlecenie w sztukach, kupno płaci za każdą zaczętą porcję, sprzedaż dostaje za pełne
-            'trade' => $pirate || null === $rate ? null : [
+            'trade' => !$merchant || null === $rate ? null : [
                 'rate' => $rate->toArray($profile->merchantPrices($rate)->pricePercent),
                 'portRate' => $rate->toArray($profile->marketPricePercent()),
                 'worsePercent' => EncounterCatalog::MERCHANT_WORSE_PERCENT,
@@ -405,6 +413,36 @@ final class GetExpedition
             // ucieczka: tiki i ładunek, który zabierze; okup: złoto z ładowni
             'flee' => $pirate ? ['ticks' => EncounterCatalog::FLEE_TICKS, 'cargoLost' => $profile->fleeCargoLoss()->toArray()] : null,
             'ransom' => $pirate ? ['gold' => $ransom, 'affordable' => $profile->cargo()->gold >= $ransom] : null,
+            // skutki wyborów dla reputacji (#142): bitwa (napad od razu, pirat po wygranej), handel
+            'reputation' => [
+                'battle' => match ($encounter->type) {
+                    EncounterType::Merchant => Reputation::RAID,
+                    EncounterType::Pirate => Reputation::PIRATE_DEFEATED,
+                    EncounterType::BountyHunters => 0,
+                },
+                'trade' => $merchant ? Reputation::TRADE : null,
+            ],
+        ];
+    }
+
+    /**
+     * Reputacja z jej skutkami i progami (#142): wartość, poziom, mnożnik ceny,
+     * embargo, zmiany za zdarzenia i progi osi.
+     *
+     * @return array<string,mixed>
+     */
+    private static function reputationView(Reputation $reputation): array
+    {
+        return [
+            'value' => $reputation->value,
+            'tier' => $reputation->tier()->value,
+            'pricePercent' => $reputation->pricePercent(),
+            'embargo' => $reputation->isEmbargo(),
+            'min' => Reputation::MIN,
+            'max' => Reputation::MAX,
+            'changes' => ['trade' => Reputation::TRADE, 'pirateDefeated' => Reputation::PIRATE_DEFEATED, 'raid' => Reputation::RAID],
+            'thresholds' => ['merchant' => Reputation::MERCHANT_FROM, 'corsair' => Reputation::CORSAIR_FROM, 'embargo' => Reputation::EMBARGO_FROM],
+            'prices' => ['merchant' => Reputation::MERCHANT_PRICE_PERCENT, 'corsair' => Reputation::CORSAIR_PRICE_PERCENT],
         ];
     }
 

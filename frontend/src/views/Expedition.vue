@@ -57,6 +57,21 @@
                     </div>
                 </div>
                 <div class="sep"></div>
+                <!-- reputacja kupiec ↔ korsarz (#142): stan, skutek i próg embarga zawsze na widoku -->
+                <div class="rep" :class="reputation.tier" :title="reputationTitle">
+                    <div class="rep-head">
+                        <span>Reputacja</span>
+                        <span><b>{{ signed(reputation.value) }}</b> · {{ TIER_LABELS[reputation.tier] }}</span>
+                    </div>
+                    <div class="rep-bar" role="meter" :aria-valuenow="reputation.value" :aria-valuemin="reputation.min" :aria-valuemax="reputation.max" aria-label="reputacja od korsarza do kupca">
+                        <span v-for="z in reputationZones" :key="z.tier" class="rep-zone" :class="z.tier" :style="{ left: z.left + '%', width: z.width + '%' }"></span>
+                        <span class="rep-mark" :style="{ left: axisPercent(reputation.value, reputation) + '%' }"></span>
+                    </div>
+                    <div class="rep-effect">
+                        {{ tierEffect(reputation.tier, reputation) }}<template v-if="!reputation.embargo"> · embargo od {{ signed(reputation.thresholds.embargo) }}</template>
+                    </div>
+                </div>
+                <div class="sep"></div>
                 <div class="tick">
                     <div class="kicker">Tik</div>
                     <div ref="tickEl" class="tick-n">{{ expedition.world.tick }}</div>
@@ -107,15 +122,21 @@
 
             <!-- Spotkanie na morzu (#141): rejs stoi do decyzji, skutki każdego wyboru podane z góry -->
             <section v-if="encounter" class="alert encounter" :class="encounter.type">
-                <strong>{{ encounter.type === 'pirate' ? '🏴‍☠️ Piraci na kursie' : '⚖️ Handlarz na kursie' }}</strong>
+                <strong>{{ ENCOUNTER_TITLES[encounter.type] }}</strong>
                 <span class="muted">Sektor {{ sectorLabel(encounter.position) }} · {{ encounter.sea.name }} · rejs czeka na Twoją decyzję.</span>
                 <div class="encounter-options">
                     <div class="encounter-option">
-                        <div class="kicker">{{ encounter.type === 'pirate' ? 'Walka' : 'Napad' }}</div>
+                        <div class="kicker">{{ ENCOUNTER_BATTLE_KICKERS[encounter.type] }}</div>
                         <span class="muted">{{ encounter.battle.name }}: {{ guardianFleet(encounter.battle) }} · plansza {{ encounter.battle.board.w }}×{{ encounter.battle.board.h }} · bronie specjalne</span>
                         <span>🏆 +{{ encounter.battle.xpWin }} XP, {{ formatResources(encounter.battle.lootWin) }} do ładowni</span>
                         <span class="muted">porażka: +{{ encounter.battle.xpLoss }} XP, bez łupu · zatopione statki przepadają · nadmiar łupu ponad ładownię idzie za burtę</span>
-                        <span v-if="encounter.type === 'merchant'" class="muted">Napad zapisuje się w dzienniku — kupcy go zapamiętają.</span>
+                        <!-- skutek dla reputacji (#142): napad od razu, pirat po wygranej; łowcy bez zmiany -->
+                        <template v-if="encounter.type === 'merchant'">
+                            <span class="rep-note">⚖️ Napad: {{ battleReputation.text }} od razu, bez względu na wynik.</span>
+                            <span v-if="battleReputation.crossing" class="over">⚠️ Przekroczysz próg: {{ battleReputation.crossing }}.</span>
+                        </template>
+                        <span v-else-if="encounter.type === 'pirate'" class="rep-note">⚖️ Wygrana: {{ battleReputation.text }}<template v-if="battleReputation.crossing"> ({{ battleReputation.crossing }})</template>.</span>
+                        <span v-else class="rep-note">⚖️ Łowcy nagród ścigają korsarza objętego embargiem: nie przyjmą okupu i nie dadzą uciec. Wygrana nie zmienia reputacji — z embarga wyprowadzają tylko pokonani piraci ({{ signed(reputation.changes.pirateDefeated) }}).</span>
                         <div class="squad">
                             <span :class="{ over: activeCells > encounter.battle.squadLimit }">
                                 skład: {{ squadCells(squadFor(encounter.battle)) }} / {{ encounter.battle.squadLimit }} pól
@@ -143,7 +164,7 @@
                             class="btn btn-small btn-primary"
                             :disabled="busy || starting !== null || pendingBattle !== null || squadFor(encounter.battle).length === 0 || convoyBlocked(encounter.battle)"
                             @click="onStartEncounter"
-                        >{{ starting === 'encounter' ? 'Stawianie żagli…' : encounter.type === 'pirate' ? '⚔️ Walcz z piratami' : '⚔️ Napadnij handlarza' }}</button>
+                        >{{ starting === 'encounter' ? 'Stawianie żagli…' : ENCOUNTER_BATTLE_BUTTONS[encounter.type] }}</button>
                     </div>
 
                     <template v-if="encounter.type === 'merchant' && encounter.trade">
@@ -163,6 +184,7 @@
                                 złoto: +{{ tradePreview.received }} za sprzedaż, −{{ tradePreview.paid }} za kupno
                                 · w ładowni po handlu {{ tradePreview.load }} / {{ expedition.profile.cargoCapacity }}
                             </span>
+                            <span v-if="encounter.reputation.trade" class="rep-note">⚖️ Udany handel: {{ changePreview(reputation, encounter.reputation.trade).text }}.</span>
                             <span v-if="tradePreview.problem" class="over">⚠️ {{ tradePreview.problem }}</span>
                             <button class="btn btn-small btn-primary" :disabled="busy || !!tradePreview.problem" @click="onMerchantTrade">⚖️ Handluj</button>
                         </div>
@@ -704,6 +726,7 @@
                             :capacity="expedition.profile.cargoCapacity"
                             :fleet="expedition.fleet"
                             :ship-types="expedition.shipTypes"
+                            :reputation="reputation"
                             :busy="busy"
                             @trade="onTrade"
                             @sell-ship="onSellShip"
@@ -762,7 +785,7 @@ import {
     buildBuilding, buildShip, buySeaChart, createProfile, decideEncounter, decidePrize, exploreWildIsland, getExpedition, passGate, repairFleet, repairShip, sail, scrapShip, sellShip, setFieldRepairs, settleBattle, startEncounterBattle, startGuardianBattle, startIslandBattle, startSiege,
     startResearch, trade, tradeWithMerchant, transferCargo,
     BUILDING_ICONS, BUILDING_LABELS, INLAND_TREASURE_LABELS, RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, SHIP_VARIANT_LABELS, SHIP_VARIANT_NAMES, TECH_LABELS, fleetShipLabel,
-    type BuildingTypeName, type EncounterDecisionName, type ShipTypeName, type TechnologyName, type ExpeditionDTO, type TradePortDTO, type WildIslandDTO, type InlandActionName, type InlandOutcomeDTO, type FleetShipDTO, type GateDTO, type GuardianDTO, type IslandDTO,
+    type BuildingTypeName, type EncounterDecisionName, type EncounterTypeName, type ReputationDTO, type ShipTypeName, type TechnologyName, type ExpeditionDTO, type TradePortDTO, type WildIslandDTO, type InlandActionName, type InlandOutcomeDTO, type FleetShipDTO, type GateDTO, type GuardianDTO, type IslandDTO,
     type MarketGoodName, type MarketSideName, type PrizeDTO, type PrizeDecisionName, type RankName, type RepairFleetDTO, type ResourcesDTO, type SailResultDTO, type SeaThemeDTO, type ShipTypeDTO, type ShipVariantDTO, type ShipVariantName,
 } from '../api/expeditionApi';
 import { ApiError } from '../api/http';
@@ -775,6 +798,7 @@ import { VARIANTS, carriedWeapon, columnLabel, fieldsLabel } from '../lib/ships'
 import { depositLabel, depositState, whereToFind } from '../lib/economy';
 import { logText, logTone } from '../lib/eventLog';
 import { buyCost, sellValue } from '../lib/merchant';
+import { axisPercent, changePreview, nextThresholds, signed, TIER_LABELS, tierEffect } from '../lib/reputation';
 import CargoPanel from '../components/CargoPanel.vue';
 import FleetPresetPicker from '../components/FleetPresetPicker.vue';
 import FleetPanel from '../components/FleetPanel.vue';
@@ -810,6 +834,37 @@ const pendingBattle = ref<CurrentBattle | null>(null);
 function rankLabel(rank: RankName): string {
     return RANK_LABELS[rank] ?? rank;
 }
+
+// --- HUD: reputacja kupiec ↔ korsarz (#142) ---
+
+const NEUTRAL_REPUTATION: ReputationDTO = {
+    value: 0, tier: 'neutral', pricePercent: 100, embargo: false, min: -100, max: 100,
+    changes: { trade: 2, pirateDefeated: 5, raid: -20 },
+    thresholds: { merchant: 40, corsair: -40, embargo: -70 },
+    prices: { merchant: 90, corsair: 125 },
+};
+const reputation = computed(() => expedition.value?.profile.reputation ?? NEUTRAL_REPUTATION);
+
+/** Strefy osi: embargo, korsarz, neutralny, kupiec — granice z progów backendu. */
+const reputationZones = computed(() => {
+    const r = reputation.value;
+    const at = (v: number) => axisPercent(v, r);
+    return [
+        { tier: 'embargo', left: 0, width: at(r.thresholds.embargo) },
+        { tier: 'corsair', left: at(r.thresholds.embargo), width: at(r.thresholds.corsair) - at(r.thresholds.embargo) },
+        { tier: 'neutral', left: at(r.thresholds.corsair), width: at(r.thresholds.merchant) - at(r.thresholds.corsair) },
+        { tier: 'merchant', left: at(r.thresholds.merchant), width: 100 - at(r.thresholds.merchant) },
+    ];
+});
+
+const reputationTitle = computed(() => {
+    const r = reputation.value;
+    return [
+        `Reputacja ${signed(r.value)} (${TIER_LABELS[r.tier]}): ${tierEffect(r.tier, r)}.`,
+        `Handel ${signed(r.changes.trade)}, pokonany pirat ${signed(r.changes.pirateDefeated)}, napad na handlarza ${signed(r.changes.raid)}.`,
+        ...nextThresholds(r).map(t => `Próg ${t}.`),
+    ].join('\n');
+});
 
 // --- HUD: ładownia floty ---
 
@@ -1740,6 +1795,25 @@ async function onStartGuardian(gate: GateDTO) {
 
 const encounter = computed(() => expedition.value?.encounter ?? null);
 
+const ENCOUNTER_TITLES: Record<EncounterTypeName, string> = {
+    pirate: '🏴‍☠️ Piraci na kursie',
+    merchant: '⚖️ Handlarz na kursie',
+    'bounty-hunters': '🎯 Łowcy nagród na kursie',
+};
+const ENCOUNTER_BATTLE_KICKERS: Record<EncounterTypeName, string> = {
+    pirate: 'Walka',
+    merchant: 'Napad',
+    'bounty-hunters': 'Bitwa — jedyne wyjście',
+};
+const ENCOUNTER_BATTLE_BUTTONS: Record<EncounterTypeName, string> = {
+    pirate: '⚔️ Walcz z piratami',
+    merchant: '⚔️ Napadnij handlarza',
+    'bounty-hunters': '⚔️ Stań do walki',
+};
+
+/** Skutek bitwy spotkania dla reputacji (#142): napad od razu, pirat po wygranej. */
+const battleReputation = computed(() => changePreview(reputation.value, encounter.value?.reputation.battle ?? 0));
+
 const tradeSell = ref({ wood: 0, steel: 0 });
 const tradeBuy = ref({ wood: 0, steel: 0 });
 watch(() => encounter.value?.tick, () => {
@@ -1844,6 +1918,21 @@ h2, h3 { font-family: var(--font-head); }
 .tick .kicker { font-size: 10px; letter-spacing: .16em; }
 .tick-n { font: 700 20px var(--font-head); }
 
+.rep { min-width: 190px; display: flex; flex-direction: column; gap: 6px; }
+.rep-head { display: flex; justify-content: space-between; gap: 10px; font: 500 11px var(--font-mono); color: var(--text-muted); text-transform: uppercase; }
+.rep-head b { color: var(--text); }
+.rep-bar { position: relative; height: 8px; border-radius: 5px; background: var(--bg-card-off); border: 1px solid var(--line-card); overflow: hidden; }
+.rep-zone { position: absolute; top: 0; bottom: 0; opacity: .45; }
+.rep-zone.embargo { background: var(--danger); }
+.rep-zone.corsair { background: var(--warn); }
+.rep-zone.neutral { background: transparent; }
+.rep-zone.merchant { background: var(--info); }
+.rep-mark { position: absolute; top: -1px; bottom: -1px; width: 3px; margin-left: -1px; border-radius: 2px; background: var(--text); }
+.rep-effect { font: 500 11px var(--font-mono); color: var(--text-muted); }
+.rep.corsair .rep-effect { color: var(--warn); }
+.rep.embargo .rep-effect { color: var(--danger); }
+.rep.merchant .rep-effect { color: var(--info); }
+
 /* baner i alerty */
 .banner { display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-radius: 12px; background: var(--bg-card-active); border: 1px solid var(--line-strong); }
 .signal { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--info); box-shadow: 0 0 8px var(--info); }
@@ -1866,6 +1955,8 @@ h2, h3 { font-family: var(--font-head); }
 .prize-warn { flex-basis: 100%; font: 500 12px var(--font-mono); color: var(--warn); }
 .encounter.pirate { border-color: var(--danger); }
 .encounter.merchant { border-color: var(--info); }
+.encounter.bounty-hunters { border-color: var(--danger); }
+.rep-note { font: 500 12px var(--font-mono); color: var(--text-muted); }
 .encounter-options { flex-basis: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
 .encounter-option { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-card); background: var(--bg-panel); }
 .encounter-option .over { color: var(--warn); font: 500 12px var(--font-mono); }

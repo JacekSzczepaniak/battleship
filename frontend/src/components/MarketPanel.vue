@@ -6,13 +6,16 @@
     do ładowni. Każda transakcja to 1 tik. Blokady liczy też backend.
     Port może też sprzedawać mapę akwenu (#143) — przedmiot w profilu, który
     otwiera bramę „wody nieznane”; nie zajmuje ładowni.
+    Reputacja (#142) zmienia ceny (kupno liczone od całego zlecenia, żeby
+    rabat kupca nie ginął w zaokrągleniu), a przy embargu port nie handluje.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import {
     fleetShipLabel, SHIP_ICONS,
-    type FleetShipDTO, type MarketGoodName, type MarketSideName, type ResourcesDTO, type ShipTypeDTO, type TradePortDTO,
+    type FleetShipDTO, type MarketGoodName, type MarketSideName, type ReputationDTO, type ResourcesDTO, type ShipTypeDTO, type TradePortDTO,
 } from '../api/expeditionApi';
+import { nextThresholds, signed, TIER_LABELS, tierEffect } from '../lib/reputation';
 import { RESOURCES, addResources, totalResources } from '../lib/resources';
 
 const props = defineProps<{
@@ -21,8 +24,11 @@ const props = defineProps<{
     capacity: number;
     fleet: FleetShipDTO[];
     shipTypes: ShipTypeDTO[];
+    reputation: ReputationDTO;
     busy: boolean;
 }>();
+
+const EMBARGO = 'embargo: port nie handluje z korsarzem';
 
 const emit = defineEmits<{
     trade: [side: MarketSideName, good: MarketGoodName, gold: number];
@@ -55,15 +61,28 @@ function paidFromCargo(paid: ResourcesDTO): number {
     return RESOURCES.reduce((sum, r) => sum + Math.max(0, paid[r.key] - props.port.stockpile[r.key]), 0);
 }
 
+/** Kupno od całego zlecenia, jak MarketRate::buyTotal: floor(złoto × kurs bazowy × 100 / mnożnik), nie mniej niż złoto. */
+function buyTotal(good: MarketGoodName, gold: number): number {
+    return Math.max(gold, Math.floor((gold * props.port.baseRate[good].buy * 100) / props.port.pricePercent));
+}
+
+/** Ile towaru kupuje 1 złoto po mnożniku reputacji, z jednym miejscem po przecinku. */
+function buyPerGold(good: MarketGoodName): string {
+    // w dół, żeby podgląd nie obiecywał więcej, niż da zlecenie
+    const per = Math.floor((props.port.baseRate[good].buy * 1000) / props.port.pricePercent) / 10;
+    return String(per).replace('.', ',');
+}
+
 function deal(side: MarketSideName, good: MarketGoodName): { paid: ResourcesDTO; received: ResourcesDTO } {
     const rate = props.port.rate[good];
     return side === 'buy'
-        ? { paid: pack('gold', lots.value), received: pack(good, lots.value * rate.buy) }
+        ? { paid: pack('gold', lots.value), received: pack(good, buyTotal(good, lots.value)) }
         : { paid: pack(good, lots.value * rate.sell), received: pack('gold', lots.value) };
 }
 
 /** Powód blokady transakcji; null = można. */
 function tradeBlock(side: MarketSideName, good: MarketGoodName): string | null {
+    if (props.port.embargo) return EMBARGO;
     const { paid, received } = deal(side, good);
     const key = side === 'buy' ? 'gold' : good;
     if (available.value[key] < paid[key]) {
@@ -98,6 +117,7 @@ function candidate(ships: FleetShipDTO[]): FleetShipDTO {
 
 /** Powód blokady sprzedaży statku; null = można. */
 function saleBlock(ship: FleetShipDTO): string | null {
+    if (props.port.embargo) return EMBARGO;
     switch (ship.scrapBlock) {
         case 'in-battle': return 'statek walczy w nierozliczonej bitwie';
         case 'last-seaworthy': return 'ostatnia sprawna jednostka floty — bez niej nie stoczysz bitwy';
@@ -114,6 +134,7 @@ const chartBlock = computed((): string | null => {
     const chart = props.port.chart;
     if (!chart) return null;
     if (chart.owned) return 'mapa jest już w profilu';
+    if (props.port.embargo) return EMBARGO;
     if (available.value.gold < chart.price) return `za mało złota: potrzeba ${chart.price}, w magazynie portu i ładowni jest ${available.value.gold}`;
     return null;
 });
@@ -128,6 +149,21 @@ function confirmSale(ship: FleetShipDTO) {
 
 <template>
     <div class="market">
+        <!-- reputacja (#142): poziom, skutek na tym rynku i najbliższe progi -->
+        <div class="rep-note" :class="reputation.tier">
+            <span>
+                ⚖️ Reputacja <b>{{ signed(reputation.value) }}</b> · {{ TIER_LABELS[reputation.tier] }}:
+                {{ reputation.embargo ? 'port odmawia handlu, sprzedaży statku i mapy' : tierEffect(reputation.tier, reputation) }}.
+            </span>
+            <span v-if="reputation.embargo" class="muted small">
+                Przeładunek do własnego magazynu w porcie działa. Embargo zdejmuje reputacja powyżej {{ signed(reputation.thresholds.embargo) }} —
+                pokonany pirat daje {{ signed(reputation.changes.pirateDefeated) }}.
+            </span>
+            <span v-else class="muted small">
+                Każda transakcja {{ signed(reputation.changes.trade) }}. Progi: {{ nextThresholds(reputation).join(' · ') }}.
+            </span>
+        </div>
+
         <div class="block">
             <div class="head">
                 <span class="kicker">Kurs akwenu · za 1 złoto</span>
@@ -147,7 +183,7 @@ function confirmSale(ship: FleetShipDTO) {
             <ul class="goods">
                 <li v-for="g in GOODS" :key="g.key" class="good">
                     <span class="good-name"><span class="res-dot" :style="{ background: g.color }"></span>{{ g.label }}</span>
-                    <span class="rate muted">kupno {{ port.rate[g.key].buy }} · sprzedaż {{ port.rate[g.key].sell }}</span>
+                    <span class="rate muted">kupno {{ buyPerGold(g.key) }} · sprzedaż {{ port.rate[g.key].sell }}</span>
                     <span class="actions">
                         <button
                             class="btn btn-small btn-secondary"
@@ -155,7 +191,7 @@ function confirmSale(ship: FleetShipDTO) {
                             :title="tradeBlock('buy', g.key) ?? 'płaci magazyn portu, resztę ładownia · 1 tik'"
                             @click="emit('trade', 'buy', g.key, lots)"
                         >
-                            Kup {{ amountLabel(g.key, lots * port.rate[g.key].buy) }} za {{ amountLabel('gold', lots) }}
+                            Kup {{ amountLabel(g.key, buyTotal(g.key, lots)) }} za {{ amountLabel('gold', lots) }}
                         </button>
                         <button
                             class="btn btn-small btn-secondary"
@@ -170,7 +206,7 @@ function confirmSale(ship: FleetShipDTO) {
                 </li>
             </ul>
             <p class="note">
-                Sprzedaż idzie po połowie ceny kupna. Płacisz z magazynu portu, a brakującą resztę bierze ładownia;
+                Sprzedaż idzie po połowie ceny kupna, kupno liczy się od całego zlecenia. Płacisz z magazynu portu, a brakującą resztę bierze ładownia;
                 towar i złoto trafiają do ładowni. Każda transakcja to 1 tik.
                 Do wydania: {{ available.gold }} {{ goldLabel.genitive }}.
             </p>
@@ -251,6 +287,10 @@ function confirmSale(ship: FleetShipDTO) {
 .chart.owned { border-color: var(--line-card); }
 .chart-name { font: 600 14px var(--font-head); }
 .tag-owned { font: 600 11px var(--font-mono); color: var(--info); }
+.rep-note { display: flex; flex-direction: column; gap: 4px; padding: 10px 14px; border: 1px solid var(--line-card); border-radius: 12px; background: var(--bg-card); font: 500 13px var(--font-body); }
+.rep-note.merchant { border-color: var(--info); }
+.rep-note.corsair { border-color: var(--warn); }
+.rep-note.embargo { border-color: var(--danger); }
 .note { margin: 0; font: 400 12px var(--font-body); color: var(--text-muted); }
 .small { margin: 0; font-size: 12px; }
 </style>

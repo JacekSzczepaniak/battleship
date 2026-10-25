@@ -53,6 +53,16 @@ final class CaptainProfile
     /** Dziennik kapitana (#111) trzyma tyle ostatnich wpisów. */
     public const LOG_LIMIT = 50;
 
+    /** Pojemne ładownie (#96): ładownia +50% bazowej. */
+    public const LARGE_HOLDS_CARGO_BONUS_PERCENT = 50;
+
+    /** Perki ekonomiczne (#162, D4 Epica K): ładownia, ceny, budowa, magazyn złóż. */
+    public const LARGER_HOLD_PERK_PERCENT = 10;
+    public const MARKET_DISCOUNT_PERK_PERCENT = 5;
+    public const MASTER_TRADER_PERK_PERCENT = 10;
+    public const CHEAPER_SHIPBUILDING_PERK_PERCENT = 10;
+    public const DEPOSIT_STORAGE_PERK_TICKS = 5;
+
     /** @var array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int, stronghold?: bool, encounter?: string}> klucz: gameId */
     private array $battles = [];
 
@@ -326,12 +336,18 @@ final class CaptainProfile
         return array_sum(array_map(fn (OwnedShip $s) => $this->shipCargoCapacity($s->type), $this->fleet));
     }
 
-    /** Ładownia statku danego typu: Pojemne ładownie dają +50%, z zaokrągleniem w dół. */
+    /**
+     * Ładownia statku danego typu: premie w procentach ładowni bazowej się
+     * sumują — Pojemne ładownie +50%, perk Większa ładownia +10% (#162) —
+     * z zaokrągleniem w dół.
+     */
     public function shipCargoCapacity(ShipType $type): int
     {
-        $capacity = $type->cargoCapacity();
+        $percent = 100
+            + ($this->hasResearched(Technology::PojemneLadownie) ? self::LARGE_HOLDS_CARGO_BONUS_PERCENT : 0)
+            + ($this->hasPerk(Perk::LargerHold) ? self::LARGER_HOLD_PERK_PERCENT : 0);
 
-        return $this->hasResearched(Technology::PojemneLadownie) ? intdiv($capacity * 3, 2) : $capacity;
+        return intdiv($type->cargoCapacity() * $percent, 100);
     }
 
     public function stockpile(string $islandId): Resources
@@ -582,13 +598,29 @@ final class CaptainProfile
         if (null !== $technology && !$this->hasResearched($technology)) {
             throw new \DomainException(sprintf('Ship variant locked: requires technology %s', $technology->value));
         }
-        $this->pay($islandId, $type->buildCost());
+        $this->pay($islandId, $this->shipBuildCost($type));
 
         $ship = OwnedShip::build($type, $variant);
         $this->fleet[] = $ship;
         $this->record($this->tick, LogEvent::ShipBuilt, ['ship' => $type->value, 'variant' => $ship->variant?->value, 'island' => $islandId]);
 
         return $ship;
+    }
+
+    /**
+     * Koszt budowy statku dla kapitana: koszt typu, z perkiem Tańsza budowa
+     * (#162) −10% każdego surowca, z zaokrągleniem w dół. Złom liczy się dalej
+     * od kosztu typu.
+     */
+    public function shipBuildCost(ShipType $type): Resources
+    {
+        $cost = $type->buildCost();
+        if (!$this->hasPerk(Perk::CheaperShipbuilding)) {
+            return $cost;
+        }
+        $percent = 100 - self::CHEAPER_SHIPBUILDING_PERK_PERCENT;
+
+        return Resources::fromArray(array_map(static fn (int $amount) => intdiv($amount * $percent, 100), $cost->toArray()));
     }
 
     /** Remontuje uszkodzony statek za surowce z magazynu wyspy i ładowni. */
@@ -888,10 +920,16 @@ final class CaptainProfile
         return min($level, Island::MAX_SHIPYARD_LEVEL);
     }
 
-    /** Ile urobku może czekać w magazynie wyspy: limit rośnie razem z urobkiem, Spichlerze go podwajają. */
+    /**
+     * Ile urobku może czekać w magazynie wyspy: limit rośnie razem z urobkiem,
+     * Spichlerze go podwajają, perk Magazyn złóż (#162) dokłada tiki produkcji.
+     */
     public function depositCap(Island $island, SeaTheme $theme = new SeaTheme()): Resources
     {
         $bufferTicks = $this->hasResearched(Technology::Spichlerze) ? Island::DEPOSIT_BUFFER_TICKS_GRANARY : Island::DEPOSIT_BUFFER_TICKS;
+        if ($this->hasPerk(Perk::DepositStorage)) {
+            $bufferTicks += self::DEPOSIT_STORAGE_PERK_TICKS;
+        }
 
         return $this->depositYield($island, $theme)->times($bufferTicks);
     }
@@ -1542,12 +1580,24 @@ final class CaptainProfile
     }
 
     /**
-     * Mnożnik ceny rynku w procentach (100 = kurs bazowy akwenu) z reputacji
-     * kupiec ↔ korsarz (#142): od +40 taniej, od −40 drożej.
+     * Mnożnik ceny rynku w procentach (100 = kurs bazowy akwenu): reputacja
+     * kupiec ↔ korsarz (#142) razy perk ceny (#162), z zaokrągleniem w dół.
+     * Jedyne miejsce, gdzie te dwa mnożniki się łączą — z niego biorą rynek,
+     * sprzedaż statku, mapa akwenu i handlarz.
      */
     public function marketPricePercent(): int
     {
-        return $this->reputation->pricePercent();
+        return max(1, intdiv($this->reputation->pricePercent() * $this->marketPerkPercent(), MarketRate::BASE_PRICE_PERCENT));
+    }
+
+    /** Mnożnik ceny z perków ekonomicznych (#162): 100, od poziomu 2 95, od poziomu 5 90. */
+    public function marketPerkPercent(): int
+    {
+        return MarketRate::BASE_PRICE_PERCENT - match (true) {
+            $this->hasPerk(Perk::MasterTrader) => self::MASTER_TRADER_PERK_PERCENT,
+            $this->hasPerk(Perk::MarketDiscount) => self::MARKET_DISCOUNT_PERK_PERCENT,
+            default => 0,
+        };
     }
 
     /**
@@ -2061,12 +2111,18 @@ final class CaptainProfile
     }
 
     /**
-     * Ceny handlarza: mnożnik ceny rynku (#140, później z reputacją #142)
+     * Ceny handlarza: mnożnik ceny rynku (reputacja #142 i perk #162)
      * podniesiony o marżę handlarza.
      */
     public function merchantPrices(MarketRate $rate): MerchantPrices
     {
-        return new MerchantPrices($rate, intdiv($this->marketPricePercent() * (100 + EncounterCatalog::MERCHANT_WORSE_PERCENT), 100));
+        return new MerchantPrices($rate, intdiv($this->marketPricePercent() * (100 + $this->merchantSurchargePercent()), 100));
+    }
+
+    /** Marża handlarza na morzu w procentach; perk Mistrz handlu (#162) ją znosi. */
+    public function merchantSurchargePercent(): int
+    {
+        return $this->hasPerk(Perk::MasterTrader) ? 0 : EncounterCatalog::MERCHANT_WORSE_PERCENT;
     }
 
     /**

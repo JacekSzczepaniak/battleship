@@ -162,6 +162,10 @@ function confirmSale(ship: FleetShipDTO) {
             <span v-else class="muted small">
                 Każda transakcja {{ signed(reputation.changes.trade) }}. Progi: {{ nextThresholds(reputation).join(' · ') }}.
             </span>
+            <!-- perk ceny ze ścieżki ekonomicznej (#162) mnoży się z reputacją -->
+            <span v-if="port.perkPercent < 100" class="small">
+                ⚖️ Perk kupiecki: ceny rynku {{ signed(port.perkPercent - 100) }}% · łącznie z reputacją {{ port.pricePercent }}% ceny bazowej.
+            </span>
         </div>
 
         <div class="block">

@@ -144,7 +144,8 @@ final class GetExpedition
             'cargoCapacity' => $profile->shipCargoCapacity($type),
             // nośnik broni = eskorta konwoju (#47)
             'armed' => $type->isArmed(),
-            'buildCost' => $type->buildCost()->toArray(),
+            // koszt dla kapitana: perk Tańsza budowa (#162) obniża koszt typu
+            'buildCost' => $profile->shipBuildCost($type)->toArray(),
             'repairCost' => $profile->repairCost($type)->toArray(),
             'requiredRank' => $type->requiredRank()->value,
             'requiredShipyardLevel' => $type->requiredShipyardLevel(),
@@ -301,8 +302,10 @@ final class GetExpedition
             'rate' => $port->rate->toArray($profile->marketPricePercent()),
             // kurs bazowy akwenu: kupno liczy się od całego zlecenia (#142), więc front potrzebuje go do podglądu
             'baseRate' => $port->rate->toArray(),
-            // mnożnik ceny w procentach (100 = kurs bazowy) z reputacji (#142)
+            // mnożnik ceny w procentach (100 = kurs bazowy): reputacja (#142) razy perk ceny (#162)
             'pricePercent' => $profile->marketPricePercent(),
+            // sam perk ceny ze ścieżki ekonomicznej (#162): 100, 95 albo 90
+            'perkPercent' => $profile->marketPerkPercent(),
             // embargo (#142): port odmawia handlu, sprzedaży statku i mapy
             'embargo' => $profile->isUnderEmbargo(),
             'stockpile' => $profile->stockpile($port->id)->toArray(),
@@ -414,7 +417,8 @@ final class GetExpedition
             'trade' => !$merchant || null === $rate ? null : [
                 'rate' => $rate->toArray($profile->merchantPrices($rate)->pricePercent),
                 'portRate' => $rate->toArray($profile->marketPricePercent()),
-                'worsePercent' => EncounterCatalog::MERCHANT_WORSE_PERCENT,
+                // marża handlarza; 0 = perk Mistrz handlu (#162)
+                'worsePercent' => $profile->merchantSurchargePercent(),
                 'ticks' => EncounterCatalog::TRADE_TICKS,
             ],
             // ucieczka: tiki i ładunek, który zabierze; okup: złoto z ładowni

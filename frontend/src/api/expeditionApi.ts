@@ -417,8 +417,10 @@ export interface TradePortDTO {
     rate: Record<MarketGoodName, { buy: number; sell: number }>;
     // kurs bazowy akwenu: kupno liczy się od całego zlecenia (#142) — floor(złoto × buy × 100 / pricePercent)
     baseRate: Record<MarketGoodName, { buy: number; sell: number }>;
-    // mnożnik ceny w procentach (100 = kurs bazowy) z reputacji (#142)
+    // mnożnik ceny w procentach (100 = kurs bazowy): reputacja (#142) razy perk ceny (#162)
     pricePercent: number;
+    // sam perk ceny ze ścieżki ekonomicznej (#162): 100, 95 albo 90
+    perkPercent: number;
     // embargo (#142): port odmawia handlu, sprzedaży statku i mapy
     embargo: boolean;
     stockpile: ResourcesDTO;
@@ -742,6 +744,7 @@ export interface EncounterDTO {
     trade: {
         rate: Record<MarketGoodName, { buy: number; sell: number }>;
         portRate: Record<MarketGoodName, { buy: number; sell: number }>;
+        // marża handlarza w procentach; 0 = perk Mistrz handlu (#162)
         worsePercent: number;
         ticks: number;
     } | null;

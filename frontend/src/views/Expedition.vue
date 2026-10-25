@@ -37,6 +37,10 @@
                             <template v-if="expedition.profile.nextRank">do rangi {{ rankLabel(expedition.profile.nextRank.rank) }}: {{ expedition.profile.nextRank.xpNeeded }}</template>
                             <template v-else>najwyższa ranga</template>
                         </div>
+                        <!-- specjalizacje (#160): poziomy obu ścieżek, klik otwiera panel kapitana -->
+                        <button class="spec-chips" type="button" title="Panel kapitana: specjalizacje i perki" @click="openCaptain">
+                            <span v-for="t in expedition.profile.specializations" :key="t.track">{{ TRACK_ICONS[t.track] }} {{ TRACK_LABELS[t.track] }} {{ t.level }}</span>
+                        </button>
                     </div>
                 </div>
                 <div class="sep"></div>
@@ -84,6 +88,18 @@
                 <span class="banner-tick">TIK {{ lastEntry.tick }}</span>
                 <span class="banner-text">{{ logText(lastEntry, expedition.world.tick) }}</span>
                 <button class="btn btn-small btn-secondary" @click="openLog">Dziennik →</button>
+            </section>
+
+            <!-- Awans specjalizacji (#160): do potwierdzenia, raz na awans -->
+            <section v-if="levelUps.length" class="alert level-up">
+                <strong>🎖️ Awans specjalizacji</strong>
+                <span v-for="u in levelUps" :key="u.track">
+                    {{ trackLevelText(u.track, u.to) }}<template v-if="perkFor(u.track, u.to)"> · nowy perk: {{ PERK_LABELS[perkFor(u.track, u.to)!] }}</template>
+                </span>
+                <span class="prize-actions">
+                    <button class="btn btn-small btn-primary" @click="openCaptain(); dismissLevelUps()">Panel kapitana</button>
+                    <button class="btn btn-small btn-secondary" @click="dismissLevelUps">OK</button>
+                </span>
             </section>
 
             <!-- Kontratak w toku (#78): stan do decyzji, nie zdarzenie — zawsze na wierzchu -->
@@ -785,6 +801,11 @@
                         />
                     </div>
 
+                    <!-- KAPITAN: specjalizacje i perki (#160) -->
+                    <div v-else-if="activeTab === 'kapitan'" class="tab-body" role="tabpanel">
+                        <CaptainPanel :tracks="expedition.profile.specializations" />
+                    </div>
+
                     <!-- DZIENNIK: najnowsze na górze -->
                     <div v-else class="tab-body" role="tabpanel">
                         <ol v-if="expedition.log.length" class="log">
@@ -810,7 +831,7 @@ import {
     startResearch, trade, tradeWithMerchant, transferCargo,
     BUILDING_ICONS, BUILDING_LABELS, INLAND_TREASURE_LABELS, RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, SHIP_VARIANT_LABELS, SHIP_VARIANT_NAMES, TECH_LABELS, fleetShipLabel,
     type BuildingTypeName, type EncounterDecisionName, type EncounterTypeName, type ReputationDTO, type ShipTypeName, type TechnologyName, type ExpeditionDTO, type TradePortDTO, type WildIslandDTO, type InlandActionName, type InlandOutcomeDTO, type FleetShipDTO, type GateDTO, type GuardianDTO, type IslandDTO,
-    type MarketGoodName, type MarketSideName, type PrizeDTO, type PrizeDecisionName, type RankName, type RepairFleetDTO, type ResourcesDTO, type SailResultDTO, type SeaThemeDTO, type VoyagePlanDTO, type ShipTypeDTO, type ShipVariantDTO, type ShipVariantName,
+    type MarketGoodName, type MarketSideName, type PrizeDTO, type PrizeDecisionName, type RankName, type RepairFleetDTO, type ResourcesDTO, type SailResultDTO, type SeaThemeDTO, type VoyagePlanDTO, type ShipTypeDTO, type ShipVariantDTO, type ShipVariantName, type SpecializationTrackName,
 } from '../api/expeditionApi';
 import { ApiError } from '../api/http';
 import {
@@ -832,6 +853,8 @@ import NavigatorPanel, { type NavTarget, type NavVoyage } from '../components/Na
 import SeaMap from '../components/SeaMap.vue';
 import SettlementPanel from '../components/SettlementPanel.vue';
 import TechTreePanel from '../components/TechTreePanel.vue';
+import CaptainPanel from '../components/CaptainPanel.vue';
+import { markLevelsSeen, PERK_LABELS, perkFor, TRACK_ICONS, TRACK_LABELS, trackLevelText, unseenLevelUps } from '../lib/specializations';
 import type { Cell, FxBoard } from '../fx/board';
 import { FxSequencer, isCancelled, type FxToken } from '../fx/core';
 import { fxMode } from '../fx/speed';
@@ -908,8 +931,8 @@ const cargoSegments = computed(() => {
 
 // --- Panel z zakładkami (#111): aktywna zakładka w hashu adresu ---
 
-type TabId = 'wyspa' | 'budynki' | 'stocznia' | 'rynek' | 'flota' | 'badania' | 'dziennik';
-const TAB_IDS: TabId[] = ['wyspa', 'budynki', 'stocznia', 'rynek', 'flota', 'badania', 'dziennik'];
+type TabId = 'wyspa' | 'budynki' | 'stocznia' | 'rynek' | 'flota' | 'badania' | 'kapitan' | 'dziennik';
+const TAB_IDS: TabId[] = ['wyspa', 'budynki', 'stocznia', 'rynek', 'flota', 'badania', 'kapitan', 'dziennik'];
 
 const activeTab = ref<TabId>('flota');
 const panelEl = ref<HTMLElement | null>(null);
@@ -951,6 +974,7 @@ const tabs = computed(() => {
         ...(currentPort.value ? [{ id: 'rynek' as TabId, label: 'Rynek', badge: '', live: false }] : []),
         { id: 'flota' as TabId, label: 'Flota', badge: String(exp?.fleet.length ?? ''), live: false },
         { id: 'badania' as TabId, label: 'Badania', badge: `${researchDone.value}/${exp?.research.technologies.length ?? 0}`, live: !!current && !current.paused },
+        { id: 'kapitan' as TabId, label: 'Kapitan', badge: (exp?.profile.specializations ?? []).map(t => t.level).join('·'), live: false },
         { id: 'dziennik' as TabId, label: 'Dziennik', badge: '', live: false },
     ];
 });
@@ -960,6 +984,26 @@ const lastEntry = computed(() => expedition.value?.log[0] ?? null);
 function openLog() {
     setTab('dziennik');
     panelEl.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function openCaptain() {
+    setTab('kapitan');
+    panelEl.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// --- Awans specjalizacji (#160): komunikat do potwierdzenia, poziomy widziane zapamiętane per profil ---
+
+const levelUps = ref<{ track: SpecializationTrackName; from: number; to: number }[]>([]);
+
+watch(() => expedition.value?.profile.specializations, tracks => {
+    const profileId = expedition.value?.profile.id;
+    if (tracks && profileId) levelUps.value = unseenLevelUps(profileId, tracks);
+});
+
+function dismissLevelUps() {
+    const exp = expedition.value;
+    if (exp) markLevelsSeen(exp.profile.id, exp.profile.specializations);
+    levelUps.value = [];
 }
 
 // --- Wolne morze: mapa, żegluga, port w doku ---
@@ -2104,6 +2148,9 @@ h2, h3 { font-family: var(--font-head); }
 .captain-name { display: flex; align-items: baseline; gap: 9px; font: 700 17px var(--font-head); }
 .rank { font: 600 10px var(--font-mono); color: var(--accent); letter-spacing: .18em; text-transform: uppercase; }
 .xp { font: 500 11px var(--font-mono); color: var(--text-muted); }
+.spec-chips { display: flex; gap: 8px; margin-top: 3px; padding: 0; border: 0; background: none; color: var(--text-label); font: 500 11px var(--font-mono); cursor: pointer; }
+.spec-chips:hover { color: var(--text); }
+.alert.level-up { border-color: var(--line-strong); background: var(--bg-card-active); }
 .sep { width: 1px; height: 36px; background: var(--line-card); }
 .pills { display: flex; gap: 8px; flex-wrap: wrap; }
 .pill { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--line-card); }

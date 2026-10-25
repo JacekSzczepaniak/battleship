@@ -89,4 +89,7 @@ enum LogEvent: string
 
     /** Reputacja przekroczyła próg: kupiec, neutralny, korsarz albo embargo (#142). */
     case ReputationTier = 'reputation-tier';
+
+    /** Awans ścieżki specjalizacji na kolejny poziom; perk poziomu działa od tego tiku (#160). */
+    case SpecializationLevel = 'specialization-level';
 }

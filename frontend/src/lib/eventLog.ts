@@ -6,6 +6,7 @@ import {
 } from '../api/expeditionApi';
 import { formatResources } from './resources';
 import { ticksLabel } from './counterattack';
+import { PERK_LABELS, perkFor, TRACK_LABELS } from './specializations';
 
 // nazw wysp nie odmieniamy (Mielizny, Archipelag Mgieł) — stoją po dwukropku
 export function logText(e: LogEntryDTO, tick?: number): string {
@@ -74,6 +75,11 @@ export function logText(e: LogEntryDTO, tick?: number): string {
                 : 'Handlarz na kursie — handel, napad albo minięcie. Rejs czeka na decyzję.';
         case 'reputation-tier':
             return reputationTierText(e);
+        case 'specialization-level': {
+            if (!e.track || !e.level) return 'Awans specjalizacji.';
+            const perk = perkFor(e.track, e.level);
+            return `Awans: specjalizacja ${TRACK_LABELS[e.track]} — poziom ${e.level}${perk ? `. Nowy perk: ${PERK_LABELS[perk]}` : ''}.`;
+        }
         case 'encounter-resolved':
             return encounterResolvedText(e);
         case 'field-repair':

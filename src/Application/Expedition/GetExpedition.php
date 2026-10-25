@@ -11,6 +11,7 @@ use App\Domain\Expedition\FleetPreset;
 use App\Domain\Expedition\InlandTreasure;
 use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\LogEntry;
+use App\Domain\Expedition\Perk;
 use App\Domain\Expedition\Prize;
 use App\Domain\Expedition\ProfileRepository;
 use App\Domain\Expedition\Reputation;
@@ -18,6 +19,8 @@ use App\Domain\Expedition\Sea;
 use App\Domain\Expedition\SeaGraph;
 use App\Domain\Expedition\ShipType;
 use App\Domain\Expedition\ShipVariant;
+use App\Domain\Expedition\SpecializationSource;
+use App\Domain\Expedition\SpecializationTrack;
 use App\Domain\Expedition\StaticSeaGraph;
 use App\Domain\Expedition\TechBranch;
 use App\Domain\Expedition\TechLevel;
@@ -188,6 +191,8 @@ final class GetExpedition
                 ], array_keys($profile->seaCharts()), array_values($profile->seaCharts())),
                 // reputacja kupiec ↔ korsarz (#142): stan, skutki i progi podane z góry (zasada 4)
                 'reputation' => self::reputationView($profile->reputation()),
+                // specjalizacje bojowa i ekonomiczna (#160): poziomy, postęp, źródła punktów i perki
+                'specializations' => self::specializationsView($profile),
             ],
             'fleet' => $fleet,
             // statki zdobyte abordażem, czekające na decyzję (#118); scrapValue = zwrot z rozbiórki,
@@ -425,6 +430,44 @@ final class GetExpedition
                 'trade' => $merchant ? Reputation::TRADE : null,
             ],
         ];
+    }
+
+    /**
+     * Ścieżki specjalizacji z postępem do kolejnego progu, źródłami punktów
+     * (reszta jednostek czeka na kolejny punkt) i perkami poziomów (#160).
+     *
+     * @return list<array<string,mixed>>
+     */
+    private static function specializationsView(CaptainProfile $profile): array
+    {
+        $specializations = $profile->specializations();
+
+        return array_map(static function (SpecializationTrack $track) use ($profile, $specializations) {
+            $points = $specializations->points($track);
+            $level = $specializations->level($track);
+            $next = SpecializationTrack::threshold($level + 1);
+
+            return [
+                'track' => $track->value,
+                'points' => $points,
+                'level' => $level,
+                'maxLevel' => SpecializationTrack::MAX_LEVEL,
+                'levelFrom' => SpecializationTrack::threshold($level) ?? 0,
+                'next' => null !== $next ? ['level' => $level + 1, 'points' => $next, 'pointsNeeded' => $next - $points] : null,
+                'sources' => array_values(array_map(static fn (SpecializationSource $source) => [
+                    'source' => $source->value,
+                    'units' => $specializations->units($source),
+                    'points' => $source->points($specializations->units($source)),
+                    'unitsPerPoint' => $source->unitsPerPoint(),
+                    'pointsPerUnit' => $source->pointsPerUnit(),
+                ], array_filter(SpecializationSource::cases(), static fn (SpecializationSource $source) => $source->track() === $track))),
+                'perks' => array_map(static fn (Perk $perk) => [
+                    'perk' => $perk->value,
+                    'level' => $perk->level(),
+                    'active' => $profile->hasPerk($perk),
+                ], $track->perks()),
+            ];
+        }, SpecializationTrack::cases());
     }
 
     /**

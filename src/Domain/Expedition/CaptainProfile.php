@@ -236,12 +236,26 @@ final class CaptainProfile
     /** Reputacja na osi kupiec ↔ korsarz (#142): ceny rynku, embargo i łowcy nagród. */
     private Reputation $reputation;
 
+    /** Liczniki akcji specjalizacji bojowej i ekonomicznej (Epic K, #160). */
+    private Specializations $specializations;
+
+    /**
+     * Pochodzenie ładunku do punktów za transport (#160): ile jednostek
+     * załadowano na danej wyspie i nadal jest w ładowni. Ładunek bez
+     * pochodzenia (łup, kartografia, handel) nie ma wpisu. Suma nie
+     * przekracza ładowni: straty zabierają najpierw ładunek bez pochodzenia.
+     *
+     * @var array<string, int> klucz: id wyspy (albo portu handlowego)
+     */
+    private array $cargoOrigins = [];
+
     private function __construct(
         private ProfileId $id,
         private string $name,
         private int $xp = 0,
     ) {
         $this->reputation = new Reputation();
+        $this->specializations = new Specializations();
     }
 
     public static function create(string $name): self
@@ -346,20 +360,81 @@ final class CaptainProfile
         }
 
         $this->stockpiles[$islandId] = $stock;
-        $this->cargo = $this->cargo->add($amount);
+        $this->setCargo($this->cargo->add($amount));
+        $this->cargoOrigins[$islandId] = ($this->cargoOrigins[$islandId] ?? 0) + $amount->total();
         $this->passTicks();
     }
 
-    /** Rozładunek z ładowni do magazynu wyspy. Dokowanie kosztuje tik. */
+    /**
+     * Rozładunek z ładowni do magazynu wyspy. Dokowanie kosztuje tik.
+     * Jednostki załadowane na innych wyspach to faktyczny transport (#160):
+     * rozładunek zdejmuje najpierw je, potem ładunek z tej wyspy.
+     */
     public function unloadCargo(string $islandId, Resources $amount): void
     {
         if ($amount->isZero()) {
             throw new \InvalidArgumentException('Nothing to transfer');
         }
 
-        $this->cargo = $this->cargo->subtract($amount);
+        $cargo = $this->cargo->subtract($amount);
+        // pochodzenie przed przycięciem w setCargo(), które nie wie, gdzie się rozładowuje
+        $transported = $this->takeCargoOrigins($amount->total(), $islandId);
+        $this->setCargo($cargo);
         $this->stockpiles[$islandId] = $this->stockpile($islandId)->add($amount);
         $this->passTicks();
+        $this->earn(SpecializationSource::Transport, $transported);
+    }
+
+    /**
+     * Zdejmuje rozładowane jednostki z pochodzenia: najpierw z innych wysp,
+     * potem z wyspy rozładunku (reszta to ładunek bez pochodzenia).
+     *
+     * @return int jednostki przewiezione z innych wysp
+     */
+    private function takeCargoOrigins(int $units, string $islandId): int
+    {
+        $transported = 0;
+        foreach ($this->cargoOrigins as $origin => $held) {
+            if ($origin === $islandId || 0 === $units) {
+                continue;
+            }
+            $taken = min($held, $units);
+            $this->cargoOrigins[$origin] -= $taken;
+            $units -= $taken;
+            $transported += $taken;
+        }
+        if (isset($this->cargoOrigins[$islandId])) {
+            $this->cargoOrigins[$islandId] -= min($this->cargoOrigins[$islandId], $units);
+        }
+        $this->cargoOrigins = array_filter($this->cargoOrigins);
+
+        return $transported;
+    }
+
+    /**
+     * Jedyne miejsce zmiany ładowni: gdy ładunku jest mniej niż jednostek
+     * z pochodzeniem, nadwyżka pochodzenia przepada od najstarszych wpisów.
+     * Strata zabiera więc najpierw ładunek bez pochodzenia.
+     */
+    private function setCargo(Resources $cargo): void
+    {
+        $this->cargo = $cargo;
+        $excess = array_sum($this->cargoOrigins) - $cargo->total();
+        foreach ($this->cargoOrigins as $origin => $held) {
+            if ($excess <= 0) {
+                break;
+            }
+            $taken = min($held, $excess);
+            $this->cargoOrigins[$origin] -= $taken;
+            $excess -= $taken;
+        }
+        $this->cargoOrigins = array_filter($this->cargoOrigins);
+    }
+
+    /** @return array<string, int> jednostki ładowni załadowane na danej wyspie (klucz: id wyspy) */
+    public function cargoOrigins(): array
+    {
+        return $this->cargoOrigins;
     }
 
     /**
@@ -379,14 +454,14 @@ final class CaptainProfile
             min($stock->gold, $cost->gold),
         );
         $this->stockpiles[$islandId] = $stock->subtract($fromStock);
-        $this->cargo = $this->cargo->subtract($cost->subtract($fromStock));
+        $this->setCargo($this->cargo->subtract($cost->subtract($fromStock)));
     }
 
     /** Ładunek ponad pojemność (po utracie statku) przepada; zwraca, co przepadło. */
     private function trimCargo(): Resources
     {
         [$kept, $overflow] = $this->cargo->fitInto($this->cargoCapacity());
-        $this->cargo = $kept;
+        $this->setCargo($kept);
 
         return $overflow;
     }
@@ -628,7 +703,7 @@ final class CaptainProfile
             if (!$this->cargo->covers($cost)) {
                 continue;
             }
-            $this->cargo = $this->cargo->subtract($cost);
+            $this->setCargo($this->cargo->subtract($cost));
             $ship->repair();
             --$repairers;
             $this->record($this->tick, LogEvent::FieldRepair, ['ship' => $ship->type->value, 'variant' => $ship->variant?->value, 'paid' => $cost->toArray()]);
@@ -1155,6 +1230,8 @@ final class CaptainProfile
 
         $this->stockpiles[$islandId] = $this->stockpile($islandId)->add(Resources::fromArray($output));
         $this->depositTicks[$islandId] = $upTo;
+        // urobek odłożony w magazynie (limit już przycięty) to punkty ekonomiczne (#160)
+        $this->earn(SpecializationSource::Mining, array_sum($output));
     }
 
     /**
@@ -1179,7 +1256,7 @@ final class CaptainProfile
         }
 
         [$fit, $rest] = $legacy->fitInto($this->cargoCapacity() - $this->cargo->total());
-        $this->cargo = $this->cargo->add($fit);
+        $this->setCargo($this->cargo->add($fit));
         if (!$rest->isZero()) {
             $start = $world->startPosition();
             $startIsland = $world->islandAt($start['x'], $start['y']) ?? throw new \LogicException('Start sector has no island');
@@ -1326,7 +1403,8 @@ final class CaptainProfile
             }
         }
         [$fit, $lost] = (new Resources(wood: $cartography))->fitInto($this->cargoCapacity() - $this->cargo->total());
-        $this->cargo = $this->cargo->add($fit);
+        $this->setCargo($this->cargo->add($fit));
+        $this->earn(SpecializationSource::Discovery, count($discoveredNow));
 
         return ['discoveredNow' => $discoveredNow, 'cartography' => $cartography, 'cartographyLost' => $lost->wood, 'event' => $event];
     }
@@ -1356,7 +1434,7 @@ final class CaptainProfile
             min(self::STORM_MIN_WOOD_LOSS * $multiplier, $this->cargo->wood),
         );
         $lost = self::takeCheapestFirst($this->cargo, $units);
-        $this->cargo = $this->cargo->subtract($lost);
+        $this->setCargo($this->cargo->subtract($lost));
 
         return ['type' => 'storm', 'effect' => 'cargo-lost', 'cargoLost' => $lost->toArray(), 'unescorted' => $unescorted];
     }
@@ -1506,7 +1584,7 @@ final class CaptainProfile
         }
 
         $this->pay($port->id, $paid);
-        $this->cargo = $this->cargo->add($received);
+        $this->setCargo($this->cargo->add($received));
         $this->passTicks();
         $this->record($this->tick, LogEvent::MarketTrade, [
             'island' => $port->id,
@@ -1516,6 +1594,7 @@ final class CaptainProfile
             'received' => $received->toArray(),
         ]);
         $this->changeReputation(Reputation::TRADE);
+        $this->earn(SpecializationSource::MarketTurnover, $gold);
 
         return ['paid' => $paid, 'received' => $received];
     }
@@ -1551,7 +1630,7 @@ final class CaptainProfile
         }
 
         $this->fleet = array_values(array_filter($this->fleet, static fn (OwnedShip $s) => $s->id !== $shipId));
-        $this->cargo = $this->cargo->add(new Resources(gold: $gold));
+        $this->setCargo($this->cargo->add(new Resources(gold: $gold)));
         $this->passTicks();
         $this->record($this->tick, LogEvent::ShipSold, [
             'ship' => $ship->type->value,
@@ -1865,7 +1944,7 @@ final class CaptainProfile
     {
         $loot = $inland->collected->add(new Resources(gold: $treasure['gold'] ?? 0));
         [$received, $lost] = $loot->fitInto($this->cargoCapacity() - $this->cargo->total());
-        $this->cargo = $this->cargo->add($received);
+        $this->setCargo($this->cargo->add($received));
         $this->inland = null;
         $this->wildVisits[$island->id] = $this->tick;
         $this->record($this->tick, LogEvent::InlandReturned, [
@@ -1957,7 +2036,7 @@ final class CaptainProfile
             case EncounterDecision::Flee:
                 $encounter = $this->pendingEncounter(EncounterType::Pirate);
                 $cargoLost = $this->fleeCargoLoss();
-                $this->cargo = $this->cargo->subtract($cargoLost);
+                $this->setCargo($this->cargo->subtract($cargoLost));
                 $this->passTicks(EncounterCatalog::FLEE_TICKS);
                 break;
             case EncounterDecision::Ransom:
@@ -1966,7 +2045,7 @@ final class CaptainProfile
                 if ($this->cargo->gold < $goldPaid) {
                     throw new \DomainException('Not enough gold for ransom');
                 }
-                $this->cargo = $this->cargo->subtract(new Resources(gold: $goldPaid));
+                $this->setCargo($this->cargo->subtract(new Resources(gold: $goldPaid)));
                 break;
         }
 
@@ -2020,7 +2099,7 @@ final class CaptainProfile
             throw new \DomainException('Cargo capacity exceeded');
         }
 
-        $this->cargo = $cargo;
+        $this->setCargo($cargo);
         $this->passTicks(EncounterCatalog::TRADE_TICKS);
         $this->encounter = null;
         $this->record($this->tick, LogEvent::EncounterResolved, [
@@ -2032,6 +2111,7 @@ final class CaptainProfile
             'goldPaid' => $goldPaid,
         ]);
         $this->changeReputation(Reputation::TRADE);
+        $this->earn(SpecializationSource::MarketTurnover, $goldReceived + $goldPaid);
 
         return ['goldReceived' => $goldReceived, 'goldPaid' => $goldPaid];
     }
@@ -2331,7 +2411,7 @@ final class CaptainProfile
         if ($atSea) {
             // łup strażnika i spotkania ładuje flota, która przetrwała bitwę
             [$fit, $overflow] = $loot->fitInto($this->cargoCapacity() - $this->cargo->total());
-            $this->cargo = $this->cargo->add($fit);
+            $this->setCargo($this->cargo->add($fit));
             $cargoLost = $cargoLost->add($overflow);
         }
 
@@ -2346,8 +2426,31 @@ final class CaptainProfile
             };
             $this->record($this->tick, LogEvent::ShipBoarded, ['ship' => $boardedType->value, 'variant' => $boardedVariant?->value, $place => $battle['island']]);
         }
+        $this->earnFromBattle($kind, $won, $enemyShipsSunk, null !== $prize);
 
         return ['xp' => $xpAward, 'loot' => $loot, 'lost' => $lost, 'damaged' => $damaged, 'cargoLost' => $cargoLost, 'captured' => $captured, 'besieged' => $besieged, 'defense' => $defense, 'gateOpened' => $gateOpened, 'prize' => $prize];
+    }
+
+    /**
+     * Punkty bojowe z rozliczonej bitwy (D3): wygrana każdego rodzaju, do niej
+     * premie za abordaż, obronę i oblężenie (sumują się, decyzja Jacka
+     * 25.10.2026), oraz każdy zatopiony wróg, także w przegranej.
+     */
+    private function earnFromBattle(BattleKind $kind, bool $won, int $enemyShipsSunk, bool $boarded): void
+    {
+        $this->earn(SpecializationSource::EnemySunk, $enemyShipsSunk);
+        if (!$won) {
+            return;
+        }
+        $this->earn(SpecializationSource::Win, 1);
+        if ($boarded) {
+            $this->earn(SpecializationSource::Boarding, 1);
+        }
+        match ($kind) {
+            BattleKind::Defense => $this->earn(SpecializationSource::Defense, 1),
+            BattleKind::Siege => $this->earn(SpecializationSource::Siege, 1),
+            default => null,
+        };
     }
 
     // --- Zdobyte statki (#118) ---
@@ -2401,7 +2504,7 @@ final class CaptainProfile
                 break;
             case PrizeDecision::Scrap:
                 [$refund, $cargoLost] = $prize->scrapValue()->fitInto($this->cargoCapacity() - $this->cargo->total());
-                $this->cargo = $this->cargo->add($refund);
+                $this->setCargo($this->cargo->add($refund));
                 break;
             case PrizeDecision::Study:
                 $this->researched[] = $technology;
@@ -2623,6 +2726,48 @@ final class CaptainProfile
         return null;
     }
 
+    // --- Specjalizacje (Epic K, #160) ---
+
+    public function specializations(): Specializations
+    {
+        return $this->specializations;
+    }
+
+    public function specializationLevel(SpecializationTrack $track): int
+    {
+        return $this->specializations->level($track);
+    }
+
+    /** Czy perk działa: poziom jego ścieżki sięgnął poziomu perka. API dla efektów z #161 i #162. */
+    public function hasPerk(Perk $perk): bool
+    {
+        return $this->specializationLevel($perk->track()) >= $perk->level();
+    }
+
+    /** @return list<Perk> perki zdobyte na obu ścieżkach */
+    public function perks(): array
+    {
+        return array_values(array_filter(Perk::cases(), fn (Perk $perk) => $this->hasPerk($perk)));
+    }
+
+    /**
+     * Nalicza jednostki akcji specjalizacji (D3). Każdy przekroczony próg
+     * ścieżki trafia do dziennika osobnym wpisem, także przy awansie o dwa
+     * poziomy jedną akcją.
+     */
+    private function earn(SpecializationSource $source, int $units): void
+    {
+        if ($units <= 0) {
+            return;
+        }
+        $track = $source->track();
+        $before = $this->specializations->level($track);
+        $this->specializations = $this->specializations->add($source, $units);
+        for ($level = $before + 1; $level <= $this->specializations->level($track); ++$level) {
+            $this->record($this->tick, LogEvent::SpecializationLevel, ['track' => $track->value, 'level' => $level]);
+        }
+    }
+
     // --- Dziennik kapitana (#111) ---
 
     /** @return list<LogEntry> ostatnie zdarzenia, najstarsze pierwsze */
@@ -2694,34 +2839,36 @@ final class CaptainProfile
 
     /**
      * @param array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int, stronghold?: bool}> $battles
-     * @param list<OwnedShip>|null                                                                                                                          $fleet        null = profil sprzed ekonomii — dostaje flotę startową
-     * @param Resources|null                                                                                                                                $cargo        null = profil sprzed ładowni (patrz $unplaced) albo sprzed ekonomii — drewno startowe do magazynu wyspy
-     * @param int|null                                                                                                                                      $worldSeed    null = seed wyprowadzony z id (stabilny dla starych profili)
-     * @param array{x:int,y:int}|null                                                                                                                       $position     pozycja na akwenie $sea; null = start ustali ensureWorldState
-     * @param list<string>|null                                                                                                                             $discovered   sektory "x:y" akwenu $sea
-     * @param int|null                                                                                                                                      $tick         null = profil sprzed tiku: rejsy + zarejestrowane bitwy
-     * @param list<string>|null                                                                                                                             $visited      sektory akwenu $sea; null = profil sprzed odwiedzin: tylko obecna pozycja
-     * @param array<string, Resources>                                                                                                                      $stockpiles   magazyny wysp
-     * @param Resources|null                                                                                                                                $unplaced     surowce czekające na magazyn wyspy (też jeden magazyn profilu sprzed ładowni) — rozłożone przy ensureWorldState()
-     * @param array<string, int>                                                                                                                            $depositTicks tik ostatniego naliczenia urobku złoża (klucz: id wyspy)
-     * @param array<string, int>                                                                                                                            $ownedIslands wyspy pod banderą: id wyspy → tik zdobycia
-     * @param array<string, list<BuildingType>>                                                                                                             $buildings    budynki osady (klucz: id wyspy)
-     * @param list<Technology>                                                                                                                              $researched   zbadane technologie
-     * @param array{technology: Technology, island: string, progress: int, countedTo: int}|null                                                             $research     badanie w toku
-     * @param string|null                                                                                                                                   $sea          akwen floty; null = profil sprzed akwenów: Morze Rozbitków
-     * @param array<string, SeaState>                                                                                                                       $seaStates    stan pozostałych akwenów (klucz: id akwenu); stan akwenu $sea dają $position, $discovered i $visited
-     * @param array<string, int>                                                                                                                            $openedGates  bramy otwarte na stałe: id bramy → tik otwarcia
-     * @param list<LogEntry>                                                                                                                                $log          dziennik kapitana, najstarsze pierwsze; profil sprzed dziennika zaczyna od pustego
-     * @param list<Prize>                                                                                                                                   $prizes       statki zdobyte abordażem, czekające na decyzję (#118)
-     * @param array<string, int>                                                                                                                            $besieged     oblężone twierdze: id wyspy → tik wygranej potyczki (#120)
-     * @param list<FleetPreset>                                                                                                                             $fleetPresets zapisane zestawy floty (#125)
-     * @param Encounter|null                                                                                                                                $encounter    spotkanie czekające na decyzję (#141)
-     * @param bool                                                                                                                                          $fieldRepairs naprawy kutrów remontowych włączone (#152)
-     * @param array<string, int>                                                                                                                            $seaCharts    mapy akwenów: id akwenu → tik zdobycia (#143)
-     * @param InlandExpedition|null                                                                                                                         $inland       ekspedycja w głąb dzikiej wyspy w toku (#144)
-     * @param array<string, int>                                                                                                                            $wildVisits   koniec ostatniej ekspedycji: id dzikiej wyspy → tik (#144)
-     * @param array<string, int>                                                                                                                            $artifacts    technologie z questu: id technologii → tik (#144), tylko spośród $researched
-     * @param int                                                                                                                                           $reputation   reputacja kupiec ↔ korsarz (#142); spoza osi przycięta
+     * @param list<OwnedShip>|null                                                                                                                          $fleet           null = profil sprzed ekonomii — dostaje flotę startową
+     * @param Resources|null                                                                                                                                $cargo           null = profil sprzed ładowni (patrz $unplaced) albo sprzed ekonomii — drewno startowe do magazynu wyspy
+     * @param int|null                                                                                                                                      $worldSeed       null = seed wyprowadzony z id (stabilny dla starych profili)
+     * @param array{x:int,y:int}|null                                                                                                                       $position        pozycja na akwenie $sea; null = start ustali ensureWorldState
+     * @param list<string>|null                                                                                                                             $discovered      sektory "x:y" akwenu $sea
+     * @param int|null                                                                                                                                      $tick            null = profil sprzed tiku: rejsy + zarejestrowane bitwy
+     * @param list<string>|null                                                                                                                             $visited         sektory akwenu $sea; null = profil sprzed odwiedzin: tylko obecna pozycja
+     * @param array<string, Resources>                                                                                                                      $stockpiles      magazyny wysp
+     * @param Resources|null                                                                                                                                $unplaced        surowce czekające na magazyn wyspy (też jeden magazyn profilu sprzed ładowni) — rozłożone przy ensureWorldState()
+     * @param array<string, int>                                                                                                                            $depositTicks    tik ostatniego naliczenia urobku złoża (klucz: id wyspy)
+     * @param array<string, int>                                                                                                                            $ownedIslands    wyspy pod banderą: id wyspy → tik zdobycia
+     * @param array<string, list<BuildingType>>                                                                                                             $buildings       budynki osady (klucz: id wyspy)
+     * @param list<Technology>                                                                                                                              $researched      zbadane technologie
+     * @param array{technology: Technology, island: string, progress: int, countedTo: int}|null                                                             $research        badanie w toku
+     * @param string|null                                                                                                                                   $sea             akwen floty; null = profil sprzed akwenów: Morze Rozbitków
+     * @param array<string, SeaState>                                                                                                                       $seaStates       stan pozostałych akwenów (klucz: id akwenu); stan akwenu $sea dają $position, $discovered i $visited
+     * @param array<string, int>                                                                                                                            $openedGates     bramy otwarte na stałe: id bramy → tik otwarcia
+     * @param list<LogEntry>                                                                                                                                $log             dziennik kapitana, najstarsze pierwsze; profil sprzed dziennika zaczyna od pustego
+     * @param list<Prize>                                                                                                                                   $prizes          statki zdobyte abordażem, czekające na decyzję (#118)
+     * @param array<string, int>                                                                                                                            $besieged        oblężone twierdze: id wyspy → tik wygranej potyczki (#120)
+     * @param list<FleetPreset>                                                                                                                             $fleetPresets    zapisane zestawy floty (#125)
+     * @param Encounter|null                                                                                                                                $encounter       spotkanie czekające na decyzję (#141)
+     * @param bool                                                                                                                                          $fieldRepairs    naprawy kutrów remontowych włączone (#152)
+     * @param array<string, int>                                                                                                                            $seaCharts       mapy akwenów: id akwenu → tik zdobycia (#143)
+     * @param InlandExpedition|null                                                                                                                         $inland          ekspedycja w głąb dzikiej wyspy w toku (#144)
+     * @param array<string, int>                                                                                                                            $wildVisits      koniec ostatniej ekspedycji: id dzikiej wyspy → tik (#144)
+     * @param array<string, int>                                                                                                                            $artifacts       technologie z questu: id technologii → tik (#144), tylko spośród $researched
+     * @param int                                                                                                                                           $reputation      reputacja kupiec ↔ korsarz (#142); spoza osi przycięta
+     * @param Specializations|null                                                                                                                          $specializations liczniki specjalizacji (#160); null = profil sprzed specjalizacji, start od zera (D7)
+     * @param array<string, int>                                                                                                                            $cargoOrigins    jednostki ładowni załadowane na wyspach (#160); suma przycięta do ładowni
      */
     public static function fromSnapshot(
         ProfileId $id,
@@ -2758,6 +2905,8 @@ final class CaptainProfile
         array $wildVisits = [],
         array $artifacts = [],
         int $reputation = 0,
+        ?Specializations $specializations = null,
+        array $cargoOrigins = [],
     ): self {
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
@@ -2813,6 +2962,9 @@ final class CaptainProfile
             ARRAY_FILTER_USE_KEY,
         );
         $self->reputation = Reputation::clamped($reputation);
+        $self->specializations = $specializations ?? new Specializations();
+        $self->cargoOrigins = array_filter(array_map(static fn (int $units) => max(0, $units), $cargoOrigins));
+        $self->setCargo($self->cargo);
 
         return $self;
     }

@@ -135,6 +135,29 @@ export interface ExpeditionProfileDTO extends ProfileDTO {
     seaCharts: SeaChartDTO[];
     // reputacja kupiec ↔ korsarz (#142): stan, skutki i progi podane z góry
     reputation: ReputationDTO;
+    // specjalizacje bojowa i ekonomiczna (#160): poziomy, postęp, źródła punktów i perki
+    specializations: SpecializationTrackDTO[];
+}
+
+// specjalizacje kapitana (#160, Epic K): ścieżka, źródło punktów i perk (Domain/Expedition/Perk)
+export type SpecializationTrackName = 'combat' | 'economy';
+export type SpecializationSourceName =
+    | 'win' | 'enemy-sunk' | 'boarding' | 'defense' | 'siege'
+    | 'market-turnover' | 'transport' | 'mining' | 'discovery';
+export type PerkName =
+    | 'repair-discount' | 'boarding-edge' | 'extra-sonar' | 'loot-bonus' | 'first-turn-energy'
+    | 'larger-hold' | 'market-discount' | 'cheaper-shipbuilding' | 'deposit-storage' | 'master-trader';
+export interface SpecializationTrackDTO {
+    track: SpecializationTrackName;
+    points: number;
+    level: number;
+    maxLevel: number;
+    // próg obecnego poziomu (0 przed pierwszym) — początek paska postępu
+    levelFrom: number;
+    next: { level: number; points: number; pointsNeeded: number } | null;
+    // jednostki akcji: punkty = floor(units / unitsPerPoint) × pointsPerUnit, reszta czeka na kolejny punkt
+    sources: { source: SpecializationSourceName; units: number; points: number; unitsPerPoint: number; pointsPerUnit: number }[];
+    perks: { perk: PerkName; level: number; active: boolean }[];
 }
 
 // reputacja (#142): oś od min (korsarz) do max (kupiec); progi włącznie
@@ -599,7 +622,7 @@ export type LogEventName =
     | 'ship-boarded' | 'prize-decided' | 'island-besieged' | 'siege-failed' | 'ship-scrapped'
     | 'market-trade' | 'ship-sold' | 'chart-acquired'
     | 'encounter-met' | 'encounter-resolved' | 'encounter-battle' | 'field-repair'
-    | 'inland-returned' | 'inland-failed' | 'artifact-found' | 'reputation-tier';
+    | 'inland-returned' | 'inland-failed' | 'artifact-found' | 'reputation-tier' | 'specialization-level';
 
 export interface LogEntryDTO {
     tick: number;
@@ -655,6 +678,9 @@ export interface LogEntryDTO {
     treasure?: InlandTreasureName;
     // próg reputacji (#142): poziomy w from/to, wartość po zmianie
     reputation?: number;
+    // awans specjalizacji (#160): ścieżka i nowy poziom
+    track?: SpecializationTrackName;
+    level?: number;
 }
 
 // decyzja o statku zdobytym abordażem (#118); study = zbadaj konstrukcję (#121)

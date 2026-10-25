@@ -4,6 +4,8 @@
     sprzedaż statku za złoto (zwrot jak przy złomowaniu, przeliczony po kursie
     sprzedaży). Płaci magazyn portu, resztę ładownia; towar i złoto trafiają
     do ładowni. Każda transakcja to 1 tik. Blokady liczy też backend.
+    Port może też sprzedawać mapę akwenu (#143) — przedmiot w profilu, który
+    otwiera bramę „wody nieznane”; nie zajmuje ładowni.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue';
@@ -25,6 +27,7 @@ const props = defineProps<{
 const emit = defineEmits<{
     trade: [side: MarketSideName, good: MarketGoodName, gold: number];
     sellShip: [ship: FleetShipDTO];
+    buyChart: [];
 }>();
 
 const GOODS = RESOURCES.filter((r): r is typeof r & { key: MarketGoodName } => r.key !== 'gold');
@@ -106,6 +109,15 @@ function saleBlock(ship: FleetShipDTO): string | null {
     return null;
 }
 
+/** Powód blokady kupna mapy akwenu; null = można. */
+const chartBlock = computed((): string | null => {
+    const chart = props.port.chart;
+    if (!chart) return null;
+    if (chart.owned) return 'mapa jest już w profilu';
+    if (available.value.gold < chart.price) return `za mało złota: potrzeba ${chart.price}, w magazynie portu i ładowni jest ${available.value.gold}`;
+    return null;
+});
+
 const confirming = ref<string | null>(null);
 
 function confirmSale(ship: FleetShipDTO) {
@@ -164,6 +176,29 @@ function confirmSale(ship: FleetShipDTO) {
             </p>
         </div>
 
+        <div v-if="port.chart" class="block">
+            <div class="kicker">Mapa akwenu</div>
+            <div class="chart" :class="{ owned: port.chart.owned }">
+                <span class="chart-name">🗺️ Mapa: {{ port.chart.seaName }}</span>
+                <span class="muted small">
+                    Prowadzi przez wody nieznane na wschodzie Morza Mgieł. Mapy się nie zużywa: brama zostaje otwarta w obie strony.
+                </span>
+                <span class="actions">
+                    <span v-if="port.chart.owned" class="tag-owned">✓ w profilu</span>
+                    <button
+                        v-else
+                        class="btn btn-small btn-primary"
+                        :disabled="busy || chartBlock !== null"
+                        :title="chartBlock ?? 'płaci magazyn portu, resztę ładownia · 1 tik'"
+                        @click="emit('buyChart')"
+                    >
+                        Kup mapę za {{ amountLabel('gold', port.chart.price) }}
+                    </button>
+                </span>
+                <span v-if="chartBlock && !port.chart.owned" class="why">{{ chartBlock }}</span>
+            </div>
+        </div>
+
         <div class="block">
             <div class="kicker">Sprzedaż statku</div>
             <p class="muted small">Zwrot jak przy złomowaniu (połowa kosztu budowy, za uszkodzony mniej o remont), przeliczony na złoto po kursie sprzedaży. Stocznia nie jest potrzebna.</p>
@@ -212,6 +247,10 @@ function confirmSale(ship: FleetShipDTO) {
 .ask { flex-basis: 100%; font: 500 12px var(--font-mono); color: var(--warn); }
 .btn-sell { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
 .btn-sell:hover:not(:disabled) { background: var(--accent); color: var(--accent-ink); }
+.chart { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 14px; border: 1px solid var(--res-gold); border-radius: 12px; background: var(--bg-card); }
+.chart.owned { border-color: var(--line-card); }
+.chart-name { font: 600 14px var(--font-head); }
+.tag-owned { font: 600 11px var(--font-mono); color: var(--info); }
 .note { margin: 0; font: 400 12px var(--font-body); color: var(--text-muted); }
 .small { margin: 0; font-size: 12px; }
 </style>

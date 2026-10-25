@@ -92,8 +92,8 @@ it('wartość surowców w złocie liczy drewno i stal razem po kursie sprzedaży
         ->and($rate->goldValue(Resources::none()))->toBe(0);
 });
 
-it('każdy akwen ma port handlowy z własnym kursem: na Oceanie tańsza stal, na Morzu Mgieł droższe drewno', function () {
-    $ports = array_map(static fn (Sea $sea) => $sea->tradePort, tradeGraph()->seas());
+it('akweny 1–3 mają port handlowy z własnym kursem: na Oceanie tańsza stal, na Morzu Mgieł droższe drewno', function () {
+    $ports = array_map(static fn (Sea $sea) => $sea->tradePort, portSeas());
 
     expect(array_map(static fn (?TradePort $p) => [$p?->id, $p?->name], $ports))->toBe([
         ['targ-rozbitkow', 'Targ Rozbitków'],
@@ -106,7 +106,9 @@ it('każdy akwen ma port handlowy z własnym kursem: na Oceanie tańsza stal, na
             ['wood' => ['buy' => 3, 'sell' => 6], 'steel' => ['buy' => 3, 'sell' => 6]],
         ])
         ->and(tradeGraph()->tradePort('faktoria-kotwic'))->toEqual($ports[1])
-        ->and(tradeGraph()->tradePort('zatoka-rozbitka'))->toBeNull();
+        ->and(tradeGraph()->tradePort('zatoka-rozbitka'))->toBeNull()
+        // tajny akwen 4 nie ma portu: po handel wraca się na Morze Mgieł (#143)
+        ->and(tradeGraph()->sea(StaticSeaGraph::BLACK_PEARL)->tradePort)->toBeNull();
 
     // brak arbitrażu: najtańsze kupno na dowolnym akwenie daje mniej towaru, niż wymaga najlepsza sprzedaż
     foreach (MarketGood::cases() as $good) {
@@ -117,8 +119,7 @@ it('każdy akwen ma port handlowy z własnym kursem: na Oceanie tańsza stal, na
 });
 
 it('port nie należy do trasy wysp: nie ma bitwy, bandery, złoża ani kontrataków i nie liczy się do pełnej bandery', function () {
-    $graph = tradeGraph();
-    foreach ($graph->seas() as $sea) {
+    foreach (portSeas() as $sea) {
         $ids = array_map(static fn (Island $i) => $i->id, $sea->islands->all());
         expect($ids)->not->toContain($sea->tradePort->id)
             ->and($sea->islands->byId($sea->tradePort->id))->toBeNull();
@@ -139,7 +140,7 @@ it('id portu nie może powtarzać wyspy, bo magazyny szuka się po id w całym �
 
 it('sektor portu losuje seed akwenu osobnym rzutem: we wnętrzu mapy, nie obok wyspy i nie na bramie, bez zmiany rozkładu wysp', function () {
     foreach ([1, 7, TRADE_SEED, 99_999] as $seed) {
-        foreach (tradeGraph()->seas() as $sea) {
+        foreach (portSeas() as $sea) {
             $map = tradeMap($sea->id, $seed);
             $pos = $map->tradePortPosition();
             $without = WorldMap::generate($sea->seed($seed), array_map(static fn (Island $i) => $i->id, $sea->islands->all()));
@@ -271,3 +272,9 @@ it('flota stoi w porcie tylko na jego sektorze', function () {
     $elsewhere = CaptainProfile::fromSnapshot(CaptainProfile::create('Jacek')->id(), 'Jacek', 0, [], null, Resources::none(), TRADE_SEED);
     expect($elsewhere->isAtTradePort(tradeMap()))->toBeFalse();
 });
+
+/** @return list<Sea> akweny gry z portem handlowym (akwen 4 go nie ma, #143) */
+function portSeas(): array
+{
+    return array_values(array_filter(tradeGraph()->seas(), static fn (Sea $sea) => null !== $sea->tradePort));
+}

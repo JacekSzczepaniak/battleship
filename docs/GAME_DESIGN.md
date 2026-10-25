@@ -28,8 +28,8 @@ w Filarze VIII; licznik zatopionych jednostek wroga) · flota jako majątek
 (budowa/remont, stocznie, wygrana→remont / przegrana→strata; uszkodzony
 statek wozi ładunek, ale nie walczy — #92; złomowanie w stoczni za połowę
 kosztu budowy do magazynu wyspy, uszkodzony mniej o remont, bez ostatniej
-sprawnej jednostki — #124) · port handlowy z rynkiem na każdym
-akwenie, sprzedaż statku za złoto (#140) · rozbudowa
+sprawnej jednostki — #124) · port handlowy z rynkiem na akwenach
+1–3, sprzedaż statku za złoto (#140) · rozbudowa
 stoczni w osadzie (#82: Zatoka pod banderą 1→2) · fort w osadzie (#81:
 nieobecność przy kontrataku to grabież połowy magazynu, wyspa zostaje) · wolne morze
 12×12 z mgłą, deterministyczne z seeda profilu · kartografia pasywna ·
@@ -38,14 +38,14 @@ wymagają obecności) · bandery na wyspach i kontrataki z bitwą obronną; peł
 bandera daje obrońcy pierwszy strzał i odbiera napastnikowi największy statek
 (Epic E) · drzewko technologii (Epic G: uczelnia, 9 technologii w 4
 gałęziach na 3 poziomach, niszczyciel zwiadowczy jako pierwszy wariant
-statku; 3 warianty tylko z abordażu, #121) · trzy akweny połączone strzeżoną cieśniną i otwartym oceanem
-(#106–#108) · UI flow
+statku; 3 warianty tylko z abordażu, #121) · cztery akweny połączone trzema typami bram: strzeżoną
+cieśniną, otwartym oceanem i wodami nieznanymi z mapą akwenu (#106–#108, #143) · UI flow
 bitwy: port → rozstawianie → bitwa → wynik oraz ekran Rejs z mapą zawsze
 widoczną, panelem z zakładkami i dziennikiem kapitana (#111) · zapisane
 zestawy floty z rozmieszczeniem (#125, sekcja niżej)
 (projekt: `docs/design/ui-flow/`). Elementy projektu UI bez pokrycia
-w silniku czekają w zadaniach: trzy surowce w UI (#49), abordaż (#55), mapa akwenu jako
-łup (#56). Szczegóły: git log + testy, uruchomienie: `README.md`.
+w silniku czekają w zadaniach: trzy surowce w UI (#49), abordaż (#55). Mapy akwenu
+nie ma w łupach z bitew (#56 rozstrzygnięte w #143). Szczegóły: git log + testy, uruchomienie: `README.md`.
 
 ## Rdzeń — bitwa: energia i tura ✅
 
@@ -108,8 +108,8 @@ generowana deterministycznie: `worldSeed → akwenSeed_i`.
 ✅ (Epic I) Na start trzy akweny: Morze Rozbitków → (strzeżona cieśnina, od
 rangi porucznik) → Ocean Sztormów → (otwarty ocean, technologia Nawigacja
 oceaniczna) → Morze Mgieł. Motyw to trzy parametry: szansa sztormu,
-widoczność i mnożnik złóż. Brama „wody nieznane” wchodzi z Epikiem J razem z
-mapą akwenu.
+widoczność i mnożnik złóż. Z Epikiem J (#143) doszła trzecia brama, „wody
+nieznane”, do tajnego akwenu 4.
 
 ✅ (#107) Akwen 2 „Ocean Sztormów” (sztorm 40%, widoczność 1, złoża ×2) i
 strzeżona cieśnina. Sektor bramy leży na wschodniej krawędzi Morza Rozbitków,
@@ -147,13 +147,35 @@ Mgieł jest 5 wysp na planszach 12×12:
 Każda daje więcej XP i łupów niż wyspy Oceanu Sztormów. Kapitan może wpłynąć
 na Morze Mgieł i zarabiać na kartografii, ale wyspy zdobędzie od komandora.
 
-**Przejścia między akwenami — trzy rodzaje bram (mieszane):**
-1. **Strzeżona cieśnina** — bitwa-boss: flota strażnicza + fort,
-2. **Otwarty ocean** — wymaga technologii („Nawigacja oceaniczna"),
-3. **Wody nieznane** — wymaga **mapy akwenu** (kupionej / z wraku / z questa).
+✅ (#143, Epic J D5) Akwen 4 „Wody Czarnej Perły” (sztorm 30%, widoczność 1,
+złoża ×3) i wody nieznane. Sektor bramy leży na wschodniej krawędzi Morza
+Mgieł, a po drugiej stronie na zachodniej krawędzi akwenu 4. Bramę otwiera
+**mapa akwenu**, przedmiot w profilu kapitana. Przejście jest bez bitwy,
+kosztuje 1 tik i działa w obie strony; mapy się nie zużywa.
+- Mapę kupuje się tylko na rynku Bazaru we Mgle za 150 złota razy mnożnik
+  ceny rynku (dziś 100%; reputacja z #142 zmieni go jak kursy towarów).
+  Płaci magazyn portu, resztę ładownia, a transakcja kosztuje 1 tik.
+- Drugim źródłem będzie nagroda z ekspedycji (#144).
+- **Mapy nie ma w łupach z bitew** — ma zostać najcenniejszym przedmiotem
+  w grze (pytanie z #56 rozstrzygnięte).
+
+Akwen 4 to treść poza końcówką gry: 3 wyspy od admirała na planszach 12×12:
+- Przystań Kaperska ze stocznią poziomu 3,
+- Rafa Perłowa ze złotem 2/tik (×3 z motywu),
+- Wrak Czarnej Perły z fortem (bandera po oblężeniu) i największym łupem:
+  450 XP oraz 50 drewna, 50 stali i 50 złota.
+
+Wróg pływa ze wszystkimi trzema wariantami ze zdobyczy. Akwen nie ma portu
+handlowego, bo po handel wraca się na Mgły. Spotkania na morzu są takie jak
+na Mgłach. Zdobycie, złoża i kontrataki działają tak jak na innych akwenach.
+
+**Przejścia między akwenami — trzy rodzaje bram (mieszane), wszystkie działają ✅:**
+1. **Strzeżona cieśnina** — bitwa ze strażnikiem (#107); fort w cieśninie odłożony,
+2. **Otwarty ocean** — wymaga technologii („Nawigacja oceaniczna", #108),
+3. **Wody nieznane** — wymaga **mapy akwenu** (rynek Mgieł, ekspedycja #144; #143).
 
 Mapa akwenu = najcenniejszy przedmiot w grze; to domyka wątek „mapy jako
-towar" i daje sens handlowi, questom i abordażom.
+towar" i daje sens handlowi i questom.
 
 ## Filar II — Czas: tik = akcja morska ✅
 

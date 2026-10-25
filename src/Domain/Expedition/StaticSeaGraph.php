@@ -6,8 +6,10 @@ namespace App\Domain\Expedition;
  * Stały graf akwenów: Morze Rozbitków (katalog wysp plastra A/B, motyw
  * 20% / 1 / ×1, na którym gra działa jak przed akwenami) i za strzeżoną
  * cieśniną Ocean Sztormów (40% / 1 / ×2, #107), a za otwartym oceanem na
- * jego wschodniej krawędzi Morze Mgieł (10% / 0 / ×2, #108). Każdy akwen
- * ma neutralny port handlowy z katalogu swoich wysp (#140).
+ * jego wschodniej krawędzi Morze Mgieł (10% / 0 / ×2, #108). Za wodami
+ * nieznanymi na wschodzie Mgieł leżą Wody Czarnej Perły (30% / 1 / ×3, #143),
+ * do których prowadzi tylko mapa akwenu. Akweny 1–3 mają neutralny port
+ * handlowy z katalogu swoich wysp (#140); tajny akwen 4 go nie ma.
  */
 final class StaticSeaGraph implements SeaGraph
 {
@@ -15,6 +17,8 @@ final class StaticSeaGraph implements SeaGraph
     public const GUARDED_STRAIT = 'strzezona-ciesnina';
     public const MIST_SEA = 'morze-mgiel';
     public const OPEN_OCEAN = 'otwarty-ocean';
+    public const BLACK_PEARL = 'wody-czarnej-perly';
+    public const UNCHARTED_WATERS = 'wody-nieznane';
 
     /** @var list<Sea> */
     private array $seas;
@@ -31,19 +35,26 @@ final class StaticSeaGraph implements SeaGraph
         if (null === $seas) {
             $stormIslands = new StormOceanIslandCatalog();
             $mistIslands = new MistSeaIslandCatalog();
+            $pearlIslands = new BlackPearlIslandCatalog();
             $this->seas = [
                 new Sea(Sea::START, 'Morze Rozbitków', new SeaTheme(stormChance: 20, visibility: 1, depositMultiplier: 1), $shipwreckIslands, tradePort: $shipwreckIslands->tradePort()),
                 new Sea(self::STORM_OCEAN, 'Ocean Sztormów', new SeaTheme(stormChance: 40, visibility: 1, depositMultiplier: 2), $stormIslands, [ShipVariant::KuterTorpedowy, ShipVariant::CiezkiNiszczyciel], $stormIslands->tradePort()),
                 new Sea(self::MIST_SEA, 'Morze Mgieł', new SeaTheme(stormChance: 10, visibility: 0, depositMultiplier: 2), $mistIslands, [ShipVariant::LotniskowiecEskortowy], $mistIslands->tradePort()),
+                // tajny akwen (#143): wróg pływa ze wszystkimi wariantami ze zdobyczy, portu nie ma
+                new Sea(self::BLACK_PEARL, 'Wody Czarnej Perły', new SeaTheme(stormChance: 30, visibility: 1, depositMultiplier: 3), $pearlIslands, [ShipVariant::KuterTorpedowy, ShipVariant::CiezkiNiszczyciel, ShipVariant::LotniskowiecEskortowy]),
             ];
             $strait = self::guardedStrait();
             // otwarty ocean: bez bitwy, otwiera go technologia (#108)
             $ocean = new SeaGate(self::OPEN_OCEAN, 'Otwarty ocean', new TechnologyCondition(Technology::NawigacjaOceaniczna));
+            // wody nieznane: bez bitwy, otwiera je mapa akwenu (#143)
+            $uncharted = new SeaGate(self::UNCHARTED_WATERS, 'Wody nieznane', new ChartCondition(self::BLACK_PEARL));
             $this->passages = $passages ?? [
                 new SeaPassage(Sea::START, self::STORM_OCEAN, $strait, SeaEdge::East),
                 new SeaPassage(self::STORM_OCEAN, Sea::START, $strait, SeaEdge::West),
                 new SeaPassage(self::STORM_OCEAN, self::MIST_SEA, $ocean, SeaEdge::East),
                 new SeaPassage(self::MIST_SEA, self::STORM_OCEAN, $ocean, SeaEdge::West),
+                new SeaPassage(self::MIST_SEA, self::BLACK_PEARL, $uncharted, SeaEdge::East),
+                new SeaPassage(self::BLACK_PEARL, self::MIST_SEA, $uncharted, SeaEdge::West),
             ];
         } else {
             $this->seas = $seas;

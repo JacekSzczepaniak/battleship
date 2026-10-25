@@ -63,6 +63,9 @@ enum LogEvent: string
     /** Kapitan sprzedał statek za złoto w porcie handlowym (#140). */
     case ShipSold = 'ship-sold';
 
+    /** Kapitan zdobył mapę akwenu: kupioną na rynku albo z ekspedycji (#143, #144). */
+    case ChartAcquired = 'chart-acquired';
+
     /** Spotkanie w rejsie: handlarz albo pirat czeka na decyzję (#141). */
     case EncounterMet = 'encounter-met';
 

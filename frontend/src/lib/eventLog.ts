@@ -63,6 +63,10 @@ export function logText(e: LogEntryDTO, tick?: number): string {
         }
         case 'ship-sold':
             return `Sprzedano: ${prizeLabel(e).toLowerCase()}${e.damaged ? ' (uszkodzony)' : ''} — do ładowni (${island}): ${formatResources({ wood: 0, steel: 0, gold: e.gold ?? 0 }, 'nic')}.`;
+        case 'chart-acquired':
+            return e.source === 'expedition'
+                ? `Mapa akwenu z ekspedycji: ${e.seaName ?? e.sea} — wody nieznane stoją otworem.`
+                : `Kupiono mapę akwenu (${island}): ${e.seaName ?? e.sea} za ${formatResources({ wood: 0, steel: 0, gold: e.gold ?? 0 }, 'nic')}.`;
         case 'encounter-met':
             return e.encounter === 'pirate'
                 ? 'Piraci na kursie — walka, ucieczka albo okup. Rejs czeka na decyzję.'

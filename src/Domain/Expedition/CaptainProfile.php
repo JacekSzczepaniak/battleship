@@ -173,6 +173,14 @@ final class CaptainProfile
     private array $openedGates = [];
 
     /**
+     * Mapy akwenów (#143, Epic J D5): przedmiot w profilu, warunek bramy
+     * „wody nieznane”. Mapy nie zużywa się i nie traci.
+     *
+     * @var array<string, int> klucz: id akwenu, do którego prowadzi mapa; wartość: tik zdobycia
+     */
+    private array $seaCharts = [];
+
+    /**
      * Dziennik kapitana (#111): ostatnie ważne zdarzenia w kolejności tików,
      * najstarsze pierwsze, najwyżej LOG_LIMIT wpisów.
      *
@@ -1514,6 +1522,72 @@ final class CaptainProfile
         return $gold;
     }
 
+    // --- Mapy akwenów (#143) ---
+
+    public function hasSeaChart(string $seaId): bool
+    {
+        return isset($this->seaCharts[$seaId]);
+    }
+
+    /** @return array<string, int> mapy akwenów: id akwenu → tik zdobycia */
+    public function seaCharts(): array
+    {
+        return $this->seaCharts;
+    }
+
+    /**
+     * Cena mapy z oferty portu w złocie, z mnożnikiem ceny rynku kapitana
+     * (reputacja z #142 zmieni ją tak jak kursy towarów).
+     */
+    public function chartPrice(SeaChartOffer $offer): int
+    {
+        return $offer->priceFor($this->marketPricePercent());
+    }
+
+    /**
+     * Kupno mapy akwenu na rynku portu handlowego (obecność w porcie sprawdza
+     * warstwa aplikacji). Złoto najpierw z magazynu portu, reszta z ładowni.
+     * Mapa nie zajmuje miejsca w ładowni. Kosztuje tik jak transakcja rynku.
+     *
+     * @return int zapłacone złoto
+     */
+    public function buySeaChart(TradePort $port): int
+    {
+        $offer = $port->chart ?? throw new \DomainException('No sea chart for sale here');
+        if ($this->hasSeaChart($offer->seaId)) {
+            throw new \DomainException('Sea chart already owned');
+        }
+        $price = $this->chartPrice($offer);
+        $this->pay($port->id, new Resources(gold: $price));
+        ++$this->tick;
+        $this->grantSeaChart($offer->seaId, SeaChartSource::Market, ['island' => $port->id, 'gold' => $price]);
+
+        return $price;
+    }
+
+    /**
+     * Przyznaje mapę akwenu (#143): zakup na rynku albo nagroda z ekspedycji
+     * (#144 woła to z SeaChartSource::Expedition). Mapy nie ma w łupach
+     * z bitew. Nie kosztuje tiku — tik liczy akcja, która mapę daje.
+     *
+     * @param array<string, mixed> $logData dodatkowe dane wpisu w dzienniku (np. port i cena)
+     *
+     * @return bool false = kapitan już ma tę mapę (nic się nie zmienia)
+     */
+    public function grantSeaChart(string $seaId, SeaChartSource $source, array $logData = []): bool
+    {
+        if ('' === $seaId) {
+            throw new \InvalidArgumentException('Sea chart needs a sea');
+        }
+        if ($this->hasSeaChart($seaId)) {
+            return false;
+        }
+        $this->seaCharts[$seaId] = $this->tick;
+        $this->record($this->tick, LogEvent::ChartAcquired, ['sea' => $seaId, 'source' => $source->value] + $logData);
+
+        return true;
+    }
+
     // --- Spotkania na morzu (#141) ---
 
     public function encounter(): ?Encounter
@@ -2294,6 +2368,7 @@ final class CaptainProfile
      * @param list<FleetPreset>                                                                                                                             $fleetPresets zapisane zestawy floty (#125)
      * @param Encounter|null                                                                                                                                $encounter    spotkanie czekające na decyzję (#141)
      * @param bool                                                                                                                                          $fieldRepairs naprawy kutrów remontowych włączone (#152)
+     * @param array<string, int>                                                                                                                            $seaCharts    mapy akwenów: id akwenu → tik zdobycia (#143)
      */
     public static function fromSnapshot(
         ProfileId $id,
@@ -2325,6 +2400,7 @@ final class CaptainProfile
         array $fleetPresets = [],
         ?Encounter $encounter = null,
         bool $fieldRepairs = true,
+        array $seaCharts = [],
     ): self {
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
@@ -2346,6 +2422,7 @@ final class CaptainProfile
         $self->sea = $sea ?? Sea::START;
         $self->seaStates = $seaStates;
         $self->openedGates = $openedGates;
+        $self->seaCharts = $seaCharts;
         // zdobyta twierdza nie bywa oblężona
         $self->besieged = array_diff_key($besieged, $ownedIslands);
         foreach ($prizes as $prize) {

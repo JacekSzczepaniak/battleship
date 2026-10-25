@@ -178,6 +178,10 @@ na Mgłach. Zdobycie, złoża i kontrataki działają tak jak na innych akwenach
 Mapa akwenu = najcenniejszy przedmiot w grze; to domyka wątek „mapy jako
 towar" i daje sens handlowi i questom.
 
+✅ (#153) Z technologią Nawigator (filar V) flota płynie wyznaczoną trasą po
+odkrytych sektorach wielu akwenów i przez otwarte bramy. Każdy krok jest
+zwykłym rejsem albo przejściem przez bramę i kosztuje tyle tików co zwykle.
+
 ## Filar II — Czas: tik = akcja morska ✅
 
 Czysta turowość, **zero zegara ściennego**. Tik = akcja na morzu
@@ -390,6 +394,28 @@ sternik. Technologie działają tylko po stronie gracza.
 rangi kapitan, po zbadaniu poziomu 2 tej samej gałęzi. Pierwsza technologia
 poziomu 3 to Nawigacja oceaniczna (po Żegludze dwusektorowej), która otwiera
 otwarty ocean między Oceanem Sztormów a Morzem Mgieł.
+
+✅ (#153) Nawigator, poziom 2 Nawigacji obok Żeglugi dwusektorowej (wymaga Map
+sztormowych i rangi sternik; 40 drewna, 30 stali, 15 złota, 10 tików), planuje
+dłuższą podróż przy tym samym koszcie w tikach:
+- trasa prowadzi tylko po odkrytych sektorach i przez otwarte bramy akwenów.
+  Cel też musi być odkryty, a przy kroku o 2 sektory także sektor po drodze,
+- krok ma długość zwykłego rejsu: 1 sektor albo 2 z Żeglugą dwusektorową,
+- domyślnie trasa jest najkrótsza w tikach. Przy remisie wygrywa trasa
+  z mniejszą liczbą sektorów ze sztormem, a potem z mniejszą liczbą dokowań po drodze,
+- przełącznik „omijaj nieodwiedzone sektory” daje trasę bez ryzyka sztormu,
+  nawet jeśli dłuższą, albo informację, że takiej trasy nie ma,
+- przed startem widać koszt w tikach, liczbę sektorów z ryzykiem sztormu
+  i zdążenie przed zapowiedzianym kontratakiem. Zdąży trasa krótsza niż czas
+  do uderzenia, jak w #109,
+- każdy krok to zwykły rejs albo przejście przez bramę, z animacją i tikiem
+  przez `passTicks()`. Trasa staje na sztormie, spotkaniu, nowej zapowiedzi
+  kontrataku i dokowaniu przy wyspie, porcie albo dzikiej wyspie. „Płyń dalej”
+  liczy trasę od nowa z miejsca postoju, a „Anuluj” ją porzuca.
+
+Plan liczy backend (`NavigatorRoute`, `GET /profiles/{id}/navigator/route`).
+Rejs prowadzi front przez zwykłe `/sail` i `/gates/{gateId}/pass`, więc reguły
+rejsu się nie zmieniają. Nawigator jest poziomem 2, więc może też wypaść jako artefakt.
 
 ✅ (#96) Ekonomia: Pojemne ładownie (ładownia statku +50%, w dół) i Dok
 remontowy (remont za pół ceny, w górę) w Kadłubach; Lepsze narzędzia (złoże

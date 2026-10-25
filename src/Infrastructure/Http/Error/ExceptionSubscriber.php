@@ -179,6 +179,7 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             'No active academy on this island' => ['NO_ACADEMY', 409],
             // bramy akwenów (#107)
             'Gate not found' => ['GATE_NOT_FOUND', 404],
+            'Sea not found' => ['SEA_NOT_FOUND', 404],
             'Gate has no guardian' => ['GATE_HAS_NO_GUARDIAN', 409],
             'Gate already open' => ['GATE_ALREADY_OPEN', 409],
             'Gate guarded: defeat the guardian first' => ['GATE_GUARDED', 409],

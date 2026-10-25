@@ -234,6 +234,8 @@ final class GetExpedition
                 'stormChance' => $profile->stormChance($theme),
                 // Żegluga dwusektorowa (Epic G) wydłuża rejs za 1 tik z 1 do 2 sektorów
                 'sailRange' => $profile->sailRange(),
+                // Nawigator (#153): plan trasy przez GET /navigator/route; cele z odkrytych sektorów znanych akwenów
+                'navigator' => $this->navigatorView($profile, $world),
                 // zegar świata: rejs i bitwa kosztują tik
                 'tick' => $profile->tick(),
                 // bandery per akwen (#109): pełna bandera działa tylko przy obronie wyspy swojego akwenu
@@ -642,6 +644,51 @@ final class GetExpedition
             static fn (Sea $sea) => $flags[$sea->id] ?? null,
             $this->seas->seas(),
         )));
+    }
+
+    /**
+     * Cele trasy Nawigatora (#153): odkryte wyspy, porty, dzikie wyspy
+     * i bramy na akwenach, które kapitan zna, w kolejności progresji akwenów.
+     *
+     * @return array{available: bool, destinations: list<array{sea: string, seaName: string, kind: string, id: string, name: string, x: int, y: int}>}
+     */
+    private function navigatorView(CaptainProfile $profile, WorldMap $world): array
+    {
+        if (!$profile->hasResearched(Technology::Nawigator)) {
+            return ['available' => false, 'destinations' => []];
+        }
+        $maps = [];
+        foreach ([$world, ...$world->otherSeas()] as $map) {
+            $maps[$map->seaId()] = $map;
+        }
+        $destinations = [];
+        foreach ($this->seas->seas() as $sea) {
+            $map = $maps[$sea->id] ?? null;
+            $state = $profile->seaStates()[$sea->id] ?? null;
+            if (null === $map || null === $state) {
+                continue;
+            }
+            $places = [];
+            foreach ($map->islands() as $islandId => $pos) {
+                $places[] = ['island', (string) $islandId, $this->islandName((string) $islandId), $pos];
+            }
+            if (null !== $sea->tradePort && null !== $map->tradePortPosition()) {
+                $places[] = ['port', $sea->tradePort->id, $sea->tradePort->name, $map->tradePortPosition()];
+            }
+            if (null !== $sea->wildIsland && null !== $map->wildIslandPosition()) {
+                $places[] = ['wild', $sea->wildIsland->id, $sea->wildIsland->name, $map->wildIslandPosition()];
+            }
+            foreach ($map->gates() as $gateId => $pos) {
+                $places[] = ['gate', (string) $gateId, $this->seas->gate((string) $gateId)->name ?? (string) $gateId, $pos];
+            }
+            foreach ($places as [$kind, $id, $name, $pos]) {
+                if ($state->isDiscovered($pos['x'], $pos['y'])) {
+                    $destinations[] = ['sea' => $sea->id, 'seaName' => $sea->name, 'kind' => $kind, 'id' => $id, 'name' => $name, 'x' => $pos['x'], 'y' => $pos['y']];
+                }
+            }
+        }
+
+        return ['available' => true, 'destinations' => $destinations];
     }
 
     private function islandName(string $islandId): string

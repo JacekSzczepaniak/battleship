@@ -10,6 +10,8 @@
     Animacja rejsu (#146): nad komórkami leży warstwa efektów — `fxBoard()` daje
     jej geometrię. W trakcie animacji sektory z `masked` stoją pod mgłą, a znacznik
     floty rysuje overlay (`fleetHidden`); klik w mapę pomija animację.
+    Nawigator (#153): w trybie `planning` klik w odkryty sektor wybiera cel trasy
+    (emit `pick`), a `route` zaznacza kroki trasy na tym akwenie z numerem kroku.
 -->
 <script setup lang="ts">
 import { computed, ref, type Component } from 'vue';
@@ -33,10 +35,14 @@ const props = defineProps<{
     masked?: ReadonlySet<string>;
     fleetHidden?: boolean;
     animating?: boolean;
+    // Nawigator (#153): wybór celu kliknięciem i kroki trasy na tym akwenie ("x:y" → numer kroku, ryzyko sztormu)
+    planning?: boolean;
+    route?: ReadonlyMap<string, { n: number; risk: boolean; last: boolean }>;
 }>();
 
 const emit = defineEmits<{
     sail: [x: number, y: number];
+    pick: [x: number, y: number];
     skip: [];
 }>();
 
@@ -104,6 +110,10 @@ interface Cell {
     key: string; x: number; y: number;
     cls: Record<string, boolean>;
     sailable: boolean;
+    // tryb planowania trasy: odkryty sektor poza flotą da się wybrać na cel
+    pickable: boolean;
+    // numer kroku trasy Nawigatora; null = poza trasą
+    step: number | null;
     // nazwa wyspy albo bramy — etykieta po najechaniu
     name: string;
     title: string;
@@ -143,11 +153,15 @@ const cells = computed<Cell[]>(() => {
             const risk = sailable && !visited.has(key);
             const attacked = !!island && pending?.island === island.id;
             const marks = island ? islandMarks(island) : null;
+            const planning = !!props.planning;
+            const pickable = planning && discovered && !(x === px && y === py);
+            const onRoute = props.route?.get(key) ?? null;
 
             out.push({
-                key, x, y, sailable,
+                key, x, y, sailable: sailable && !planning, pickable, step: onRoute?.n ?? null,
                 cls: {
-                    explored: discovered || !!island, fog: !discovered && !island, reach: sailable, risk,
+                    explored: discovered || !!island, fog: !discovered && !island, reach: sailable && !planning, risk: risk && !planning,
+                    pick: pickable, 'on-route': !!onRoute, 'route-risk': !!onRoute?.risk, 'route-end': !!onRoute?.last,
                     island: !!island, locked: !!island && !island.unlocked, owned: !!island?.owned,
                     gate: !!gate, 'gate-open': !!gate?.open, port: atPort, wild: atWild, here, attacked,
                     marked: !!marks && (marks.shipyard > 0 || marks.deposit.length > 0 || marks.buildings.length > 0),
@@ -166,8 +180,10 @@ const cells = computed<Cell[]>(() => {
                     island?.owned && island.buildings.length ? `budynki: ${island.buildings.map(b => BUILDING_LABELS[b]).join(', ')}` : '',
                     island && !isEmpty(island.stockpile) ? `magazyn: ${formatResources(island.stockpile)}` : '',
                     atPort && !isEmpty(port!.stockpile) ? `magazyn: ${formatResources(port!.stockpile)}` : '',
-                    sailable ? `wypłyń · 1 tik${distance > 1 ? ' (2 sektory)' : ''}` : '',
-                    risk ? `pierwsze wpłynięcie — ryzyko sztormu ${w.stormChance}%` : '',
+                    sailable && !planning ? `wypłyń · 1 tik${distance > 1 ? ' (2 sektory)' : ''}` : '',
+                    risk && !planning ? `pierwsze wpłynięcie — ryzyko sztormu ${w.stormChance}%` : '',
+                    pickable ? 'wyznacz trasę tutaj' : '',
+                    onRoute ? `trasa: krok ${onRoute.n}${onRoute.risk ? ` — ryzyko sztormu ${w.stormChance}%` : ''}` : '',
                 ].filter(Boolean).join(' · '),
             });
         }
@@ -218,10 +234,10 @@ const rows = computed(() => Array.from({ length: world.value.height }, (_, y) =>
                     :key="cell.key"
                     class="cell"
                     :class="cell.cls"
-                    :disabled="busy || !cell.sailable"
+                    :disabled="busy || !(planning ? cell.pickable : cell.sailable)"
                     :title="cell.title"
                     :aria-label="cell.title"
-                    @click="emit('sail', cell.x, cell.y)"
+                    @click="planning ? emit('pick', cell.x, cell.y) : emit('sail', cell.x, cell.y)"
                 >
                     <span v-if="cell.cls.island" class="isle" :class="{ besieged: cell.marks?.besieged && !cell.cls.owned }">
                         <Castle v-if="cell.marks?.stronghold" class="castle" :size="20" :stroke-width="2.25" />
@@ -242,6 +258,7 @@ const rows = computed(() => Array.from({ length: world.value.height }, (_, y) =>
                     </span>
                     <span v-if="cell.cls.attacked" class="alarm">⚔</span>
                     <span v-if="cell.cls.here" class="fleet"></span>
+                    <span v-if="cell.step !== null" class="step">{{ cell.step }}</span>
                     <span v-if="cell.name" class="name">{{ cell.name }}</span>
                 </button>
             </div>
@@ -271,8 +288,12 @@ const rows = computed(() => Array.from({ length: world.value.height }, (_, y) =>
             <span><i class="lg-gate"></i>brama akwenu</span>
             <span><i class="lg-flag"></i>Twoja bandera</span>
             <span><i class="lg-fog"></i>niezbadane</span>
+            <span v-if="route?.size"><i class="lg-route"></i>trasa Nawigatora i numer kroku</span>
         </div>
-        <p class="hint">
+        <p v-if="planning" class="hint">
+            Nawigator: kliknij odkryty sektor, aby wyznaczyć do niego trasę.
+        </p>
+        <p v-else class="hint">
             Kliknij sektor w zasięgu, aby wypłynąć — <b>1 tik</b> za ruch
             <template v-if="world.sailRange > 1">(żegluga dwusektorowa: do {{ world.sailRange }} sektorów, także po skosie)</template>.
         </p>
@@ -333,6 +354,14 @@ h2 { margin: 2px 0 0; font: 700 24px var(--font-head); }
 .cell.reach:not(:disabled) { background: #0f2f38; box-shadow: none; border: 1.5px dashed var(--info); cursor: pointer; }
 .cell.reach.risk:not(:disabled) { border-color: var(--warn); }
 .cell.reach:not(:disabled):hover { filter: brightness(1.35); }
+/* Nawigator (#153): wybór celu i kroki trasy */
+.cell.pick:not(:disabled) { cursor: crosshair; }
+.cell.pick:not(:disabled):hover { filter: brightness(1.35); box-shadow: inset 0 0 0 1.5px var(--accent-light); }
+.cell.on-route { box-shadow: inset 0 0 0 2px var(--accent-light); }
+.cell.on-route.route-risk { box-shadow: inset 0 0 0 2px var(--warn); }
+.cell.on-route.route-end { box-shadow: inset 0 0 0 2px var(--accent-light), 0 0 10px #e8843c66; }
+.step { position: absolute; bottom: 2px; right: 3px; z-index: 2; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 7px; background: var(--accent-light); color: #10202a; font: 700 9px/14px var(--font-mono); text-align: center; pointer-events: none; }
+.cell.route-risk .step { background: var(--warn); }
 /* wyspy nigdy nie stoją obok siebie, więc wyspa i jej znaczniki mogą wychodzić
    poza swoją komórkę na sąsiednią wodę — komórka wyspy leży nad sąsiadami */
 .cell.island { z-index: 1; }
@@ -405,6 +434,7 @@ h2 { margin: 2px 0 0; font: 700 24px var(--font-head); }
 .lg-bld { color: var(--text-muted); }
 .lg-bld svg { color: var(--accent-light); flex: none; }
 .lg-siege { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--danger); margin-left: 4px; }
+.lg-route { width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 2px var(--accent-light); }
 .lg-fog { width: 14px; height: 14px; border-radius: 4px; background: #0a1b23; box-shadow: inset 0 0 0 1px #12303a; }
 .hint { margin: 0; font: 400 12px var(--font-body); color: var(--text-muted); max-width: 560px; }
 .hint b { color: var(--text-2); }

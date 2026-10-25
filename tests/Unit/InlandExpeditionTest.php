@@ -299,11 +299,11 @@ it('kandydaci na artefakt: poziomy 1–2, bez zbadanych i bez badania w toku; gd
 
     expect(array_map(static fn (Technology $t) => $t->value, $levelsOneTwo))->toBe([
         'spichlerze', 'mapy-sztormowe', 'sonar-dalekiego-zasiegu', 'zegluga-dwusektorowa',
-        'pojemne-ladownie', 'dok-remontowy', 'lepsze-narzedzia', 'niszczyciel-zwiadowczy',
+        'pojemne-ladownie', 'dok-remontowy', 'lepsze-narzedzia', 'niszczyciel-zwiadowczy', 'nawigator',
     ])
         ->and($busy->artifactCandidates())->not->toContain(Technology::Spichlerze)
         ->and($busy->artifactCandidates())->not->toContain(Technology::MapySztormowe)
-        ->and($busy->artifactCandidates())->toHaveCount(6);
+        ->and($busy->artifactCandidates())->toHaveCount(7);
 
     $options = ['researched' => $levelsOneTwo];
     $tick = inlandTickWhere(static fn (CaptainProfile $p, WildIsland $i, WorldMap $m) => 'artifact' === (inlandAllTheWay($p, $i, $m)['treasure']['type'] ?? null), options: $options);

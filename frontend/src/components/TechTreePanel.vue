@@ -46,6 +46,7 @@ const EFFECTS: Record<TechnologyName, string> = {
     'ciezki-niszczyciel': 'Stocznia buduje ciężki niszczyciel: 2 torpedy. Pływa u wroga na Oceanie Sztormów.',
     'lotniskowiec-eskortowy': 'Stocznia buduje lotniskowiec eskortowy: nalot i sonar. Pływa u wroga na Morzu Mgieł.',
     'kuter-remontowy': 'Stocznia buduje kuter remontowy: warsztat zamiast sonaru, bez broni i bez eskorty. Na każdym tiku naprawia jeden statek do 3 pól, od najmniejszego, za koszt remontu z ładowni.',
+    nawigator: 'Planowanie trasy po odkrytych sektorach i przez otwarte bramy: flota płynie krok po kroku za te same tiki co zwykłe rejsy, z opcją omijania sektorów ze sztormem.',
     'czarna-perla': 'Widoczność +1 na wszystkich akwenach: flota odkrywa szersze sąsiedztwo, a na Morzu Mgieł widzi sąsiednie sektory zamiast samego swojego.',
 };
 

@@ -192,6 +192,8 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             'Merchant trades wood and steel for gold' => ['VALIDATION_ERROR', 400],
             'No market on this sea' => ['NO_MARKET', 409],
             'Empty trade order' => ['VALIDATION_ERROR', 400],
+            // reputacja (#142): embargo dla korsarza
+            'Embargo: no trade with a corsair' => ['EMBARGO', 409],
             // zestawy floty (#125)
             'Fleet preset not found' => ['FLEET_PRESET_NOT_FOUND', 404],
             'Fleet preset limit exceeded' => ['FLEET_PRESET_LIMIT', 409],

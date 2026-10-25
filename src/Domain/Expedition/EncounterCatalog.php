@@ -34,13 +34,40 @@ final class EncounterCatalog
         };
     }
 
-    /** Flota spotkania na akwenie: pirat do walki albo handlarz z eskortą do napadu. */
+    /** Łowcy nagród (#142): XP i łup jak u piratów akwenu, podniesione o tyle procent (w zaokrągleniu). */
+    public const BOUNTY_HUNTERS_REWARD_PERCENT = 125;
+
+    /** Flota spotkania na akwenie: pirat do walki, handlarz z eskortą do napadu albo łowcy nagród. */
     public static function fleet(EncounterType $type, string $seaId): EncounterFleet
     {
         return match ($type) {
             EncounterType::Pirate => self::pirate($seaId),
             EncounterType::Merchant => self::merchant($seaId),
+            EncounterType::BountyHunters => self::bountyHunters($seaId),
         };
+    }
+
+    /**
+     * Łowcy nagród (#142, decyzja Jacka 25.10.2026): flota piratów akwenu
+     * i jeden niszczyciel więcej, ta sama plansza, nagrody ×1,25. XP za
+     * porażkę to ćwierć wygranej, jak w całym katalogu.
+     */
+    private static function bountyHunters(string $seaId): EncounterFleet
+    {
+        $pirate = self::pirate($seaId);
+        $scaled = static fn (int $n): int => intdiv($n * self::BOUNTY_HUNTERS_REWARD_PERCENT + 50, 100);
+        $xpWin = $scaled($pirate->xpWin);
+
+        return new EncounterFleet(
+            name: 'Łowcy nagród',
+            mode: $pirate->mode,
+            fleet: [...$pirate->fleet, ShipType::Niszczyciel],
+            xpWin: $xpWin,
+            xpLoss: intdiv($xpWin, 4),
+            lootWin: new Resources($scaled($pirate->lootWin->wood), $scaled($pirate->lootWin->steel), $scaled($pirate->lootWin->gold)),
+            boardWidth: $pirate->boardWidth,
+            boardHeight: $pirate->boardHeight,
+        );
     }
 
     private static function pirate(string $seaId): EncounterFleet

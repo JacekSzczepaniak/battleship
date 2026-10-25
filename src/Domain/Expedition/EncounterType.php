@@ -12,4 +12,7 @@ enum EncounterType: string
 
     /** Pirat: walka, ucieczka albo okup. */
     case Pirate = 'pirate';
+
+    /** Łowcy nagród (#142): przychodzą zamiast handlarza przy embargu; tylko bitwa. */
+    case BountyHunters = 'bounty-hunters';
 }

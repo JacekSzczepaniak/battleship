@@ -133,6 +133,27 @@ export interface ExpeditionProfileDTO extends ProfileDTO {
     fieldRepairs: boolean;
     // mapy akwenów w profilu (#143): warunek bramy „wody nieznane”
     seaCharts: SeaChartDTO[];
+    // reputacja kupiec ↔ korsarz (#142): stan, skutki i progi podane z góry
+    reputation: ReputationDTO;
+}
+
+// reputacja (#142): oś od min (korsarz) do max (kupiec); progi włącznie
+export type ReputationTierName = 'merchant' | 'neutral' | 'corsair' | 'embargo';
+export interface ReputationDTO {
+    value: number;
+    tier: ReputationTierName;
+    // mnożnik ceny rynku w procentach (100 = kurs bazowy)
+    pricePercent: number;
+    // port odmawia handlu, zamiast handlarza przychodzą łowcy nagród
+    embargo: boolean;
+    min: number;
+    max: number;
+    // zmiany za zdarzenia: transakcja lub zlecenie u handlarza, pokonany pirat, napad
+    changes: { trade: number; pirateDefeated: number; raid: number };
+    // od merchant w górę kupiec, od corsair i embargo w dół
+    thresholds: { merchant: number; corsair: number; embargo: number };
+    // mnożnik ceny kupca i korsarza w procentach
+    prices: { merchant: number; corsair: number };
 }
 
 // mapa akwenu (#143): prowadzi przez wody nieznane na akwen `sea`; tick = kiedy kapitan ją zdobył
@@ -318,8 +339,12 @@ export interface TradePortDTO {
     present: boolean;
     // buy: ile towaru kupuje 1 złoto; sell: ile towaru trzeba oddać za 1 złoto (połowa ceny kupna)
     rate: Record<MarketGoodName, { buy: number; sell: number }>;
-    // mnożnik ceny w procentach (100 = kurs bazowy); pod reputację z #142
+    // kurs bazowy akwenu: kupno liczy się od całego zlecenia (#142) — floor(złoto × buy × 100 / pricePercent)
+    baseRate: Record<MarketGoodName, { buy: number; sell: number }>;
+    // mnożnik ceny w procentach (100 = kurs bazowy) z reputacji (#142)
     pricePercent: number;
+    // embargo (#142): port odmawia handlu, sprzedaży statku i mapy
+    embargo: boolean;
     stockpile: ResourcesDTO;
     // mapa akwenu na sprzedaż (#143): cena w złocie z mnożnikiem rynku; null = port bez mapy
     chart: { sea: string; seaName: string; price: number; owned: boolean } | null;
@@ -466,7 +491,7 @@ export type LogEventName =
     | 'research-completed' | 'ship-built' | 'building-built' | 'gate-opened' | 'gate-passed'
     | 'ship-boarded' | 'prize-decided' | 'island-besieged' | 'siege-failed' | 'ship-scrapped'
     | 'market-trade' | 'ship-sold' | 'chart-acquired'
-    | 'encounter-met' | 'encounter-resolved' | 'encounter-battle' | 'field-repair';
+    | 'encounter-met' | 'encounter-resolved' | 'encounter-battle' | 'field-repair' | 'reputation-tier';
 
 export interface LogEntryDTO {
     tick: number;
@@ -517,6 +542,8 @@ export interface LogEntryDTO {
     bought?: ResourcesDTO;
     goldReceived?: number;
     goldPaid?: number;
+    // próg reputacji (#142): poziomy w from/to, wartość po zmianie
+    reputation?: number;
 }
 
 // decyzja o statku zdobytym abordażem (#118); study = zbadaj konstrukcję (#121)
@@ -551,7 +578,8 @@ export async function decidePrize(profileId: string, prizeId: string, decision: 
 }
 
 // spotkania na morzu (#141): kogo flota spotkała i wybór bez bitwy (handel i bitwa mają własne akcje)
-export type EncounterTypeName = 'merchant' | 'pirate';
+// łowcy nagród (#142) przychodzą zamiast handlarza przy embargu: tylko bitwa
+export type EncounterTypeName = 'merchant' | 'pirate' | 'bounty-hunters';
 export type EncounterDecisionName = 'pass' | 'flee' | 'ransom';
 
 // spotkanie czekające na decyzję, ze skutkami wyborów podanymi z góry
@@ -583,6 +611,8 @@ export interface EncounterDTO {
     // pirat: ucieczka (tiki i ładunek, który zabierze) i okup w złocie z ładowni
     flee: { ticks: number; cargoLost: ResourcesDTO } | null;
     ransom: { gold: number; affordable: boolean } | null;
+    // skutki dla reputacji (#142): bitwa (napad od razu, pirat po wygranej, łowcy 0) i handel (null = brak handlu)
+    reputation: { battle: number; trade: number | null };
 }
 
 export interface ResolveEncounterDTO {

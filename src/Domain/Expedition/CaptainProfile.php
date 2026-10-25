@@ -214,11 +214,15 @@ final class CaptainProfile
     /** Naprawy kutrów remontowych poza stocznią (#152); kapitan wyłącza je, żeby oszczędzać ładunek. */
     private bool $fieldRepairs = true;
 
+    /** Reputacja na osi kupiec ↔ korsarz (#142): ceny rynku, embargo i łowcy nagród. */
+    private Reputation $reputation;
+
     private function __construct(
         private ProfileId $id,
         private string $name,
         private int $xp = 0,
     ) {
+        $this->reputation = new Reputation();
     }
 
     public static function create(string $name): self
@@ -1426,17 +1430,18 @@ final class CaptainProfile
     }
 
     /**
-     * Mnożnik ceny rynku w procentach (100 = kurs bazowy akwenu). Na razie
-     * stały: miejsce na reputację kupiec ↔ korsarz z #142.
+     * Mnożnik ceny rynku w procentach (100 = kurs bazowy akwenu) z reputacji
+     * kupiec ↔ korsarz (#142): od +40 taniej, od −40 drożej.
      */
     public function marketPricePercent(): int
     {
-        return MarketRate::BASE_PRICE_PERCENT;
+        return $this->reputation->pricePercent();
     }
 
     /**
-     * Kupno albo sprzedaż towaru w porcjach po 1 złoto (obecność w porcie
-     * sprawdza warstwa aplikacji). Płaci się z magazynu portu, a brakującą
+     * Kupno albo sprzedaż towaru za złoto (obecność w porcie sprawdza warstwa
+     * aplikacji): sprzedaż w porcjach po 1 złoto, kupno liczone od całego
+     * zlecenia (#142). Handel podnosi reputację, embargo go blokuje. Płaci się z magazynu portu, a brakującą
      * resztę bierze z ładowni; to, co kapitan dostaje, trafia do ładowni.
      * Transakcja bez środków albo bez miejsca w ładowni jest odrzucana.
      * Kosztuje tik jak przeładunek.
@@ -1448,10 +1453,11 @@ final class CaptainProfile
         if ($gold < 1) {
             throw new \InvalidArgumentException('Trade amount must be positive');
         }
+        $this->assertNoEmbargo();
         $percent = $this->marketPricePercent();
         $coins = new Resources(gold: $gold);
         [$paid, $received] = match ($side) {
-            MarketSide::Buy => [$coins, $good->resources($gold * $port->rate->buyAmount($good, $percent))],
+            MarketSide::Buy => [$coins, $good->resources($port->rate->buyTotal($good, $gold, $percent))],
             MarketSide::Sell => [$good->resources($gold * $port->rate->sellAmount($good, $percent)), $coins],
         };
 
@@ -1475,6 +1481,7 @@ final class CaptainProfile
             'paid' => $paid->toArray(),
             'received' => $received->toArray(),
         ]);
+        $this->changeReputation(Reputation::TRADE);
 
         return ['paid' => $paid, 'received' => $received];
     }
@@ -1497,6 +1504,7 @@ final class CaptainProfile
     public function sellShip(string $shipId, TradePort $port): int
     {
         $ship = $this->shipById($shipId) ?? throw new \DomainException('Ship not found');
+        $this->assertNoEmbargo();
         $block = $this->scrapBlocker($ship);
         if (null !== $block) {
             throw new \DomainException($block->message());
@@ -1554,6 +1562,7 @@ final class CaptainProfile
     public function buySeaChart(TradePort $port): int
     {
         $offer = $port->chart ?? throw new \DomainException('No sea chart for sale here');
+        $this->assertNoEmbargo();
         if ($this->hasSeaChart($offer->seaId)) {
             throw new \DomainException('Sea chart already owned');
         }
@@ -1597,7 +1606,9 @@ final class CaptainProfile
 
     /**
      * Spotkanie po rejsie: około 8% szansy z seeda i tiku, jak sztorm. Nie na
-     * sektorze wyspy ani bramy. 60% handlarz, 40% pirat.
+     * sektorze wyspy ani bramy. 60% handlarz, 40% pirat. Przy embargu (#142)
+     * zamiast handlarza przychodzą łowcy nagród — ale tylko do floty, która
+     * ma uzbrojony sprawny statek, bo z łowcami nie ma innego wyjścia niż bitwa.
      */
     private function rollEncounter(int $x, int $y, WorldMap $world): ?Encounter
     {
@@ -1611,6 +1622,12 @@ final class CaptainProfile
         $type = crc32("{$this->worldSeed}:{$this->tick}:encounter-type") % 100 < EncounterCatalog::MERCHANT_SHARE
             ? EncounterType::Merchant
             : EncounterType::Pirate;
+        if (EncounterType::Merchant === $type && $this->reputation->isEmbargo()) {
+            if (!$this->canFight()) {
+                return null;
+            }
+            $type = EncounterType::BountyHunters;
+        }
         $this->encounter = new Encounter($type, $this->tick, $this->sea, $x, $y);
         $this->record($this->tick, LogEvent::EncounterMet, ['encounter' => $type->value]);
 
@@ -1701,6 +1718,7 @@ final class CaptainProfile
     public function tradeWithMerchant(Resources $sell, Resources $buy, MarketRate $rate): array
     {
         $encounter = $this->pendingEncounter(EncounterType::Merchant);
+        $this->assertNoEmbargo();
         if (0 !== $sell->gold || 0 !== $buy->gold) {
             throw new \DomainException('Merchant trades wood and steel for gold');
         }
@@ -1730,6 +1748,7 @@ final class CaptainProfile
             'goldReceived' => $goldReceived,
             'goldPaid' => $goldPaid,
         ]);
+        $this->changeReputation(Reputation::TRADE);
 
         return ['goldReceived' => $goldReceived, 'goldPaid' => $goldPaid];
     }
@@ -1737,8 +1756,9 @@ final class CaptainProfile
     /**
      * Rejestruje bitwę spotkania: napad na handlarza albo walkę z piratem.
      * W rejestrze zamiast wyspy stoi akwen, a rodzaj spotkania pod kluczem
-     * 'encounter' (pod reputację, #142). Start bitwy kończy spotkanie —
-     * porzucona bitwa nie blokuje rejsu.
+     * 'encounter'. Start bitwy kończy spotkanie — porzucona bitwa nie blokuje
+     * rejsu. Napad na handlarza kosztuje reputację już przy starcie, bez
+     * względu na wynik (#142).
      *
      * @param list<string> $shipIds statki, które wypłynęły (do rozliczenia strat)
      */
@@ -1748,6 +1768,9 @@ final class CaptainProfile
         $this->registerBattle($encounter->sea, $gameId, BattleKind::Encounter, $shipIds);
         $this->battles[(string) $gameId]['encounter'] = $encounter->type->value;
         $this->encounter = null;
+        if (EncounterType::Merchant === $encounter->type) {
+            $this->changeReputation(Reputation::RAID);
+        }
 
         return $encounter;
     }
@@ -1756,6 +1779,46 @@ final class CaptainProfile
     public function encounterFor(GameId $gameId): ?EncounterType
     {
         return EncounterType::tryFrom($this->battles[(string) $gameId]['encounter'] ?? '');
+    }
+
+    // --- Reputacja kupiec ↔ korsarz (#142) ---
+
+    public function reputation(): Reputation
+    {
+        return $this->reputation;
+    }
+
+    /** Embargo: port odmawia handlu, a zamiast handlarza przychodzą łowcy nagród. */
+    public function isUnderEmbargo(): bool
+    {
+        return $this->reputation->isEmbargo();
+    }
+
+    private function assertNoEmbargo(): void
+    {
+        if ($this->reputation->isEmbargo()) {
+            throw new \DomainException('Embargo: no trade with a corsair');
+        }
+    }
+
+    /** Czy flota stanie do bitwy z łowcami nagród: ma sprawny statek z bronią. */
+    private function canFight(): bool
+    {
+        return [] !== array_filter($this->activeFleet(), static fn (OwnedShip $s) => $s->isArmed());
+    }
+
+    /** Zmiana reputacji w zakresie osi; przejście progu trafia do dziennika. */
+    private function changeReputation(int $delta): void
+    {
+        $before = $this->reputation;
+        $this->reputation = $before->change($delta);
+        if ($before->tier() !== $this->reputation->tier()) {
+            $this->record($this->tick, LogEvent::ReputationTier, [
+                'from' => $before->tier()->value,
+                'to' => $this->reputation->tier()->value,
+                'reputation' => $this->reputation->value,
+            ]);
+        }
     }
 
     // --- Bitwy ---
@@ -1975,6 +2038,9 @@ final class CaptainProfile
         }
         if (BattleKind::Encounter === $kind) {
             $this->record($this->tick, LogEvent::EncounterBattle, ['encounter' => $battle['encounter'] ?? null, 'result' => $result, 'sea' => $battle['island']]);
+            if ($won && EncounterType::Pirate->value === ($battle['encounter'] ?? null)) {
+                $this->changeReputation(Reputation::PIRATE_DEFEATED);
+            }
         }
 
         [$lost, $damaged] = $this->applyLosses($battle['ships'] ?? [], $result, $sunkLengths, $sunkVariants);
@@ -2369,6 +2435,7 @@ final class CaptainProfile
      * @param Encounter|null                                                                                                                                $encounter    spotkanie czekające na decyzję (#141)
      * @param bool                                                                                                                                          $fieldRepairs naprawy kutrów remontowych włączone (#152)
      * @param array<string, int>                                                                                                                            $seaCharts    mapy akwenów: id akwenu → tik zdobycia (#143)
+     * @param int                                                                                                                                           $reputation   reputacja kupiec ↔ korsarz (#142); spoza osi przycięta
      */
     public static function fromSnapshot(
         ProfileId $id,
@@ -2401,6 +2468,7 @@ final class CaptainProfile
         ?Encounter $encounter = null,
         bool $fieldRepairs = true,
         array $seaCharts = [],
+        int $reputation = 0,
     ): self {
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
@@ -2448,6 +2516,7 @@ final class CaptainProfile
         $self->lastCounterattack = $counterattacks['last'] ?? null;
         $self->encounter = $encounter;
         $self->fieldRepairs = $fieldRepairs;
+        $self->reputation = Reputation::clamped($reputation);
 
         return $self;
     }

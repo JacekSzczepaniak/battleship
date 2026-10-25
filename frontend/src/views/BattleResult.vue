@@ -38,6 +38,7 @@ const kicker = computed(() => {
     const kind = e.kind === 'guardian' ? 'CIEŚNINA'
         : e.settle.encounter === 'merchant' ? 'NAPAD'
         : e.settle.encounter === 'pirate' ? 'PIRACI'
+        : e.settle.encounter === 'bounty-hunters' ? 'ŁOWCY NAGRÓD'
         : e.settle.kind === 'siege' ? 'OBLĘŻENIE' : e.settle.defense ? 'OBRONA' : 'BITWA';
     return `${kind} · ${e.islandName.toUpperCase()}${e.seaName ? ` · ${e.seaName.toUpperCase()}` : ''}`;
 });
@@ -70,8 +71,14 @@ const description = computed(() => {
                 ? `Eskorta handlarza poszła na dno — jego towary są Twoje. Kupcy zapamiętają ten napad.${repairs}`
                 : 'Eskorta obroniła handlarza. Jednostki zatopione w tej bitwie przepadły — XP zostaje na zawsze.';
         }
+        // łowcy nagród (#142): wygrana nie zdejmuje embarga
+        if (r.expedition.settle.encounter === 'bounty-hunters') {
+            return won.value
+                ? `Łowcy nagród poszli na dno — ich złoto i stal są Twoje. Embargo trwa: zdejmie je tylko lepsza reputacja.${repairs}`
+                : 'Łowcy nagród wygrali bitwę. Jednostki zatopione w tej bitwie przepadły — XP zostaje na zawsze, embargo trwa.';
+        }
         return won.value
-            ? `Piraci rozbici — ich złoto i stal są Twoje.${repairs}`
+            ? `Piraci rozbici — ich złoto i stal są Twoje, a kupcy to docenią (reputacja +5).${repairs}`
             : 'Piraci wygrali bitwę. Jednostki zatopione w tej bitwie przepadły — XP zostaje na zawsze.';
     }
     if (r.expedition.settle.kind === 'siege') {

@@ -77,4 +77,7 @@ enum LogEvent: string
 
     /** Kuter remontowy naprawił statek poza stocznią, za surowce z ładowni (#152). */
     case FieldRepair = 'field-repair';
+
+    /** Reputacja przekroczyła próg: kupiec, neutralny, korsarz albo embargo (#142). */
+    case ReputationTier = 'reputation-tier';
 }

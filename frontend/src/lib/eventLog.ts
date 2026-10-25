@@ -68,18 +68,36 @@ export function logText(e: LogEntryDTO, tick?: number): string {
                 ? `Mapa akwenu z ekspedycji: ${e.seaName ?? e.sea} — wody nieznane stoją otworem.`
                 : `Kupiono mapę akwenu (${island}): ${e.seaName ?? e.sea} za ${formatResources({ wood: 0, steel: 0, gold: e.gold ?? 0 }, 'nic')}.`;
         case 'encounter-met':
+            if (e.encounter === 'bounty-hunters') return 'Łowcy nagród na kursie — embargo ściga korsarza. Bitwa jest jedynym wyjściem.';
             return e.encounter === 'pirate'
                 ? 'Piraci na kursie — walka, ucieczka albo okup. Rejs czeka na decyzję.'
                 : 'Handlarz na kursie — handel, napad albo minięcie. Rejs czeka na decyzję.';
+        case 'reputation-tier':
+            return reputationTierText(e);
         case 'encounter-resolved':
             return encounterResolvedText(e);
         case 'field-repair':
             return `Kuter remontowy naprawił: ${prizeLabel(e).toLowerCase()} — z ładowni: ${formatResources(e.paid ?? { wood: 0, steel: 0, gold: 0 }, 'nic')}.`;
         case 'encounter-battle':
+            if (e.encounter === 'bounty-hunters') {
+                return e.result === 'won' ? 'Łowcy nagród rozbici — ich złoto i stal w ładowni. Embargo trwa.' : 'Łowcy nagród wygrali bitwę — embargo trwa.';
+            }
             if (e.encounter === 'pirate') {
                 return e.result === 'won' ? 'Piraci pokonani — łup w ładowni.' : 'Piraci wygrali bitwę — odpłynęli z tym, co zatopili.';
             }
             return e.result === 'won' ? 'Napad udany — towary handlarza w ładowni.' : 'Napad odparty — eskorta obroniła handlarza.';
+    }
+}
+
+// próg reputacji (#142): nowy poziom i jego skutek
+function reputationTierText(e: LogEntryDTO): string {
+    const value = e.reputation ?? 0;
+    const signed = value > 0 ? `+${value}` : value < 0 ? `−${-value}` : '0';
+    switch (e.to) {
+        case 'merchant': return `Reputacja ${signed}: kupiec — ceny na rynku niższe o 10%.`;
+        case 'corsair': return `Reputacja ${signed}: korsarz — ceny na rynku wyższe o 25%.`;
+        case 'embargo': return `Reputacja ${signed}: embargo — porty odmawiają handlu, zamiast handlarzy przychodzą łowcy nagród.`;
+        default: return `Reputacja ${signed}: neutralna — ceny na rynku bazowe.`;
     }
 }
 
@@ -108,7 +126,8 @@ export function logTone(e: LogEntryDTO): 'danger' | 'warn' | 'info' {
     switch (e.event) {
         case 'island-lost': case 'counterattack-announced': return 'danger';
         case 'storm': case 'island-plundered': case 'siege-failed': return 'warn';
-        case 'encounter-met': return e.encounter === 'pirate' ? 'warn' : 'info';
+        case 'encounter-met': return e.encounter === 'bounty-hunters' ? 'danger' : e.encounter === 'pirate' ? 'warn' : 'info';
+        case 'reputation-tier': return e.to === 'embargo' ? 'danger' : e.to === 'corsair' ? 'warn' : 'info';
         case 'encounter-battle': return e.result === 'lost' ? 'warn' : 'info';
         default: return 'info';
     }

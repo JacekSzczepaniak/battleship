@@ -153,7 +153,7 @@ Mgieł, a po drugiej stronie na zachodniej krawędzi akwenu 4. Bramę otwiera
 **mapa akwenu**, przedmiot w profilu kapitana. Przejście jest bez bitwy,
 kosztuje 1 tik i działa w obie strony; mapy się nie zużywa.
 - Mapę kupuje się tylko na rynku Bazaru we Mgle za 150 złota razy mnożnik
-  ceny rynku (dziś 100%; reputacja z #142 zmieni go jak kursy towarów).
+  ceny rynku z reputacji (#142): kupiec 135, korsarz 188 złota.
   Płaci magazyn portu, resztę ładownia, a transakcja kosztuje 1 tik.
 - Drugim źródłem będzie nagroda z ekspedycji (#144).
 - **Mapy nie ma w łupach z bitew** — ma zostać najcenniejszym przedmiotem
@@ -339,11 +339,13 @@ Obrona wyspy bez floty: fort w osadzie (#81, Filar III wyżej).
   albo 3 stali, na Oceanie Sztormów 5 drewna albo 4 stali (tańsza stal),
   na Morzu Mgieł 3 drewna albo 3 stali (droższe drewno). Sprzedaż idzie po
   połowie ceny kupna, więc między akwenami nie ma arbitrażu. Transakcje
-  w porcjach po 1 złoto, 1 tik każda: płaci magazyn portu, resztę ładownia,
+  za złoto, 1 tik każda (sprzedaż w porcjach po 1 złoto, kupno liczone od
+  całego zlecenia, #142): płaci magazyn portu, resztę ładownia,
   a towar i złoto trafiają do ładowni (bez miejsca = odrzucenie). Statek
   sprzedasz za złoto bez stoczni: zwrot jak przy złomowaniu (#124),
   przeliczony po kursie sprzedaży, w dół z całości. Mnożnik ceny
-  w procentach czeka na reputację (#142) i handlarza na morzu (#141).
+  w procentach daje reputacja (#142), a handlarz na morzu (#141) dolicza
+  do niego swoją marżę.
 - **Ładownia**: statki mają pojemność cargo; surowce wozi się fizycznie
   między wyspami. Nowy typ: **transportowiec/galeon** — dużo cargo,
   bezbronny, wymaga eskorty.
@@ -470,7 +472,39 @@ podaje skutki każdego wyboru z góry.
   daje ¼ XP bez łupu. Pirat: 10 stali i 15 złota / 20 i 25 / 25 i 35.
   Napad: 30 drewna, 15 stali, 10 złota / 35, 35, 20 / 45, 35, 30.
 - Napad i pokonanie pirata zapisują się w rejestrze bitew (`encounter`)
-  i w dzienniku; reputację policzy #142.
+  i w dzienniku.
+
+✅ (#142, Epic J D4) Reputacja kupiec ↔ korsarz. Jedna oś od −100
+(korsarz) do +100 (kupiec), nowy kapitan i profil sprzed reputacji startują
+od 0. Wartość jest zapisana w profilu, a nie liczona z historii.
+- **Zmiany:** każda transakcja na rynku portu i każde zlecenie u handlarza
+  +2, pokonany pirat +5 (po wygranej bitwie), napad na handlarza −20 już
+  przy starcie bitwy, bez względu na wynik. Sprzedaż statku i kupno mapy
+  reputacji nie zmieniają. Nie ma dryfu w czasie: reputacja stoi, dopóki
+  kapitan czegoś nie zrobi.
+- **Progi (włącznie):** od +40 kupiec, ceny na rynku −10% (mnożnik 90%);
+  od −40 korsarz, ceny +25% (125%); od −70 embargo. Mnożnik działa na
+  kursy towarów, cenę mapy, sprzedaż statku i ceny handlarza (handlarz
+  dolicza swoje 25%). Kupno na rynku liczy się od całego zlecenia
+  (floor(złoto × kurs × 100 / mnożnik)), bo przy porcjach po 1 złoto rabat
+  kupca ginął w zaokrągleniu: 10 złota kupuje kupcowi 55 drewna zamiast 50.
+- **Embargo:** port odmawia handlu, sprzedaży statku i mapy, a handlarz na
+  morzu handlu (`409 EMBARGO`). Przeładunek do własnego magazynu w porcie
+  działa. Handlarze nie przychodzą: z embarga wyprowadzają tylko pokonani
+  piraci.
+- **Łowcy nagród** przychodzą przy embargu zamiast handlarza (te same
+  rzuty z seeda i tiku, piraci bez zmian). Z łowcami jest tylko bitwa:
+  bez minięcia, ucieczki, okupu i handlu. Flota to piraci akwenu i jeden
+  niszczyciel więcej, na tej samej planszy, a XP i łup ×1,25 (przegrana
+  ¼ XP). Wygrana z łowcami reputacji nie zmienia. Do floty bez sprawnego
+  statku z bronią łowcy nie przychodzą, żeby wymuszona bitwa nie zablokowała
+  rejsu.
+- **Telegrafowanie:** HUD ekranu Rejs pokazuje wartość, poziom, skutek
+  i próg embarga na pasku osi, a w dymku zmiany za zdarzenia i najbliższe
+  progi. Rynek podaje poziom i progi, a przy embargu powód blokady. Baner
+  spotkania podaje skutek każdego wyboru dla reputacji („reputacja −20
+  (−25 → −45)”) i ostrzega, gdy napad przekroczy próg. Przejście progu
+  trafia do dziennika (`reputation-tier`).
 
 ## Filar VII — Questy
 

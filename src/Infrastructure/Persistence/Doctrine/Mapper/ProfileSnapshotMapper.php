@@ -82,6 +82,8 @@ final class ProfileSnapshotMapper
             'encounter' => $profile->encounter()?->toArray(),
             // naprawy kutrów remontowych poza stocznią (#152)
             'fieldRepairs' => $profile->fieldRepairsEnabled(),
+            // reputacja kupiec ↔ korsarz (#142)
+            'reputation' => $profile->reputation()->value,
         ];
     }
 
@@ -190,6 +192,8 @@ final class ProfileSnapshotMapper
             fieldRepairs: (bool) ($state['fieldRepairs'] ?? true),
             // brak klucza = profil sprzed map akwenów, bez map
             seaCharts: array_map('intval', (array) ($state['charts'] ?? [])),
+            // brak klucza = profil sprzed reputacji, start od 0
+            reputation: (int) ($state['reputation'] ?? 0),
         );
     }
 

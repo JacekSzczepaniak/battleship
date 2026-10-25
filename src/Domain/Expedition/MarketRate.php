@@ -34,6 +34,16 @@ final class MarketRate
         return max(1, intdiv($this->perGold($good) * self::BASE_PRICE_PERCENT, self::percent($pricePercent)));
     }
 
+    /**
+     * Ile towaru kupuje całe zlecenie za $gold złota na rynku portu: liczone
+     * od całej kwoty, nie od porcji, żeby rabat kupca (#142) nie ginął
+     * w zaokrągleniu porcji po 1 złoto. Nigdy mniej niż sztuka za złoto.
+     */
+    public function buyTotal(MarketGood $good, int $gold, int $pricePercent = self::BASE_PRICE_PERCENT): int
+    {
+        return max($gold, intdiv($gold * $this->perGold($good) * self::BASE_PRICE_PERCENT, self::percent($pricePercent)));
+    }
+
     /** Ile towaru trzeba oddać za 1 złoto; drożej = więcej, z zaokrągleniem w górę. */
     public function sellAmount(MarketGood $good, int $pricePercent = self::BASE_PRICE_PERCENT): int
     {

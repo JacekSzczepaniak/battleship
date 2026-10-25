@@ -9,15 +9,18 @@ use App\Domain\Expedition\GateBlock;
 use App\Domain\Expedition\Island;
 use App\Domain\Expedition\LogEvent;
 use App\Domain\Expedition\MistSeaIslandCatalog;
+use App\Domain\Expedition\OwnedShip;
 use App\Domain\Expedition\Rank;
 use App\Domain\Expedition\Resources;
 use App\Domain\Expedition\Sea;
 use App\Domain\Expedition\SeaChartOffer;
 use App\Domain\Expedition\SeaChartSource;
 use App\Domain\Expedition\SeaEdge;
+use App\Domain\Expedition\ShipType;
 use App\Domain\Expedition\ShipVariant;
 use App\Domain\Expedition\StaticIslandCatalog;
 use App\Domain\Expedition\StaticSeaGraph;
+use App\Domain\Expedition\Technology;
 use App\Domain\Expedition\WorldMap;
 use App\Domain\Shared\GameId;
 
@@ -187,6 +190,28 @@ it('kupno mapy płaci złotem najpierw z magazynu portu, resztę z ładowni, za 
         ->and($entry->event)->toBe(LogEvent::ChartAcquired)
         ->and($entry->data)->toBe(['sea' => PEARL, 'source' => 'market', 'island' => 'bazar-we-mgle', 'gold' => 150])
         ->and($profile->gateBlocker(chartGraph()->passage(StaticSeaGraph::MIST_SEA, UNCHARTED)))->toBeNull();
+});
+
+it('zakup mapy to tik jak każda akcja: kuter remontowy naprawia na nim jeden statek (#152)', function () {
+    $broken = OwnedShip::build(ShipType::Kuter);
+    $broken->markDamaged();
+    $port = chartMap(StaticSeaGraph::MIST_SEA)->tradePortPosition();
+    $profile = CaptainProfile::fromSnapshot(
+        CaptainProfile::create('Jacek')->id(), 'Jacek', 1400, [],
+        [$broken, OwnedShip::build(ShipType::Kuter, ShipVariant::KuterRemontowy), OwnedShip::build(ShipType::Transportowiec)],
+        new Resources(wood: 10, steel: 10), CHART_SEED, $port, ["{$port['x']}:{$port['y']}"],
+        stockpiles: ['bazar-we-mgle' => new Resources(gold: 150)],
+        researched: [Technology::DokRemontowy, Technology::KuterRemontowy],
+        sea: StaticSeaGraph::MIST_SEA,
+    );
+    $cost = $profile->repairCost(ShipType::Kuter);
+
+    $profile->buySeaChart(chartGraph()->sea(StaticSeaGraph::MIST_SEA)->tradePort);
+
+    expect($profile->tick())->toBe(1)
+        ->and(array_filter($profile->fleet(), static fn (OwnedShip $s) => $s->isDamaged()))->toBe([])
+        ->and($profile->cargo()->toArray())->toBe((new Resources(wood: 10, steel: 10))->subtract($cost)->toArray())
+        ->and(array_map(static fn ($e) => $e->event, $profile->log()))->toContain(LogEvent::FieldRepair, LogEvent::ChartAcquired);
 });
 
 it('kupno mapy bez 150 złota albo drugi raz jest odrzucane bez zmian w profilu', function () {

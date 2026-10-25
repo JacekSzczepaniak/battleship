@@ -1559,7 +1559,7 @@ final class CaptainProfile
         }
         $price = $this->chartPrice($offer);
         $this->pay($port->id, new Resources(gold: $price));
-        ++$this->tick;
+        $this->passTicks();
         $this->grantSeaChart($offer->seaId, SeaChartSource::Market, ['island' => $port->id, 'gold' => $price]);
 
         return $price;

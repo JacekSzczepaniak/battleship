@@ -80,6 +80,19 @@ export function logText(e: LogEntryDTO, tick?: number): string {
                 return e.result === 'won' ? 'Piraci pokonani — łup w ładowni.' : 'Piraci wygrali bitwę — odpłynęli z tym, co zatopili.';
             }
             return e.result === 'won' ? 'Napad udany — towary handlarza w ładowni.' : 'Napad odparty — eskorta obroniła handlarza.';
+        case 'inland-returned': {
+            const none = { wood: 0, steel: 0, gold: 0 };
+            const lost = e.lost ? ` (nie zmieściło się: ${formatResources(e.lost)})` : '';
+            return e.stage === 3
+                ? `Ekspedycja przeszła wyspę: ${island} — do ładowni: ${formatResources(e.received ?? none, 'nic')}${lost}.`
+                : `Powrót z głębi wyspy: ${island} po etapie ${e.stage} — do ładowni: ${formatResources(e.received ?? none, 'nic')}${lost}.`;
+        }
+        case 'inland-failed':
+            return `Ekspedycja przepadła na etapie ${e.stage}: ${island} — ${e.lost ? `stracono ${formatResources(e.lost)}` : 'bez łupu'}${e.ship ? `, uszkodzony: ${SHIP_LABELS[e.ship].toLowerCase()}` : ''}.`;
+        case 'artifact-found':
+            return e.technology === 'czarna-perla'
+                ? `Legenda z ekspedycji: Czarna perła (${island}) — +1 do widoczności na wszystkich akwenach.`
+                : `Artefakt z ekspedycji (${island}): ${e.technology ? TECH_LABELS[e.technology] : '?'} działa od razu, bez uczelni.`;
     }
 }
 
@@ -110,6 +123,7 @@ export function logTone(e: LogEntryDTO): 'danger' | 'warn' | 'info' {
         case 'storm': case 'island-plundered': case 'siege-failed': return 'warn';
         case 'encounter-met': return e.encounter === 'pirate' ? 'warn' : 'info';
         case 'encounter-battle': return e.result === 'lost' ? 'warn' : 'info';
+        case 'inland-failed': return 'warn';
         default: return 'info';
     }
 }

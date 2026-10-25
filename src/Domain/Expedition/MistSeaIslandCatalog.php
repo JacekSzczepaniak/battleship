@@ -113,6 +113,32 @@ final class MistSeaIslandCatalog implements IslandCatalog
         );
     }
 
+    /**
+     * Dzika wyspa Morza Mgieł (#144): poza trasą, bez areny i bandery,
+     * z ekspedycją w głąb lądu na trzy etapy.
+     */
+    public function wildIsland(): WildIsland
+    {
+        return new WildIsland(
+            id: 'wyspa-zaginionych',
+            name: 'Wyspa Zaginionych',
+            description: 'Mgła rozstępuje się tu tylko na chwilę. Załogi, które zeszły na ląd, rzadko wracały, ale te, które wróciły, miały mapy.',
+            requiredRank: Rank::Komandor,
+            stageRewards: [
+                new Resources(wood: 20),
+                new Resources(wood: 16, steel: 16),
+                new Resources(steel: 16, gold: 14),
+            ],
+            // jedyna dzika wyspa z mapą Wód Czarnej Perły (#143): brama „wody nieznane” leży na Mgłach
+            treasures: [[InlandTreasure::Chart, 35], [InlandTreasure::Artifact, 30]],
+            stories: [
+                'Ślady butów we mgle prowadzą w głąb lądu. Przy ścieżce leżą porzucone skrzynie z zapasami.',
+                'Ruiny osady kartografów. Na ścianach wydrapano linie wybrzeży, których nie ma na żadnej mapie.',
+                'Wieża latarni w sercu wyspy. Na jej szczycie leży zwój w nieprzemakalnej tubie.',
+            ],
+        );
+    }
+
     public function byId(string $id): ?Island
     {
         foreach ($this->all() as $island) {

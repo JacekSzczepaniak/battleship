@@ -5,6 +5,9 @@
     badanie naraz, poprzedni poziom, ranga, uczelnia pod banderą, koszt) liczy
     backend — tu tylko opisujemy jego kod blokady. Technologie ze zdobyczy (#121)
     są poza poziomami: osobna sekcja „Tylko z abordażu”, bez przycisku badania.
+    Ścieżka questowa (#144): artefakt z ekspedycji odblokowuje technologię
+    z uczelni od razu (węzeł dostaje znacznik „artefakt”), a legenda „Czarna
+    perła” jest tylko z questu — obie w sekcji „Z questu”.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -43,6 +46,7 @@ const EFFECTS: Record<TechnologyName, string> = {
     'ciezki-niszczyciel': 'Stocznia buduje ciężki niszczyciel: 2 torpedy. Pływa u wroga na Oceanie Sztormów.',
     'lotniskowiec-eskortowy': 'Stocznia buduje lotniskowiec eskortowy: nalot i sonar. Pływa u wroga na Morzu Mgieł.',
     'kuter-remontowy': 'Stocznia buduje kuter remontowy: warsztat zamiast sonaru, bez broni i bez eskorty. Na każdym tiku naprawia jeden statek do 3 pól, od najmniejszego, za koszt remontu z ładowni.',
+    'czarna-perla': 'Widoczność +1 na wszystkich akwenach: flota odkrywa szersze sąsiedztwo, a na Morzu Mgieł widzi sąsiednie sektory zamiast samego swojego.',
 };
 
 const current = computed(() => props.research.current);
@@ -57,6 +61,14 @@ const levels = computed(() => props.research.levels.map(l => ({
 // technologie ze zdobyczy (#121): odblokowuje je „Zbadaj konstrukcję” po abordażu, nie uczelnia
 const boarding = computed(() => props.research.technologies.filter(t => t.unlock === 'boarding'));
 
+// ścieżka questowa (#144): legenda tylko z ekspedycji i technologie uczelni zdobyte jako artefakt
+const legends = computed(() => props.research.technologies.filter(t => t.unlock === 'quest'));
+const artifacts = computed(() => props.research.technologies.filter(t => t.unlock === 'academy' && fromArtifact(t)));
+
+function fromArtifact(t: TechnologyDTO): boolean {
+    return (props.research.artifacts ?? []).includes(t.id);
+}
+
 function levelLabel(l: TechLevelDTO): string {
     const rank = l.requiredRank ? ` · od rangi ${RANK_LABELS[l.requiredRank]}` : '';
     return `${formatResources(l.cost)} · ${ticksLabel(l.ticks)}${rank}`;
@@ -68,6 +80,7 @@ function blockLabel(t: TechnologyDTO): string | null {
         case null: return null;
         case 'researched': return 'zbadana';
         case 'boarding-only': return 'zdobądź abordażem i zbadaj konstrukcję';
+        case 'quest-only': return 'tylko z ekspedycji: skarb Wyspy Czaszki (Wody Czarnej Perły)';
         case 'busy': return 'trwa inne badanie';
         case 'prerequisite': return 'najpierw poziom 1 tej gałęzi';
         case 'rank': return `wymaga rangi ${level?.requiredRank ? RANK_LABELS[level.requiredRank] : ''}`;
@@ -121,7 +134,8 @@ function percent(progress: number, ticks: number): number {
                             <div class="branch">{{ TECH_BRANCH_LABELS[t.branch] }}</div>
                             <div class="node-name">{{ TECH_LABELS[t.id] }}</div>
                         </div>
-                        <span v-if="t.state === 'researched'" class="check" title="zbadana — działa">✓</span>
+                        <span v-if="t.state === 'researched' && fromArtifact(t)" class="quest-tag" title="z artefaktu — bez uczelni">artefakt</span>
+                        <span v-else-if="t.state === 'researched'" class="check" title="zbadana — działa">✓</span>
                     </div>
                     <div class="desc">{{ EFFECTS[t.id] }}</div>
                     <template v-if="t.state === 'in-progress' && current">
@@ -165,6 +179,37 @@ function percent(progress: number, ticks: number): number {
                 </div>
             </div>
         </section>
+
+        <section v-if="legends.length" class="level">
+            <div class="level-head">
+                <span class="level-name">Z questu</span>
+                <span class="level-cost">ekspedycje na dzikie wyspy · skarb etapu 3</span>
+            </div>
+            <p class="rules">Artefakt od razu odblokowuje niezbadaną technologię z poziomów 1–2 uczelni — bez kosztu, tików i uczelni. Legenda jest tylko z questu.</p>
+            <div class="nodes">
+                <div v-for="t in legends" :key="t.id" class="node quest" :class="t.state">
+                    <div class="node-head">
+                        <div>
+                            <div class="branch">Legenda · {{ TECH_BRANCH_LABELS[t.branch] }}</div>
+                            <div class="node-name">{{ TECH_LABELS[t.id] }}</div>
+                        </div>
+                        <span v-if="t.state === 'researched'" class="check" title="zdobyta — działa">✓</span>
+                    </div>
+                    <div class="desc">{{ EFFECTS[t.id] }}</div>
+                    <span v-if="t.state !== 'researched'" class="hint">{{ blockLabel(t) }}</span>
+                </div>
+                <div v-for="t in artifacts" :key="t.id" class="node quest researched">
+                    <div class="node-head">
+                        <div>
+                            <div class="branch">Artefakt · poziom {{ t.level }}</div>
+                            <div class="node-name">{{ TECH_LABELS[t.id] }}</div>
+                        </div>
+                        <span class="check" title="z artefaktu — działa">✓</span>
+                    </div>
+                    <div class="desc">{{ EFFECTS[t.id] }}</div>
+                </div>
+            </div>
+        </section>
     </div>
 </template>
 
@@ -189,6 +234,8 @@ function percent(progress: number, ticks: number): number {
 .node.in-progress { border-color: var(--info); }
 .node.locked { opacity: .5; }
 .node.boarding { border-style: dashed; }
+.node.quest { border-style: double; border-width: 3px; }
+.quest-tag { flex: none; padding: 1px 6px; border-radius: 8px; border: 1px solid var(--info); color: var(--info); font: 600 9px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
 .node-head { display: flex; justify-content: space-between; gap: 8px; align-items: start; }
 .branch { font: 600 9px var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text-label); }
 .node-name { font: 600 14px var(--font-head); }

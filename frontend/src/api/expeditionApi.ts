@@ -294,6 +294,10 @@ export interface WorldDTO {
     gates: GateDTO[];
     // port handlowy akwenu (#140): neutralna wyspa z rynkiem; null = akwen bez portu
     tradePort: TradePortDTO | null;
+    // dzika wyspa akwenu (#144): ekspedycja w głąb lądu; null = akwen bez niej
+    wildIsland: WildIslandDTO | null;
+    // promień odkrywania wokół floty: motyw akwenu + legenda „Czarna perła” (#144)
+    visibility: number;
     // szansa sztormu akwenu z Mapami sztormowymi (połowa) albo bez nich
     stormChance: number;
     // najdalszy sektor osiągalny w jednym rejsie (większa z różnic x i y); Żegluga dwusektorowa: 2
@@ -323,6 +327,55 @@ export interface TradePortDTO {
     stockpile: ResourcesDTO;
     // mapa akwenu na sprzedaż (#143): cena w złocie z mnożnikiem rynku; null = port bez mapy
     chart: { sea: string; seaName: string; price: number; owned: boolean } | null;
+}
+
+// skarb etapu 3 ekspedycji (Domain/Expedition/InlandTreasure, #144)
+export type InlandTreasureName = 'chart' | 'artifact' | 'legend';
+// powód blokady startu ekspedycji (Domain/Expedition/InlandBlock); null = można wyruszyć
+export type InlandBlockCode = 'not-present' | 'rank' | 'in-progress' | 'resting' | 'no-seaworthy-ships';
+export type InlandActionName = 'start' | 'deeper' | 'return';
+
+export const INLAND_TREASURE_LABELS: Record<InlandTreasureName, string> = {
+    chart: 'mapa Wód Czarnej Perły',
+    artifact: 'artefakt (technologia od razu)',
+    legend: 'legenda „Czarna perła”',
+};
+
+// dzika wyspa (#144): sektor widać po odkryciu; etapy z ryzykiem, nagrodą i tekstem podane z góry
+export interface WildIslandDTO {
+    id: string;
+    name: string;
+    description: string;
+    requiredRank: RankName;
+    unlocked: boolean;
+    discovered: boolean;
+    position: { x: number; y: number } | null;
+    present: boolean;
+    stages: { stage: number; risk: number; reward: ResourcesDTO; story: string }[];
+    // owned = kapitan już ma ten skarb (albo nie ma czego wylosować): zamiast niego fallbackGold złota
+    treasures: { type: InlandTreasureName; chance: number; owned: boolean }[];
+    fallbackGold: number;
+    restTicks: number;
+    // tik, od którego wyspa przyjmie następną ekspedycję
+    readyAt: number;
+    blocker: InlandBlockCode | null;
+    // ekspedycja w toku: ostatni przebyty etap i nagrody, które zabierze porażka
+    expedition: { stage: number; collected: ResourcesDTO; startedAt: number } | null;
+}
+
+export interface InlandOutcomeDTO {
+    // null przy powrocie
+    stage: number | null;
+    result: 'passed' | 'completed' | 'failed' | 'returned';
+    reward: ResourcesDTO | null;
+    damagedShip: ShipTypeName | null;
+    treasure: { type: InlandTreasureName; technology?: TechnologyName; sea?: string; gold?: number } | null;
+    received: ResourcesDTO | null;
+    lost: ResourcesDTO | null;
+    expedition: { island: string; stage: number; collected: ResourcesDTO; startedAt: number } | null;
+    collected: ResourcesDTO;
+    cargo: ResourcesDTO;
+    tick: number;
 }
 
 export interface SeaFlagDTO {
@@ -390,10 +443,11 @@ export interface LastCounterattackDTO {
 // drzewko technologii (Epic G): katalog zawiera tylko działające technologie
 export type TechBranchName = 'kadluby' | 'uzbrojenie' | 'nawigacja' | 'osady';
 export type TechnologyName = 'spichlerze' | 'mapy-sztormowe' | 'sonar-dalekiego-zasiegu' | 'zegluga-dwusektorowa' | 'pojemne-ladownie' | 'dok-remontowy' | 'lepsze-narzedzia' | 'niszczyciel-zwiadowczy' | 'nawigacja-oceaniczna'
-    | 'kuter-torpedowy' | 'ciezki-niszczyciel' | 'lotniskowiec-eskortowy' | 'kuter-remontowy';
+    | 'kuter-torpedowy' | 'ciezki-niszczyciel' | 'lotniskowiec-eskortowy' | 'kuter-remontowy' | 'czarna-perla';
 
-// ścieżka odblokowania (#121): uczelnia (drzewko z poziomami) albo zbadanie konstrukcji zdobytego statku
-export type TechUnlockName = 'academy' | 'boarding';
+// ścieżka odblokowania (#121): uczelnia (drzewko z poziomami), zbadanie konstrukcji zdobytego statku
+// albo legenda z ekspedycji (#144)
+export type TechUnlockName = 'academy' | 'boarding' | 'quest';
 
 export const TECH_BRANCH_LABELS: Record<TechBranchName, string> = {
     kadluby: 'Kadłuby',
@@ -416,10 +470,11 @@ export const TECH_LABELS: Record<TechnologyName, string> = {
     'ciezki-niszczyciel': 'Ciężki niszczyciel',
     'lotniskowiec-eskortowy': 'Lotniskowiec eskortowy',
     'kuter-remontowy': 'Kuter remontowy',
+    'czarna-perla': 'Czarna perła',
 };
 
 // powód blokady badania (Domain/Expedition/ResearchBlock); null = można badać
-export type ResearchBlockCode = 'researched' | 'boarding-only' | 'busy' | 'prerequisite' | 'rank' | 'no-academy' | 'not-present' | 'resources';
+export type ResearchBlockCode = 'researched' | 'boarding-only' | 'quest-only' | 'busy' | 'prerequisite' | 'rank' | 'no-academy' | 'not-present' | 'resources';
 
 export interface TechLevelDTO {
     level: number;
@@ -455,6 +510,8 @@ export interface ResearchDTO {
     branches: TechBranchName[];
     levels: TechLevelDTO[];
     technologies: TechnologyDTO[];
+    // technologie z artefaktów i legendy z ekspedycji (#144): ścieżka „z questu”
+    artifacts: TechnologyName[];
 }
 
 // dziennik kapitana (#111): rodzaj zdarzenia (Domain/Expedition/LogEvent) z danymi; treść składa lib/eventLog
@@ -466,7 +523,8 @@ export type LogEventName =
     | 'research-completed' | 'ship-built' | 'building-built' | 'gate-opened' | 'gate-passed'
     | 'ship-boarded' | 'prize-decided' | 'island-besieged' | 'siege-failed' | 'ship-scrapped'
     | 'market-trade' | 'ship-sold' | 'chart-acquired'
-    | 'encounter-met' | 'encounter-resolved' | 'encounter-battle' | 'field-repair';
+    | 'encounter-met' | 'encounter-resolved' | 'encounter-battle' | 'field-repair'
+    | 'inland-returned' | 'inland-failed' | 'artifact-found';
 
 export interface LogEntryDTO {
     tick: number;
@@ -517,6 +575,9 @@ export interface LogEntryDTO {
     bought?: ResourcesDTO;
     goldReceived?: number;
     goldPaid?: number;
+    // ekspedycja w głąb dzikiej wyspy (#144): etap, łup w received/lost, uszkodzony statek w ship, skarb po etapie 3
+    stage?: number;
+    treasure?: InlandTreasureName;
 }
 
 // decyzja o statku zdobytym abordażem (#118); study = zbadaj konstrukcję (#121)
@@ -792,6 +853,11 @@ export interface BuySeaChartDTO {
 /** Kupno mapy akwenu w porcie handlowym (#143): płaci magazyn portu, resztę ładownia; kosztuje tik. */
 export async function buySeaChart(profileId: string, portId: string): Promise<BuySeaChartDTO> {
     return http.post<BuySeaChartDTO>(`/profiles/${profileId}/trade-ports/${portId}/chart`);
+}
+
+/** Ekspedycja w głąb dzikiej wyspy (#144): etap 1, następny etap (1 tik każdy) albo powrót bez tiku. */
+export async function exploreWildIsland(profileId: string, islandId: string, action: InlandActionName): Promise<InlandOutcomeDTO> {
+    return http.post<InlandOutcomeDTO>(`/profiles/${profileId}/wild-islands/${islandId}/expedition`, { action });
 }
 
 export interface BuildBuildingDTO {

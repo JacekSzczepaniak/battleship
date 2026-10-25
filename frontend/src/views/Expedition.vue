@@ -371,6 +371,52 @@
                             />
                         </template>
 
+                        <!-- Dzika wyspa (#144): ekspedycja w głąb lądu — press-your-luck, bez bitwy i bandery -->
+                        <template v-else-if="currentWild">
+                            <div>
+                                <div class="tags">
+                                    <span class="tag own">Dzika wyspa</span>
+                                    <span class="tag">Sektor {{ sectorLabel(currentWild.position!) }} · na brzegu</span>
+                                    <span class="tag">bez bitwy, bandery i magazynu</span>
+                                    <span v-if="!currentWild.unlocked" class="tag">🔒 od rangi {{ rankLabel(currentWild.requiredRank) }}</span>
+                                </div>
+                                <h2 class="place-name">{{ currentWild.name }}</h2>
+                                <p class="desc">{{ currentWild.description }}</p>
+                            </div>
+                            <div class="block inland">
+                                <div class="kicker">Ekspedycja w głąb lądu</div>
+                                <ol class="inland-stages">
+                                    <li
+                                        v-for="st in currentWild.stages"
+                                        :key="st.stage"
+                                        :class="{ done: (currentWild.expedition?.stage ?? 0) >= st.stage, next: nextStage(currentWild)?.stage === st.stage && !currentWild.blocker }"
+                                    >
+                                        <div class="inland-head">
+                                            <span>{{ (currentWild.expedition?.stage ?? 0) >= st.stage ? '✓' : st.stage }} · Etap {{ st.stage }}</span>
+                                            <span class="muted">ryzyko {{ st.risk }}% · +{{ formatResources(st.reward) }}</span>
+                                        </div>
+                                        <p v-if="(currentWild.expedition?.stage ?? 0) >= st.stage" class="desc story">{{ st.story }}</p>
+                                    </li>
+                                </ol>
+                                <p class="muted small">Po etapie 3: {{ treasureText(currentWild) }}.</p>
+                                <p class="muted small">Każdy etap to 1 tik, powrót nic nie kosztuje. Porażka zabiera wszystko zebrane w tej ekspedycji i uszkadza jeden statek. Łup trafia do ładowni przy powrocie (wolne: {{ cargoFree }}). Po ekspedycji wyspa odpoczywa {{ ticksLabel(currentWild.restTicks) }}.</p>
+                                <p v-if="inlandNote" class="inland-note" :class="inlandNote.tone">{{ inlandNote.text }}</p>
+                                <template v-if="currentWild.expedition">
+                                    <p class="inland-collected">Zebrane: <strong>{{ formatResources(currentWild.expedition.collected, 'nic') }}</strong> — przepadnie przy porażce.</p>
+                                    <div class="inland-actions">
+                                        <button v-if="nextStage(currentWild)" class="btn btn-primary act" :disabled="busy" @click="onInland('deeper')">
+                                            ⛏️ Głębiej — etap {{ nextStage(currentWild)!.stage }} · ryzyko {{ nextStage(currentWild)!.risk }}% (1 tik)
+                                        </button>
+                                        <button class="btn btn-secondary act" :disabled="busy" @click="onInland('return')">↩️ Wracaj z łupem</button>
+                                    </div>
+                                </template>
+                                <button v-else-if="!currentWild.blocker" class="btn btn-primary act" :disabled="busy || pendingBattle !== null" @click="onInland('start')">
+                                    🧭 Wyrusz w głąb lądu — etap 1 · ryzyko {{ currentWild.stages[0].risk }}% (1 tik)
+                                </button>
+                                <p v-else class="muted">🔒 {{ inlandBlockText(currentWild) }}</p>
+                            </div>
+                        </template>
+
                         <template v-else-if="currentGate">
                             <div>
                                 <div class="tags">
@@ -454,8 +500,8 @@
                         </template>
 
                         <!-- Przegląd akwenu: na morzu wprost, w porcie i przy bramie zwinięty -->
-                        <component :is="currentIsland || currentPort || currentGate ? 'details' : 'div'" class="overview">
-                            <summary v-if="currentIsland || currentPort || currentGate">Wyspy i bramy akwenu</summary>
+                        <component :is="currentIsland || currentPort || currentWild || currentGate ? 'details' : 'div'" class="overview">
+                            <summary v-if="currentIsland || currentPort || currentWild || currentGate">Wyspy i bramy akwenu</summary>
                             <div v-if="expedition.world.flags.length > 1" class="block">
                                 <div class="kicker">Bandery na akwenach</div>
                                 <ul class="flags-by-sea">
@@ -477,6 +523,14 @@
                                         </div>
                                     </li>
                                 </ul>
+                            </div>
+                            <div v-if="expedition.world.wildIsland?.discovered" class="block">
+                                <div class="kicker">Dzika wyspa</div>
+                                <p class="muted small">
+                                    🌴 {{ expedition.world.wildIsland.name }} · {{ expedition.world.wildIsland.present ? 'flota na brzegu' : `sektor ${sectorLabel(expedition.world.wildIsland.position!)}` }}
+                                    · ekspedycja w głąb lądu: 3 etapy, ryzyko {{ expedition.world.wildIsland.stages.map(s => `${s.risk}%`).join(' / ') }}
+                                    · {{ expedition.world.wildIsland.unlocked ? (expedition.world.wildIsland.blocker === 'resting' ? `odpoczywa do tiku ${expedition.world.wildIsland.readyAt}` : 'otwarta') : `od rangi ${rankLabel(expedition.world.wildIsland.requiredRank)}` }}
+                                </p>
                             </div>
                             <div v-if="discoveredIslands.length" class="block">
                                 <div class="kicker">Odkryte wyspy</div>
@@ -705,10 +759,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
-    buildBuilding, buildShip, buySeaChart, createProfile, decideEncounter, decidePrize, getExpedition, passGate, repairFleet, repairShip, sail, scrapShip, sellShip, setFieldRepairs, settleBattle, startEncounterBattle, startGuardianBattle, startIslandBattle, startSiege,
+    buildBuilding, buildShip, buySeaChart, createProfile, decideEncounter, decidePrize, exploreWildIsland, getExpedition, passGate, repairFleet, repairShip, sail, scrapShip, sellShip, setFieldRepairs, settleBattle, startEncounterBattle, startGuardianBattle, startIslandBattle, startSiege,
     startResearch, trade, tradeWithMerchant, transferCargo,
-    BUILDING_ICONS, BUILDING_LABELS, RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, SHIP_VARIANT_LABELS, SHIP_VARIANT_NAMES, TECH_LABELS, fleetShipLabel,
-    type BuildingTypeName, type EncounterDecisionName, type ShipTypeName, type TechnologyName, type ExpeditionDTO, type TradePortDTO, type FleetShipDTO, type GateDTO, type GuardianDTO, type IslandDTO,
+    BUILDING_ICONS, BUILDING_LABELS, INLAND_TREASURE_LABELS, RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, SHIP_VARIANT_LABELS, SHIP_VARIANT_NAMES, TECH_LABELS, fleetShipLabel,
+    type BuildingTypeName, type EncounterDecisionName, type ShipTypeName, type TechnologyName, type ExpeditionDTO, type TradePortDTO, type WildIslandDTO, type InlandActionName, type InlandOutcomeDTO, type FleetShipDTO, type GateDTO, type GuardianDTO, type IslandDTO,
     type MarketGoodName, type MarketSideName, type PrizeDTO, type PrizeDecisionName, type RankName, type RepairFleetDTO, type ResourcesDTO, type SailResultDTO, type SeaThemeDTO, type ShipTypeDTO, type ShipVariantDTO, type ShipVariantName,
 } from '../api/expeditionApi';
 import { ApiError } from '../api/http';
@@ -799,7 +853,7 @@ watch(() => route.hash, hash => {
 
 /** Domyślna zakładka: w porcie (także handlowym) albo na sektorze bramy — miejsce floty, na morzu — flota. */
 function defaultTab(): TabId {
-    return currentIsland.value || currentPort.value || currentGate.value ? 'wyspa' : 'flota';
+    return currentIsland.value || currentPort.value || currentWild.value || currentGate.value ? 'wyspa' : 'flota';
 }
 
 const researchDone = computed(() => expedition.value?.research.technologies.filter(t => t.state === 'researched').length ?? 0);
@@ -809,7 +863,7 @@ const tabs = computed(() => {
     const island = currentIsland.value;
     const current = exp?.research.current ?? null;
     return [
-        { id: 'wyspa' as TabId, label: island?.name ?? currentPort.value?.name ?? currentGate.value?.name ?? 'Akwen', badge: '', live: false },
+        { id: 'wyspa' as TabId, label: island?.name ?? currentPort.value?.name ?? currentWild.value?.name ?? currentGate.value?.name ?? 'Akwen', badge: '', live: false },
         // #130: budynki pod banderą (postawione/możliwe na tej wyspie), stocznia tam, gdzie jest
         ...(island?.owned ? [{ id: 'budynki' as TabId, label: 'Budynki', badge: `${island.buildings.length}/${buildingSlots.value}`, live: false }] : []),
         ...(island && island.shipyardLevel > 0 ? [{ id: 'stocznia' as TabId, label: 'Stocznia', badge: `poz. ${island.shipyardLevel}`, live: false }] : []),
@@ -860,13 +914,20 @@ const currentPort = computed<TradePortDTO | null>(
     () => (expedition.value?.world.tradePort?.present ? expedition.value.world.tradePort : null)
 );
 
-/** Miejsce floty w stanie wyprawy: wyspa w porcie, port handlowy albo sektor bramy. */
+/** Dzika wyspa na sektorze floty (#144). */
+const currentWild = computed<WildIslandDTO | null>(
+    () => (expedition.value?.world.wildIsland?.present ? expedition.value.world.wildIsland : null)
+);
+
+/** Miejsce floty w stanie wyprawy: wyspa w porcie, port handlowy, dzika wyspa albo sektor bramy. */
 function placeOf(exp: ExpeditionDTO | null): { key: string; name: string; label: string } | null {
     if (!exp) return null;
     const island = exp.islands.find(i => i.present);
     if (island) return { key: island.id, name: island.name, label: `Zadokowano · wyspa ${island.name}` };
     const port = exp.world.tradePort?.present ? exp.world.tradePort : null;
     if (port) return { key: port.id, name: port.name, label: `Zadokowano · port ${port.name}` };
+    const wild = exp.world.wildIsland?.present ? exp.world.wildIsland : null;
+    if (wild) return { key: wild.id, name: wild.name, label: `Na brzegu · dzika wyspa ${wild.name}` };
     const gate = exp.world.gates.find(g => g.present);
     return gate ? { key: gate.id, name: gate.name, label: `Na sektorze bramy · ${gate.name}` } : null;
 }
@@ -1354,6 +1415,79 @@ function onTrade(side: MarketSideName, good: MarketGoodName, gold: number) {
     return inTradePort((profileId, port) => trade(profileId, port.id, side, good, gold), 'Transakcja nie powiodła się');
 }
 
+// --- Ekspedycja w głąb dzikiej wyspy (#144) ---
+
+/** Wynik ostatniego kroku ekspedycji, do komunikatu na karcie wyspy. */
+const inlandNote = ref<{ text: string; tone: 'ok' | 'warn' } | null>(null);
+
+function inlandOutcomeText(o: InlandOutcomeDTO): { text: string; tone: 'ok' | 'warn' } {
+    const treasure = o.treasure
+        ? o.treasure.gold
+            ? ` Skarb (${INLAND_TREASURE_LABELS[o.treasure.type]}) już masz — zamiast niego ${o.treasure.gold} złota.`
+            : o.treasure.technology
+                ? ` Skarb: ${o.treasure.type === 'legend' ? 'legenda' : 'artefakt'} „${TECH_LABELS[o.treasure.technology]}” — działa od razu.`
+                : ' Skarb: mapa Wód Czarnej Perły — wody nieznane stoją otworem.'
+        : '';
+    const lost = o.lost && o.result !== 'failed' ? ` Nie zmieściło się w ładowni: ${formatResources(o.lost)}.` : '';
+    switch (o.result) {
+        case 'passed':
+            return { text: `Etap ${o.stage} przebyty: +${formatResources(o.reward!)}. Zebrane: ${formatResources(o.collected)}.`, tone: 'ok' };
+        case 'completed':
+            return { text: `Etap 3 przebyty — wyspa przeszła. Do ładowni: ${formatResources(o.received!, 'nic')}.${lost}${treasure || ' Skarbu nie było.'}`, tone: 'ok' };
+        case 'returned':
+            return { text: `Powrót z łupem: do ładowni ${formatResources(o.received!, 'nic')}.${lost}`, tone: 'ok' };
+        case 'failed':
+            return {
+                text: `Porażka na etapie ${o.stage}: ${o.lost ? `przepadło ${formatResources(o.lost)}` : 'bez łupu'}${o.damagedShip ? `, uszkodzony ${SHIP_LABELS[o.damagedShip].toLowerCase()}` : ''}.`,
+                tone: 'warn',
+            };
+    }
+}
+
+/** Start, „głębiej” (1 tik) albo „wracaj” (bez tiku): ryzyko i skarb liczy backend z seeda i tiku. */
+async function onInland(action: InlandActionName) {
+    const profileId = getProfileId();
+    const wild = currentWild.value;
+    if (!profileId || !wild) return;
+    busy.value = true;
+    error.value = '';
+    try {
+        const outcome = await exploreWildIsland(profileId, wild.id, action);
+        inlandNote.value = inlandOutcomeText(outcome);
+        expedition.value = await getExpedition(profileId);
+    } catch (e: any) {
+        error.value = e?.message ?? 'Ekspedycja nie ruszyła';
+    } finally {
+        busy.value = false;
+    }
+}
+
+// komunikat o wyniku zostaje na karcie, dopóki flota stoi na tej wyspie
+watch(() => currentWild.value?.id, () => { inlandNote.value = null; });
+
+/** Następny etap ekspedycji: 1 przed startem, potem po ostatnim przebytym. */
+function nextStage(wild: WildIslandDTO) {
+    return wild.stages[wild.expedition?.stage ?? 0] ?? null;
+}
+
+function inlandBlockText(wild: WildIslandDTO): string {
+    switch (wild.blocker) {
+        case null: return '';
+        case 'not-present': return 'Dopłyń na sektor wyspy.';
+        case 'rank': return `Wyspa od rangi ${rankLabel(wild.requiredRank)}.`;
+        case 'in-progress': return 'Trwa inna ekspedycja.';
+        case 'resting': return `Wyspa odpoczywa po ostatniej ekspedycji — następna od tiku ${wild.readyAt} (za ${ticksLabel(wild.readyAt - (expedition.value?.world.tick ?? 0))}).`;
+        case 'no-seaworthy-ships': return 'Porażka uszkadza statek, więc potrzebny jest choć jeden sprawny — napraw flotę.';
+    }
+}
+
+function treasureText(wild: WildIslandDTO): string {
+    if (!wild.treasures.length) return 'bez skarbu';
+    return wild.treasures
+        .map(t => `${INLAND_TREASURE_LABELS[t.type]} ${t.chance}%${t.owned ? ` (${t.type === 'artifact' ? 'wszystko zbadane' : 'masz'} — zamiast niego ${wild.fallbackGold} złota)` : ''}`)
+        .join(' · ');
+}
+
 function onSellShip(ship: FleetShipDTO) {
     return inTradePort((profileId, port) => sellShip(profileId, port.id, ship.id), 'Sprzedaż statku nie powiodła się');
 }
@@ -1779,6 +1913,17 @@ h2, h3 { font-family: var(--font-head); }
 
 /* przegląd akwenu */
 .overview { display: flex; flex-direction: column; gap: 18px; }
+/* ekspedycja w głąb dzikiej wyspy (#144) */
+.inland-stages { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.inland-stages li { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line-card); background: var(--bg-card); }
+.inland-stages li.done { border-color: var(--info); }
+.inland-stages li.next { border-color: var(--accent); }
+.inland-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font: 600 13px var(--font-head); }
+.inland-stages .story { margin: 4px 0 0; font-style: italic; }
+.inland-note { margin: 0; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--info); color: var(--info); font: 500 13px var(--font-body); }
+.inland-note.warn { border-color: var(--warn); color: var(--warn); }
+.inland-collected { margin: 0; font: 400 13px var(--font-body); }
+.inland-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 details.overview { padding: 12px 16px; border-radius: 12px; border: 1px solid var(--line-card); background: var(--bg-panel); }
 details.overview summary { cursor: pointer; font: 600 13px var(--font-head); color: var(--text-2); }
 details.overview[open] summary { margin-bottom: 14px; }

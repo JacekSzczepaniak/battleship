@@ -11,6 +11,8 @@ enum ResearchBlock: string
     case Researched = 'researched';
     /** Technologia ze zdobyczy (#121): odblokowuje ją tylko zbadanie konstrukcji zdobytego statku. */
     case BoardingOnly = 'boarding-only';
+    /** Legenda z questu (#144): odblokowuje ją tylko ekspedycja w głąb dzikiej wyspy. */
+    case QuestOnly = 'quest-only';
     case Busy = 'busy';
     case Prerequisite = 'prerequisite';
     case Rank = 'rank';
@@ -24,6 +26,7 @@ enum ResearchBlock: string
         return match ($this) {
             self::Researched => 'Technology already researched',
             self::BoardingOnly => 'Technology available only from boarded ships',
+            self::QuestOnly => 'Technology available only from quests',
             self::Busy => 'Research already in progress',
             self::Prerequisite => 'Technology requires previous level in branch',
             self::Rank => sprintf('Technology locked: requires rank %s', $technology->academyLevel()->requiredRank()?->value),

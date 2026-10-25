@@ -211,17 +211,41 @@
                 </div>
             </section>
 
+            <!-- Nawigator (#153): plan trasy i żegluga krok po kroku zwykłymi rejsami -->
+            <NavigatorPanel
+                v-if="expedition.world.navigator.available"
+                :navigator="expedition.world.navigator"
+                :target="navTarget"
+                :plan="navPlan"
+                :loading="navLoading"
+                :avoid="navAvoid"
+                :picking="navPicking"
+                :voyage="navVoyage"
+                :busy="busy || sailing"
+                :blocked="navBlocked"
+                :counterattack-name="counterattack.pending?.islandName ?? null"
+                @target="setNavTarget"
+                @pick="navPicking = !navPicking"
+                @avoid="navAvoid = $event"
+                @start="onNavStart"
+                @continue="onNavContinue"
+                @cancel="onNavCancel"
+            />
+
             <div class="main">
                 <SeaMap
                     ref="seaMap"
                     :expedition="mapView?.expedition ?? expedition"
-                    :busy="busy || !!encounter"
+                    :busy="busy || !!encounter || navVoyage !== null"
                     :note="sailing ? voyageNote : encounter ? 'Spotkanie czeka na decyzję — rejs stoi.' : seaMsg"
                     :gate-status="gateStatus"
                     :masked="mapView?.masked"
                     :fleet-hidden="mapView?.fleetHidden"
                     :animating="sailing"
+                    :planning="navPicking"
+                    :route="navRouteCells"
                     @sail="onSail"
+                    @pick="onNavPick"
                     @skip="skipVoyage"
                 />
 
@@ -782,11 +806,11 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
-    buildBuilding, buildShip, buySeaChart, createProfile, decideEncounter, decidePrize, exploreWildIsland, getExpedition, passGate, repairFleet, repairShip, sail, scrapShip, sellShip, setFieldRepairs, settleBattle, startEncounterBattle, startGuardianBattle, startIslandBattle, startSiege,
+    buildBuilding, buildShip, buySeaChart, createProfile, decideEncounter, decidePrize, exploreWildIsland, getExpedition, passGate, planVoyage, repairFleet, repairShip, sail, scrapShip, sellShip, setFieldRepairs, settleBattle, startEncounterBattle, startGuardianBattle, startIslandBattle, startSiege,
     startResearch, trade, tradeWithMerchant, transferCargo,
     BUILDING_ICONS, BUILDING_LABELS, INLAND_TREASURE_LABELS, RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, SHIP_VARIANT_LABELS, SHIP_VARIANT_NAMES, TECH_LABELS, fleetShipLabel,
     type BuildingTypeName, type EncounterDecisionName, type EncounterTypeName, type ReputationDTO, type ShipTypeName, type TechnologyName, type ExpeditionDTO, type TradePortDTO, type WildIslandDTO, type InlandActionName, type InlandOutcomeDTO, type FleetShipDTO, type GateDTO, type GuardianDTO, type IslandDTO,
-    type MarketGoodName, type MarketSideName, type PrizeDTO, type PrizeDecisionName, type RankName, type RepairFleetDTO, type ResourcesDTO, type SailResultDTO, type SeaThemeDTO, type ShipTypeDTO, type ShipVariantDTO, type ShipVariantName,
+    type MarketGoodName, type MarketSideName, type PrizeDTO, type PrizeDecisionName, type RankName, type RepairFleetDTO, type ResourcesDTO, type SailResultDTO, type SeaThemeDTO, type VoyagePlanDTO, type ShipTypeDTO, type ShipVariantDTO, type ShipVariantName,
 } from '../api/expeditionApi';
 import { ApiError } from '../api/http';
 import {
@@ -804,6 +828,7 @@ import FleetPresetPicker from '../components/FleetPresetPicker.vue';
 import FleetPanel from '../components/FleetPanel.vue';
 import ScrapButton from '../components/ScrapButton.vue';
 import MarketPanel from '../components/MarketPanel.vue';
+import NavigatorPanel, { type NavTarget, type NavVoyage } from '../components/NavigatorPanel.vue';
 import SeaMap from '../components/SeaMap.vue';
 import SettlementPanel from '../components/SettlementPanel.vue';
 import TechTreePanel from '../components/TechTreePanel.vue';
@@ -1162,13 +1187,24 @@ function guardianFleet(guardian: Pick<GuardianDTO, 'fleet'> | { fleet: ShipTypeN
     return [...counts].map(([name, n]) => (n > 1 ? `${n}× ${name}` : name)).join(', ');
 }
 
-async function onSail(x: number, y: number) {
+/**
+ * Wynik kroku żeglugi dla Nawigatora (#153): powód zatrzymania trasy albo null,
+ * gdy można płynąć dalej; undefined = krok się nie udał (błąd w `error`).
+ */
+type StepOutcome = { stop: string | null } | undefined;
+
+function onSail(x: number, y: number) {
+    void sailStep(x, y);
+}
+
+async function sailStep(x: number, y: number): Promise<StepOutcome> {
     const profileId = getProfileId();
     const start = expedition.value?.world.position;
-    if (!profileId || !start) return;
+    if (!profileId || !start) return undefined;
     busy.value = true;
     error.value = '';
     try {
+        const before = expedition.value;
         const result = await sail(profileId, x, y);
         const next = await getExpedition(profileId);
         const from: Cell = [start.x, start.y];
@@ -1182,11 +1218,29 @@ async function onSail(x: number, y: number) {
                 from, to, discovered: result.discoveredNow, onReveal: hooks.onReveal, onArrive: hooks.onArrive,
                 stopped, docks: hooks.docks,
             }), true);
+        return { stop: stepStop(result, before, next) };
     } catch (e: any) {
         error.value = e?.message ?? 'Żegluga nie powiodła się';
+        return undefined;
     } finally {
         busy.value = false;
     }
+}
+
+/**
+ * Czy trasa Nawigatora staje po kroku (#153): sztorm, spotkanie, nowa
+ * zapowiedź kontrataku albo dokowanie przy wyspie, porcie lub dzikiej wyspie.
+ * Sektor bramy nie zatrzymuje — trasa przechodzi przez nią w następnym kroku.
+ */
+function stepStop(result: SailResultDTO, before: ExpeditionDTO | null, next: ExpeditionDTO): string | null {
+    if (result.event) return 'sztorm';
+    if (result.encounter) return 'spotkanie na morzu';
+    const pending = next.counterattack.pending;
+    if (pending && pending.announcedAt !== before?.counterattack.pending?.announcedAt) return `zapowiedź kontrataku na ${pending.islandName}`;
+    const place = placeOf(next);
+    const atGate = next.world.gates.some(g => g.present);
+    if (place && !atGate && place.key !== placeOf(before)?.key) return place.label.toLowerCase();
+    return null;
 }
 
 /** Kartografia po wpłynięciu na sektor — rejsem albo przez bramę. Sztorm opisuje dziennik. */
@@ -1198,12 +1252,17 @@ function voyageMessage(result: SailResultDTO): string[] {
 }
 
 /** Przejście przez otwartą bramę: 1 tik, flota ląduje na sektorze bramy drugiego akwenu. */
-async function onPassGate(gate: GateDTO) {
+function onPassGate(gate: GateDTO) {
+    void passGateStep(gate);
+}
+
+async function passGateStep(gate: GateDTO): Promise<StepOutcome> {
     const profileId = getProfileId();
-    if (!profileId) return;
+    if (!profileId) return undefined;
     busy.value = true;
     error.value = '';
     try {
+        const before = expedition.value;
         const result = await passGate(profileId, gate.id);
         const next = await getExpedition(profileId);
         squadPick.value = null;
@@ -1214,11 +1273,151 @@ async function onPassGate(gate: GateDTO) {
                 at: [at.x, at.y], to: [result.position.x, result.position.y], discovered: result.discoveredNow,
                 swap: hooks.swap, onReveal: hooks.onReveal, onArrive: hooks.onArrive, stopped,
             }) : null, false);
+        return { stop: stepStop(result, before, next) };
     } catch (e: any) {
         error.value = e?.message ?? 'Przejście przez bramę nie powiodło się';
+        return undefined;
     } finally {
         busy.value = false;
     }
+}
+
+// --- Nawigator (#153) ---
+
+const navTarget = ref<NavTarget | null>(null);
+const navAvoid = ref(false);
+const navPicking = ref(false);
+const navPlan = ref<VoyagePlanDTO | null>(null);
+const navLoading = ref(false);
+/** Trasa w toku; paused = powód zatrzymania, po którym czeka „Płyń dalej”. */
+const navVoyage = ref<NavVoyage | null>(null);
+let navCancelled = false;
+let navRequest = 0;
+
+function setNavTarget(target: NavTarget | null) {
+    navPicking.value = false;
+    navTarget.value = target;
+}
+
+function onNavPick(x: number, y: number) {
+    const exp = expedition.value;
+    if (!exp) return;
+    const known = exp.world.navigator.destinations.find(d => d.sea === exp.world.sea.id && d.x === x && d.y === y);
+    setNavTarget({ sea: exp.world.sea.id, x, y, label: known ? `${known.name} (${known.seaName})` : `sektor ${sectorLabel({ x, y })} (${exp.world.sea.name})` });
+}
+
+/** Plan od bieżącej pozycji floty; starsza odpowiedź nie nadpisze nowszej. */
+async function planNavRoute() {
+    const profileId = getProfileId();
+    const target = navTarget.value;
+    const request = ++navRequest;
+    if (!profileId || !target) {
+        navPlan.value = null;
+        return;
+    }
+    navLoading.value = true;
+    try {
+        const plan = await planVoyage(profileId, target.sea, target.x, target.y, navAvoid.value);
+        if (request === navRequest) navPlan.value = plan;
+    } catch (e: any) {
+        if (request === navRequest) {
+            navPlan.value = null;
+            error.value = e?.message ?? 'Nawigator nie wyznaczył trasy';
+        }
+    } finally {
+        if (request === navRequest) navLoading.value = false;
+    }
+}
+
+watch([navTarget, navAvoid], () => { void planNavRoute(); });
+// ręczny rejs, brama albo decyzja zmienia pozycję i tik — plan liczy się od nowa (poza trasą w toku)
+watch(() => {
+    const w = expedition.value?.world;
+    return w ? `${w.sea.id}@${w.position.x}:${w.position.y}#${w.tick}` : '';
+}, () => { if (navTarget.value && !navVoyage.value) void planNavRoute(); });
+
+/** Kroki trasy na akwenie floty: numer kroku i ryzyko sztormu do narysowania na mapie. */
+const navRouteCells = computed(() => {
+    const steps = navPlan.value?.route?.steps ?? [];
+    const sea = (mapView.value?.expedition ?? expedition.value)?.world.sea.id;
+    const done = navVoyage.value?.done ?? 0;
+    const cells = new Map<string, { n: number; risk: boolean; last: boolean }>();
+    steps.forEach((step, i) => {
+        if (step.sea === sea) cells.set(`${step.x}:${step.y}`, { n: done + i + 1, risk: step.risk, last: i === steps.length - 1 });
+    });
+    return cells;
+});
+
+/** Co wstrzymuje start albo „Płyń dalej”: spotkanie, bitwa, ekspedycja w głąb lądu. */
+const navBlocked = computed(() => {
+    if (encounter.value) return 'Spotkanie czeka na decyzję — potem płyń dalej.';
+    if (pendingBattle.value) return 'Trwa bitwa — rozstrzygnij ją, zanim popłyniesz dalej.';
+    if (expedition.value?.world.wildIsland?.expedition) return 'Trwa ekspedycja w głąb lądu — wróć na statki.';
+    return null;
+});
+
+function onNavStart() {
+    navVoyage.value = { done: 0, total: navPlan.value?.route?.ticks ?? 0, paused: null };
+    void runNavVoyage();
+}
+
+async function onNavContinue() {
+    if (!navVoyage.value) return;
+    await planNavRoute();
+    const ticks = navPlan.value?.route?.ticks ?? 0;
+    if (!navPlan.value?.route || ticks === 0) {
+        navVoyage.value.paused = navPlan.value?.reason ? 'trasa jest już niedostępna' : navVoyage.value.paused;
+        return;
+    }
+    navVoyage.value = { done: navVoyage.value.done, total: navVoyage.value.done + ticks, paused: null };
+    void runNavVoyage();
+}
+
+/** Anuluj: trasa przepada; krok w trakcie dopływa do końca. */
+function onNavCancel() {
+    navCancelled = true;
+    if (navVoyage.value?.paused !== null) navVoyage.value = null;
+    void planNavRoute();
+}
+
+/**
+ * Trasa krok po kroku (#153): każdy krok to zwykły rejs albo przejście przez
+ * bramę z animacją (#146), za 1 tik przez passTicks() w backendzie. Staje na
+ * zdarzeniu (stepStop); „Płyń dalej” liczy trasę od nowa z miejsca floty.
+ */
+async function runNavVoyage() {
+    navCancelled = false;
+    const steps = navPlan.value?.route?.steps ?? [];
+    for (let i = 0; i < steps.length; i++) {
+        const voyage = navVoyage.value;
+        if (navCancelled || !voyage) break;
+        const step = steps[i]!;
+        const gate = step.type === 'gate' ? expedition.value?.world.gates.find(g => g.id === step.gate) : undefined;
+        const outcome = step.type === 'gate'
+            ? (gate ? await passGateStep(gate) : undefined)
+            : await sailStep(step.x, step.y);
+        if (outcome === undefined) {
+            voyage.paused = 'krok się nie udał';
+            void planNavRoute();
+            return;
+        }
+        voyage.done++;
+        if (i === steps.length - 1) break;
+        if (outcome.stop) {
+            voyage.paused = outcome.stop;
+            // plan pozostałej drogi od miejsca postoju: tiki, sztormy, kontratak
+            void planNavRoute();
+            return;
+        }
+    }
+    if (navCancelled) {
+        navVoyage.value = null;
+        void planNavRoute();
+        return;
+    }
+    seaMsg.value = [`🧭 Trasa ukończona: ${navTarget.value?.label ?? ''}`, seaMsg.value].filter(Boolean).join(' · ');
+    navVoyage.value = null;
+    navTarget.value = null;
 }
 
 /** Powód blokady budowy typu; null = można budować. */

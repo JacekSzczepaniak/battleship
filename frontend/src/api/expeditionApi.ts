@@ -323,10 +323,59 @@ export interface WorldDTO {
     stormChance: number;
     // najdalszy sektor osiągalny w jednym rejsie (większa z różnic x i y); Żegluga dwusektorowa: 2
     sailRange: number;
+    // Nawigator (#153): planowanie trasy i jej cele na znanych akwenach
+    navigator: NavigatorDTO;
     // zegar świata: liczba akcji morskich (rejs, bitwa)
     tick: number;
     // bandery na akwenach, które kapitan zna (#109): pełna bandera działa przy obronie wyspy swojego akwenu
     flags: SeaFlagDTO[];
+}
+
+// --- Nawigator (#153) ---
+
+export interface NavigatorDestinationDTO {
+    sea: string;
+    seaName: string;
+    kind: 'island' | 'port' | 'wild' | 'gate';
+    id: string;
+    name: string;
+    x: number;
+    y: number;
+}
+
+export interface NavigatorDTO {
+    available: boolean;
+    destinations: NavigatorDestinationDTO[];
+}
+
+/** Krok trasy: zwykły rejs (sea = akwen rejsu) albo przejście przez bramę (sea = akwen za bramą, x/y = sektor przybycia). */
+export interface RouteStepDTO {
+    type: 'sail' | 'gate';
+    sea: string;
+    x: number;
+    y: number;
+    gate: string | null;
+    // pierwsze wpłynięcie na sektor nieodwiedzony: ryzyko sztormu
+    risk: boolean;
+    // wyspa, port albo dzika wyspa: trasa staje tu na dokowaniu
+    dock: boolean;
+}
+
+export interface VoyagePlanDTO {
+    target: { sea: string; x: number; y: number };
+    avoidUnvisited: boolean;
+    tick: number;
+    reason: 'undiscovered' | 'no-route' | 'no-safe-route' | null;
+    route: {
+        steps: RouteStepDTO[];
+        ticks: number;
+        stormSectors: number;
+        arrivalTick: number;
+        // szansa sztormu (%) na akwenach trasy
+        stormChance: Record<string, number>;
+    } | null;
+    // zapowiedziany kontratak: zdąży trasa krótsza niż czas do uderzenia
+    counterattack: { island: string; strikeAt: number; ticksLeft: number; inTime: boolean; targetsIsland: boolean } | null;
 }
 
 // Domain/Expedition/MarketGood i MarketSide (#140)
@@ -468,7 +517,7 @@ export interface LastCounterattackDTO {
 // drzewko technologii (Epic G): katalog zawiera tylko działające technologie
 export type TechBranchName = 'kadluby' | 'uzbrojenie' | 'nawigacja' | 'osady';
 export type TechnologyName = 'spichlerze' | 'mapy-sztormowe' | 'sonar-dalekiego-zasiegu' | 'zegluga-dwusektorowa' | 'pojemne-ladownie' | 'dok-remontowy' | 'lepsze-narzedzia' | 'niszczyciel-zwiadowczy' | 'nawigacja-oceaniczna'
-    | 'kuter-torpedowy' | 'ciezki-niszczyciel' | 'lotniskowiec-eskortowy' | 'kuter-remontowy' | 'czarna-perla';
+    | 'kuter-torpedowy' | 'ciezki-niszczyciel' | 'lotniskowiec-eskortowy' | 'kuter-remontowy' | 'czarna-perla' | 'nawigator';
 
 // ścieżka odblokowania (#121): uczelnia (drzewko z poziomami), zbadanie konstrukcji zdobytego statku
 // albo legenda z ekspedycji (#144)
@@ -496,6 +545,7 @@ export const TECH_LABELS: Record<TechnologyName, string> = {
     'lotniskowiec-eskortowy': 'Lotniskowiec eskortowy',
     'kuter-remontowy': 'Kuter remontowy',
     'czarna-perla': 'Czarna perła',
+    nawigator: 'Nawigator',
 };
 
 // powód blokady badania (Domain/Expedition/ResearchBlock); null = można badać
@@ -927,6 +977,12 @@ export async function transferCargo(
     profileId: string, islandId: string, direction: 'load' | 'unload', amount: Partial<ResourcesDTO>,
 ): Promise<CargoTransferDTO> {
     return http.post<CargoTransferDTO>(`/profiles/${profileId}/cargo`, { islandId, direction, ...amount });
+}
+
+/** Plan trasy Nawigatora (#153): bez ruchu floty; płynie się nią zwykłymi rejsami i przejściami przez bramy. */
+export async function planVoyage(profileId: string, sea: string, x: number, y: number, avoidUnvisited: boolean): Promise<VoyagePlanDTO> {
+    const query = new URLSearchParams({ sea, x: String(x), y: String(y), avoidUnvisited: avoidUnvisited ? '1' : '0' });
+    return http.get<VoyagePlanDTO>(`/profiles/${profileId}/navigator/route?${query}`);
 }
 
 export async function sail(profileId: string, x: number, y: number): Promise<SailResultDTO> {

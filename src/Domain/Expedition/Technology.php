@@ -54,12 +54,15 @@ enum Technology: string
     /** Legenda tylko z questu (#144): +1 do widoczności na wszystkich akwenach. */
     case CzarnaPerla = 'czarna-perla';
 
+    /** Planowanie trasy po odkrytych sektorach i przez otwarte bramy: seria zwykłych rejsów za te same tiki (#153). */
+    case Nawigator = 'nawigator';
+
     public function branch(): TechBranch
     {
         return match ($this) {
             self::Spichlerze, self::LepszeNarzedzia => TechBranch::Osady,
             self::PojemneLadownie, self::DokRemontowy, self::KuterRemontowy => TechBranch::Kadluby,
-            self::MapySztormowe, self::ZeglugaDwusektorowa, self::NawigacjaOceaniczna, self::CzarnaPerla => TechBranch::Nawigacja,
+            self::MapySztormowe, self::ZeglugaDwusektorowa, self::NawigacjaOceaniczna, self::CzarnaPerla, self::Nawigator => TechBranch::Nawigacja,
             self::SonarDalekiegoZasiegu, self::NiszczycielZwiadowczy,
             self::KuterTorpedowy, self::CiezkiNiszczyciel, self::LotniskowiecEskortowy => TechBranch::Uzbrojenie,
         };
@@ -70,7 +73,7 @@ enum Technology: string
     {
         return match ($this) {
             self::Spichlerze, self::MapySztormowe, self::SonarDalekiegoZasiegu, self::PojemneLadownie => TechLevel::First,
-            self::ZeglugaDwusektorowa, self::LepszeNarzedzia, self::DokRemontowy, self::NiszczycielZwiadowczy => TechLevel::Second,
+            self::ZeglugaDwusektorowa, self::LepszeNarzedzia, self::DokRemontowy, self::NiszczycielZwiadowczy, self::Nawigator => TechLevel::Second,
             self::NawigacjaOceaniczna, self::KuterRemontowy => TechLevel::Third,
             self::KuterTorpedowy, self::CiezkiNiszczyciel, self::LotniskowiecEskortowy, self::CzarnaPerla => null,
         };

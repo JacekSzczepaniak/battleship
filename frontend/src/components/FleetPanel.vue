@@ -2,6 +2,7 @@
     Flota (zakładka Rejsu, #111): jednostki zgrupowane po typie i wariancie —
     liczba sztuk, rola, długość segmentami i stan. Remont i złomowanie (#124)
     statku grupy w stoczni portu; powód blokady liczy widok (zna wyspy i magazyny).
+    Przełącznik napraw kutrów remontowych poza stocznią (#152), gdy flota ma taki kuter.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -18,6 +19,8 @@ const props = defineProps<{
     shipTypes: ShipTypeDTO[];
     busy: boolean;
     unescortedConvoy: boolean;
+    // naprawy kutrów remontowych poza stocznią (#152)
+    fieldRepairs: boolean;
     // powód blokady remontu; null = można remontować
     repairBlock: (ship: FleetShipDTO) => string | null;
     // powód blokady złomowania; null = można złomować
@@ -27,6 +30,7 @@ const props = defineProps<{
 const emit = defineEmits<{
     repair: [ship: FleetShipDTO];
     scrap: [ship: FleetShipDTO];
+    fieldRepairs: [enabled: boolean];
 }>();
 
 // od największego kadłuba, jak w składzie bitewnym
@@ -59,6 +63,10 @@ const groups = computed<Group[]>(() => {
 
 const damagedCount = computed(() => props.fleet.filter(s => s.damaged).length);
 
+// kutry remontowe (#152): naprawia tylko sprawny, jeden statek do 3 pól na tik
+const repairers = computed(() => props.fleet.filter(s => s.variant === 'kuter-remontowy'));
+const workingRepairers = computed(() => repairers.value.filter(s => !s.damaged).length);
+
 /** Statek do złomowania: pierwszy bez blokady domeny (np. nie z nierozliczonej bitwy). */
 function scrapCandidate(ships: FleetShipDTO[]): FleetShipDTO {
     return ships.find(s => s.scrapBlock === null) ?? ships[0];
@@ -67,7 +75,9 @@ function scrapCandidate(ships: FleetShipDTO[]): FleetShipDTO {
 function role(ship: FleetShipDTO): string {
     const type = props.shipTypes.find(t => t.type === ship.type);
     const weapon = carriedWeapon(ship.length, ship.variant ? VARIANTS[ship.variant].w : undefined);
-    const arms = type?.armed ? `nośnik · ${weapon ?? 'strzał'}` : ship.type === 'transportowiec' ? 'bez broni · wymaga eskorty' : 'bez uzbrojenia';
+    const arms = ship.variant === 'kuter-remontowy'
+        ? 'warsztat · bez broni, nie eskortuje · naprawia poza stocznią'
+        : ship.armed ? `nośnik · ${weapon ?? 'strzał'}` : ship.type === 'transportowiec' ? 'bez broni · wymaga eskorty' : 'bez uzbrojenia';
     return type ? `${arms} · ładownia ${type.cargoCapacity}` : arms;
 }
 
@@ -87,7 +97,23 @@ function unitsLabel(n: number): string {
             <span v-if="damagedCount === 0" class="tag ok">Wszystkie sprawne</span>
             <span v-else class="tag dmg">Uszkodzone: {{ damagedCount }}</span>
         </div>
-        <p v-if="unescortedConvoy" class="warn">⚠️ Konwój bez eskorty — podwójne straty w sztormie. Eskortuje sprawny kuter, niszczyciel albo lotniskowiec.</p>
+        <p v-if="unescortedConvoy" class="warn">⚠️ Konwój bez eskorty — podwójne straty w sztormie. Eskortuje sprawny kuter, niszczyciel albo lotniskowiec (kuter remontowy nie ma broni).</p>
+
+        <label v-if="repairers.length" class="field-repairs" :class="{ off: !fieldRepairs }">
+            <input
+                type="checkbox"
+                :checked="fieldRepairs"
+                :disabled="busy"
+                @change="emit('fieldRepairs', ($event.target as HTMLInputElement).checked)"
+            />
+            <span>
+                🛠️ Naprawy w rejsie {{ fieldRepairs ? 'włączone' : 'wyłączone' }}
+                <span class="hint">
+                    sprawne kutry remontowe: {{ workingRepairers }} z {{ repairers.length }} — każdy na tik naprawia jeden statek do 3 pól,
+                    od najmniejszego, za koszt remontu z ładowni. Wyłącz, żeby oszczędzać ładunek.
+                </span>
+            </span>
+        </label>
 
         <ul class="groups">
             <li v-for="g in groups" :key="g.key" class="group" :class="{ dmg: g.damaged.length > 0 }">
@@ -128,6 +154,10 @@ function unitsLabel(n: number): string {
 .tag.ok { background: var(--bg-card-active); border: 1px solid var(--line-strong); color: var(--info); }
 .tag.dmg { background: #2a2418; border: 1px solid #5a4a28; color: var(--warn); }
 .warn { margin: 0; font: 500 12px var(--font-mono); color: var(--warn); }
+.field-repairs { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; border-radius: 12px; background: var(--bg-card); border: 1px solid var(--line-card); font: 600 13px var(--font-head); cursor: pointer; }
+.field-repairs.off { opacity: .75; }
+.field-repairs input { margin-top: 3px; }
+.field-repairs .hint { display: block; margin-top: 2px; font: 500 11px var(--font-mono); color: var(--text-muted); }
 .groups { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .group { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 4px 14px; padding: 12px 14px; border-radius: 12px; background: var(--bg-card); border: 1px solid var(--line-card); }
 .group.dmg { border-color: #5a4a28; }

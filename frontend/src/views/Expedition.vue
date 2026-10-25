@@ -540,10 +540,10 @@
                                         :key="v.variant"
                                         class="btn btn-small btn-secondary"
                                         :disabled="busy || buildBlock(t, v) !== null"
-                                        :title="buildBlock(t, v) ?? `nośnik: ${carriedWeapon(t.length, VARIANTS[v.variant].w)} · wariant stały`"
+                                        :title="buildBlock(t, v) ?? `${carriedWeapon(t.length, VARIANTS[v.variant].w) ? `nośnik: ${carriedWeapon(t.length, VARIANTS[v.variant].w)}` : 'bez broni'} · wariant stały`"
                                         @click="onBuild(t, v.variant)"
                                     >
-                                        Buduj {{ SHIP_VARIANT_LABELS[v.variant] }} · {{ carriedWeapon(t.length, VARIANTS[v.variant].w) }} ({{ formatResources(t.buildCost) }})
+                                        Buduj {{ SHIP_VARIANT_LABELS[v.variant] }} · {{ carriedWeapon(t.length, VARIANTS[v.variant].w) ?? 'warsztat' }} ({{ formatResources(t.buildCost) }})
                                     </button>
                                     <span v-if="buildBlock(t)" class="why">{{ buildBlock(t) }}</span>
                                     <span v-for="v in lockedVariants(t)" :key="v.variant" class="why">
@@ -663,10 +663,12 @@
                             :ship-types="expedition.shipTypes"
                             :busy="busy"
                             :unescorted-convoy="unescortedConvoy"
+                            :field-repairs="expedition.profile.fieldRepairs"
                             :repair-block="repairBlock"
                             :scrap-block="scrapBlock"
                             @repair="onRepair"
                             @scrap="onScrap"
+                            @field-repairs="onFieldRepairs"
                         />
                     </div>
 
@@ -702,7 +704,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
-    buildBuilding, buildShip, createProfile, decideEncounter, decidePrize, getExpedition, passGate, repairFleet, repairShip, sail, scrapShip, sellShip, settleBattle, startEncounterBattle, startGuardianBattle, startIslandBattle, startSiege,
+    buildBuilding, buildShip, createProfile, decideEncounter, decidePrize, getExpedition, passGate, repairFleet, repairShip, sail, scrapShip, sellShip, setFieldRepairs, settleBattle, startEncounterBattle, startGuardianBattle, startIslandBattle, startSiege,
     startResearch, trade, tradeWithMerchant, transferCargo,
     BUILDING_ICONS, BUILDING_LABELS, RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, SHIP_VARIANT_LABELS, SHIP_VARIANT_NAMES, TECH_LABELS, fleetShipLabel,
     type BuildingTypeName, type EncounterDecisionName, type ShipTypeName, type TechnologyName, type ExpeditionDTO, type TradePortDTO, type FleetShipDTO, type GateDTO, type GuardianDTO, type IslandDTO,
@@ -1400,6 +1402,22 @@ function onRepairFleet() {
 function onRepair(ship: FleetShipDTO) {
     fleetRepairResult.value = null;
     return inPort((profileId, island) => repairShip(profileId, island.id, ship.id), 'Remont nie powiódł się');
+}
+
+// przełącznik napraw kutrów remontowych poza stocznią (#152) — bez tiku, działa także w rejsie
+async function onFieldRepairs(enabled: boolean) {
+    const profileId = getProfileId();
+    if (!profileId || !expedition.value) return;
+    busy.value = true;
+    error.value = '';
+    try {
+        const { fieldRepairs } = await setFieldRepairs(profileId, enabled);
+        expedition.value.profile.fieldRepairs = fieldRepairs;
+    } catch (e: any) {
+        error.value = e?.message ?? 'Zmiana napraw w rejsie nie powiodła się';
+    } finally {
+        busy.value = false;
+    }
 }
 
 function onScrap(ship: FleetShipDTO) {

@@ -80,7 +80,7 @@ it('uczelnia kosztuje 30 drewna, 20 stali i 15 złota i stoi także w Zatoce Roz
 });
 
 it('katalog zawiera tylko działające technologie, a poziom niesie koszt, czas i rangę', function () {
-    expect(Technology::cases())->toBe([Technology::Spichlerze, Technology::MapySztormowe, Technology::SonarDalekiegoZasiegu, Technology::ZeglugaDwusektorowa, Technology::PojemneLadownie, Technology::DokRemontowy, Technology::LepszeNarzedzia, Technology::NiszczycielZwiadowczy, Technology::NawigacjaOceaniczna, Technology::KuterTorpedowy, Technology::CiezkiNiszczyciel, Technology::LotniskowiecEskortowy])
+    expect(Technology::cases())->toBe([Technology::Spichlerze, Technology::MapySztormowe, Technology::SonarDalekiegoZasiegu, Technology::ZeglugaDwusektorowa, Technology::PojemneLadownie, Technology::DokRemontowy, Technology::LepszeNarzedzia, Technology::NiszczycielZwiadowczy, Technology::NawigacjaOceaniczna, Technology::KuterTorpedowy, Technology::CiezkiNiszczyciel, Technology::LotniskowiecEskortowy, Technology::KuterRemontowy])
         ->and(Technology::Spichlerze->branch())->toBe(TechBranch::Osady)
         ->and(Technology::MapySztormowe->branch())->toBe(TechBranch::Nawigacja)
         ->and(Technology::Spichlerze->level())->toBe(TechLevel::First)

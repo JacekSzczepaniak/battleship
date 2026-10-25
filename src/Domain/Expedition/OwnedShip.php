@@ -30,6 +30,18 @@ final class OwnedShip
         return new self(Uuid::v4()->toRfc4122(), $type, variant: $variant);
     }
 
+    /** Nośnik broni (eskorta konwoju): wariant bez broni, np. kuter remontowy (#152), nim nie jest. */
+    public function isArmed(): bool
+    {
+        return $this->variant?->isArmed() ?? $this->type->isArmed();
+    }
+
+    /** Kuter remontowy (#152): naprawia flotę poza stocznią, gdy jest sprawny. */
+    public function isFieldRepairer(): bool
+    {
+        return ShipVariant::KuterRemontowy === $this->variant;
+    }
+
     public function isDamaged(): bool
     {
         return $this->damaged;

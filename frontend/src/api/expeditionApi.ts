@@ -45,7 +45,8 @@ export const SHIP_LABELS: Record<ShipTypeName, string> = {
 
 // wariant statku (#99): ten sam kadłub, inne wyposażenie; trzy ostatnie ma tylko wróg,
 // dopóki gracz nie zbada konstrukcji zdobytego statku (#121)
-export type ShipVariantName = 'torpedowy' | 'zwiadowczy' | 'kuter-torpedowy' | 'ciezki-niszczyciel' | 'lotniskowiec-eskortowy';
+export type ShipVariantName = 'torpedowy' | 'zwiadowczy' | 'kuter-torpedowy' | 'ciezki-niszczyciel' | 'lotniskowiec-eskortowy'
+    | 'kuter-remontowy';
 
 // krótka etykieta wariantu przy przycisku budowy („Buduj zwiadowczy”)
 export const SHIP_VARIANT_LABELS: Record<ShipVariantName, string> = {
@@ -54,6 +55,7 @@ export const SHIP_VARIANT_LABELS: Record<ShipVariantName, string> = {
     'kuter-torpedowy': 'torpedowy',
     'ciezki-niszczyciel': 'ciężki',
     'lotniskowiec-eskortowy': 'eskortowy',
+    'kuter-remontowy': 'remontowy',
 };
 
 // pełna nazwa statku w wariancie
@@ -63,6 +65,7 @@ export const SHIP_VARIANT_NAMES: Record<ShipVariantName, string> = {
     'kuter-torpedowy': 'Kuter torpedowy',
     'ciezki-niszczyciel': 'Ciężki niszczyciel',
     'lotniskowiec-eskortowy': 'Lotniskowiec eskortowy',
+    'kuter-remontowy': 'Kuter remontowy',
 };
 
 /** Nazwa statku floty z wariantem: „Niszczyciel zwiadowczy”, „Ciężki niszczyciel”, „Kuter”. */
@@ -126,6 +129,8 @@ export interface ExpeditionProfileDTO extends ProfileDTO {
     enemyShipsSunk: number;
     // wyspy pod banderą kapitana
     ownedIslands: number;
+    // naprawy kutrów remontowych poza stocznią (#152); przełącznik w zakładce Flota
+    fieldRepairs: boolean;
 }
 
 export interface FleetShipDTO {
@@ -134,6 +139,8 @@ export interface FleetShipDTO {
     length: number;
     // stały od budowy; null = typ bez wariantów
     variant: ShipVariantName | null;
+    // nośnik broni = eskorta konwoju; kuter remontowy (#152) nim nie jest
+    armed: boolean;
     damaged: boolean;
     repairCost: ResourcesDTO;
     // złomowanie (#124): zwrot do magazynu wyspy (uszkodzony oddaje mniej o remont) i blokada domeny;
@@ -370,7 +377,7 @@ export interface LastCounterattackDTO {
 // drzewko technologii (Epic G): katalog zawiera tylko działające technologie
 export type TechBranchName = 'kadluby' | 'uzbrojenie' | 'nawigacja' | 'osady';
 export type TechnologyName = 'spichlerze' | 'mapy-sztormowe' | 'sonar-dalekiego-zasiegu' | 'zegluga-dwusektorowa' | 'pojemne-ladownie' | 'dok-remontowy' | 'lepsze-narzedzia' | 'niszczyciel-zwiadowczy' | 'nawigacja-oceaniczna'
-    | 'kuter-torpedowy' | 'ciezki-niszczyciel' | 'lotniskowiec-eskortowy';
+    | 'kuter-torpedowy' | 'ciezki-niszczyciel' | 'lotniskowiec-eskortowy' | 'kuter-remontowy';
 
 // ścieżka odblokowania (#121): uczelnia (drzewko z poziomami) albo zbadanie konstrukcji zdobytego statku
 export type TechUnlockName = 'academy' | 'boarding';
@@ -395,6 +402,7 @@ export const TECH_LABELS: Record<TechnologyName, string> = {
     'kuter-torpedowy': 'Kuter torpedowy',
     'ciezki-niszczyciel': 'Ciężki niszczyciel',
     'lotniskowiec-eskortowy': 'Lotniskowiec eskortowy',
+    'kuter-remontowy': 'Kuter remontowy',
 };
 
 // powód blokady badania (Domain/Expedition/ResearchBlock); null = można badać
@@ -445,7 +453,7 @@ export type LogEventName =
     | 'research-completed' | 'ship-built' | 'building-built' | 'gate-opened' | 'gate-passed'
     | 'ship-boarded' | 'prize-decided' | 'island-besieged' | 'siege-failed' | 'ship-scrapped'
     | 'market-trade' | 'ship-sold'
-    | 'encounter-met' | 'encounter-resolved' | 'encounter-battle';
+    | 'encounter-met' | 'encounter-resolved' | 'encounter-battle' | 'field-repair';
 
 export interface LogEntryDTO {
     tick: number;
@@ -715,6 +723,11 @@ export interface RepairFleetDTO {
 
 export async function repairFleet(profileId: string, islandId: string): Promise<RepairFleetDTO> {
     return http.post<RepairFleetDTO>(`/profiles/${profileId}/fleet/repair`, { islandId });
+}
+
+/** Przełącznik napraw kutrów remontowych poza stocznią (#152); nie kosztuje tiku. */
+export async function setFieldRepairs(profileId: string, enabled: boolean): Promise<{ fieldRepairs: boolean }> {
+    return http.put<{ fieldRepairs: boolean }>(`/profiles/${profileId}/fleet/field-repairs`, { enabled });
 }
 
 export interface ScrapShipDTO {

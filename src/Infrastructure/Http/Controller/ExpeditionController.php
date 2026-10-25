@@ -16,6 +16,7 @@ use App\Application\Expedition\Sail;
 use App\Application\Expedition\SaveFleetPreset;
 use App\Application\Expedition\ScrapShip;
 use App\Application\Expedition\SellShip;
+use App\Application\Expedition\SetFieldRepairs;
 use App\Application\Expedition\SettleBattle;
 use App\Application\Expedition\StartGuardianBattle;
 use App\Application\Expedition\StartIslandBattle;
@@ -65,6 +66,7 @@ final class ExpeditionController
         private ScrapShip $scrapShip,
         private TradeAtPort $tradeAtPort,
         private SellShip $sellShip,
+        private SetFieldRepairs $setFieldRepairs,
     ) {
     }
 
@@ -222,6 +224,21 @@ final class ExpeditionController
             'stockpile' => $result['stockpile']->toArray(),
             'cargo' => $result['cargo']->toArray(),
         ]);
+    }
+
+    /** Przełącznik napraw kutrów remontowych poza stocznią (#152). */
+    #[Route('/{id}/fleet/field-repairs', name: 'api_profiles_field_repairs', methods: ['PUT'])]
+    public function setFieldRepairs(string $id, Request $request): JsonResponse
+    {
+        $this->assertUuid($id, 'profile');
+        $enabled = $this->jsonPayload($request)['enabled'] ?? null;
+        if (!is_bool($enabled)) {
+            throw new ApiException('Missing or invalid field: enabled:bool', 'VALIDATION_ERROR', 400);
+        }
+
+        $this->setFieldRepairs->handle($id, $enabled);
+
+        return new JsonResponse(['fieldRepairs' => $enabled]);
     }
 
     /** Złomowanie statku w stoczni portu (#124): zwrot trafia do magazynu wyspy. */

@@ -4,10 +4,14 @@
 import type { FleetShipDTO, ShipTypeName } from '../api/expeditionApi';
 
 const PRIORITY: ShipTypeName[] = ['lotniskowiec', 'niszczyciel', 'kuter', 'tratwa'];
-const ARMED: ShipTypeName[] = ['lotniskowiec', 'niszczyciel', 'kuter'];
 
 export function squadCells(ships: FleetShipDTO[]): number {
     return ships.reduce((sum, s) => sum + s.length, 0);
+}
+
+/** Kolejność doboru: nośniki broni od największego, statki bez broni (tratwa, kuter remontowy) na końcu. */
+function priority(ship: FleetShipDTO): number {
+    return ship.armed ? PRIORITY.indexOf(ship.type) : PRIORITY.length;
 }
 
 /**
@@ -17,7 +21,7 @@ export function squadCells(ships: FleetShipDTO[]): number {
 export function defaultSquad(fleet: FleetShipDTO[], limit: number): FleetShipDTO[] {
     const candidates = fleet
         .filter(s => !s.damaged && PRIORITY.includes(s.type))
-        .sort((a, b) => PRIORITY.indexOf(a.type) - PRIORITY.indexOf(b.type));
+        .sort((a, b) => priority(a) - priority(b));
     const squad: FleetShipDTO[] = [];
     let cells = 0;
     for (const ship of candidates) {
@@ -35,5 +39,5 @@ export function defaultSquad(fleet: FleetShipDTO[], limit: number): FleetShipDTO
  * nie atakuje wyspy, w sztormie traci 2×.
  */
 export function isUnescortedConvoy(ships: FleetShipDTO[]): boolean {
-    return ships.some(s => s.type === 'transportowiec') && !ships.some(s => !s.damaged && ARMED.includes(s.type));
+    return ships.some(s => s.type === 'transportowiec') && !ships.some(s => !s.damaged && s.armed);
 }

@@ -71,4 +71,7 @@ enum LogEvent: string
 
     /** Rozliczona bitwa spotkania: napad na handlarza albo walka z piratem (#141, pod reputację #142). */
     case EncounterBattle = 'encounter-battle';
+
+    /** Kuter remontowy naprawił statek poza stocznią, za surowce z ładowni (#152). */
+    case FieldRepair = 'field-repair';
 }

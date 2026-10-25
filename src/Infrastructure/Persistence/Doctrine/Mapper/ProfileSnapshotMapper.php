@@ -78,6 +78,8 @@ final class ProfileSnapshotMapper
             'fleetPresets' => array_map(static fn (FleetPreset $preset) => $preset->toArray(), $profile->fleetPresets()),
             // spotkanie z rejsu czekające na decyzję (#141); null = droga wolna
             'encounter' => $profile->encounter()?->toArray(),
+            // naprawy kutrów remontowych poza stocznią (#152)
+            'fieldRepairs' => $profile->fieldRepairsEnabled(),
         ];
     }
 
@@ -182,6 +184,8 @@ final class ProfileSnapshotMapper
             fleetPresets: $this->fleetPresetsFrom($state),
             // brak klucza = profil sprzed spotkań, droga wolna
             encounter: $this->encounterFrom($state),
+            // brak klucza = profil sprzed kutra remontowego, naprawy włączone
+            fieldRepairs: (bool) ($state['fieldRepairs'] ?? true),
         );
     }
 

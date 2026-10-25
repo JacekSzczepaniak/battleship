@@ -24,7 +24,8 @@ niszczyciel, nalot=lotniskowiec, wyposażenie per statek; zatopiony nośnik
 odbiera broń; w trybie fun energia 3⚡ na turę i „Zakończ turę”, #59, oraz ruch
 statku o 1 pole, #60) · profil
 kapitana (XP nigdy nie maleje, 9 rang od rozbitka do admirała — progi
-w Filarze VIII; licznik zatopionych jednostek wroga) · flota jako majątek
+w Filarze VIII; licznik zatopionych jednostek wroga; specjalizacje bojowa
+i ekonomiczna z akcji, 5 poziomów z katalogiem perków — #160) · flota jako majątek
 (budowa/remont, stocznie, wygrana→remont / przegrana→strata; uszkodzony
 statek wozi ładunek, ale nie walczy — #92; złomowanie w stoczni za połowę
 kosztu budowy do magazynu wyspy, uszkodzony mniej o remont, bez ostatniej
@@ -632,11 +633,52 @@ zmian: nigdy nie maleje, ranga wynika z XP (nie jest zapisywana).
 rozwijane przez to, co gracz faktycznie robi (nie przez wybór z listy):
 - **bojowa** — punkty z bitew (wygrane, zatopienia, abordaże),
 - **ekonomiczna** — punkty z handlu, transportu, wydobycia, kartografii.
-Poziom specjalizacji daje perki (szkic: bojowa → tańszy remont po wygranej,
-dodatkowy strzał zwiadu; ekonomiczna → +ładownia, lepsze ceny, tańsza
-budowa). Ścieżki nie wykluczają się — profil gracza wyłania się z akcji;
-to wchłania pomysł „perków kapitanów" z poczekalni. Konkretne perki
-i progi do zaprojektowania przy epiku.
+Ścieżki nie wykluczają się — profil gracza wyłania się z akcji;
+to wchłania pomysł „perków kapitanów" z poczekalni.
+
+**Model specjalizacji (Epic K, #160)** ✅ — decyzje Jacka z 25.10.2026:
+
+- **Punkty wyłącznie z akcji, obie ścieżki naraz** (D1). Bez wstecznego
+  naliczania (D7): profile sprzed specjalizacji startują od zera.
+- **5 poziomów na ścieżkę, progi 20, 60, 120, 200 i 300 punktów** (D2).
+- **Punktacja (D3):**
+
+| ścieżka | akcja | punkty |
+|---|---|---|
+| bojowa | wygrana bitwa wyprawy (każdego rodzaju) | +5 |
+| bojowa | zatopiony wróg, także w przegranej | +1 |
+| bojowa | udany abordaż | +5 obok wygranej |
+| bojowa | wygrana obrona wyspy | +5 obok wygranej |
+| bojowa | wygrane oblężenie fortu | +10 obok wygranej |
+| ekonomiczna | złoto obrotu na rynku portu i u handlarza (zapłacone albo otrzymane) | +1 za 20 |
+| ekonomiczna | ładunek rozładowany na innej wyspie niż załadunek | +1 za 20 jednostek |
+| ekonomiczna | urobek, który złoża odłożyły do magazynu (po limicie) | +1 za 30 jednostek |
+| ekonomiczna | nowo odkryty sektor | +1 |
+
+- **Premie sumują się z wygraną:** wygrane oblężenie to 15 pkt, wygrana
+  abordażem 10. Sprzedaż statku i kupno mapy nie są obrotem.
+- **Ułamki nie przepadają:** profil liczy surowe jednostki akcji (złoto,
+  ładunek, urobek), a punkty wychodzą z dzielenia.
+- **Pochodzenie ładunku:** ładownia zostaje jedną pulą, obok niej licznik
+  „wyspa → ile jednostek stamtąd jeszcze wiozę”. Rozładunek liczy najpierw
+  jednostki z innych wysp. Ładunek bez pochodzenia (łup, kartografia, handel)
+  nie jest transportem, a straty ładowni (sztorm, płatność, kuter remontowy)
+  zabierają go jako pierwszy.
+- **Perki (D4):** jeden na poziom, działają od zdobycia poziomu. Wróg ich
+  nie dostaje (D6). Ścieżka bojowa wpływa na samą bitwę umiarkowanie, od
+  poziomu 3.
+
+| poziom | bojowa (#161) | ekonomiczna (#162) |
+|---|---|---|
+| 1 | remont po wygranej −20% | ładownia +10% |
+| 2 | próg abordażu −1 | ceny rynku −5% |
+| 3 | +1 użycie sonaru w bitwie | budowa statków −10% |
+| 4 | łup z bitew +20% | magazyn złóż +5 tików produkcji |
+| 5 | +1⚡ w pierwszej turze bitwy | ceny rynku −10% łącznie, handlarz bez dopłaty |
+
+- **UI (D5):** zakładka „Kapitan” w Rejsie (poziomy, postęp do progu,
+  źródła punktów z resztą do kolejnego punktu, perki zdobyte i następny),
+  poziomy w HUD, komunikat o awansie do potwierdzenia i wpis w dzienniku.
 
 ## Zasady projektowe
 
@@ -677,7 +719,6 @@ Akwenu 1 zacznie uwierać.
 ## Otwarte pytania
 
 - Rangi vs akweny: czy progi rosną z liczbą akwenów; gdzie osiągalny admirał; czym zapełnić lukę 250–600 XP (dziś wyspy II poziomu, a od Epica G także drugi poziom drzewka) i które rangi bramkują akwen 2? Akwen 2 otwiera się od porucznika, a admirał to końcówka gry na akwenie 3.
-- Specjalizacje: konkretne perki i progi; czy bojowa wpływa na samą bitwę, czy tylko na otoczkę (remont, zwiad)?
 - Pobojowisko: procent odzysku, po ilu tikach resztki znikają?
 - Balans z obserwacji: pełna utrata floty przy przegranej, sztormy 20%, koszty statków
 - Czy kiedyś dzielimy flotę na zespoły z własną pozycją?

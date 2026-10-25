@@ -16,6 +16,7 @@ use App\Domain\Expedition\Resources;
 use App\Domain\Expedition\SeaState;
 use App\Domain\Expedition\ShipType;
 use App\Domain\Expedition\ShipVariant;
+use App\Domain\Expedition\Specializations;
 use App\Domain\Expedition\Technology;
 use App\Domain\Game\Orientation;
 use App\Domain\Shared\ProfileId;
@@ -89,6 +90,9 @@ final class ProfileSnapshotMapper
             'artifacts' => $profile->artifacts(),
             // reputacja kupiec ↔ korsarz (#142)
             'reputation' => $profile->reputation()->value,
+            // liczniki akcji specjalizacji i pochodzenie ładunku (#160)
+            'specializations' => $profile->specializations()->toArray(),
+            'cargoOrigins' => $profile->cargoOrigins(),
         ];
     }
 
@@ -203,6 +207,9 @@ final class ProfileSnapshotMapper
             artifacts: array_map('intval', (array) ($state['artifacts'] ?? [])),
             // brak klucza = profil sprzed reputacji, start od 0
             reputation: (int) ($state['reputation'] ?? 0),
+            // brak kluczy = profil sprzed specjalizacji: zera, bez wstecznego naliczania (D7)
+            specializations: new Specializations(array_map('intval', (array) ($state['specializations'] ?? []))),
+            cargoOrigins: array_map('intval', (array) ($state['cargoOrigins'] ?? [])),
         );
     }
 

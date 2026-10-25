@@ -63,6 +63,10 @@ final class CaptainProfile
     public const CHEAPER_SHIPBUILDING_PERK_PERCENT = 10;
     public const DEPOSIT_STORAGE_PERK_TICKS = 5;
 
+    /** Perki bojowe (#161, D4 Epica K): remont statku uszkodzonego w wygranej bitwie, łup z bitew. */
+    public const REPAIR_DISCOUNT_PERK_PERCENT = 20;
+    public const LOOT_BONUS_PERK_PERCENT = 20;
+
     /** @var array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int, stronghold?: bool, encounter?: string}> klucz: gameId */
     private array $battles = [];
 
@@ -634,7 +638,7 @@ final class CaptainProfile
             throw new \DomainException('Ship is not damaged');
         }
 
-        $this->pay($islandId, $this->repairCost($ship->type));
+        $this->pay($islandId, $this->repairCostOf($ship));
         $ship->repair();
 
         return $ship;
@@ -657,11 +661,11 @@ final class CaptainProfile
                 $skipped[] = ['ship' => $ship, 'reason' => RepairSkip::ShipyardTooLow];
                 continue;
             }
-            if (!$this->stockpile($islandId)->add($this->cargo)->covers($this->repairCost($ship->type))) {
+            if (!$this->stockpile($islandId)->add($this->cargo)->covers($this->repairCostOf($ship))) {
                 $skipped[] = ['ship' => $ship, 'reason' => RepairSkip::NotEnoughResources];
                 continue;
             }
-            $this->pay($islandId, $this->repairCost($ship->type));
+            $this->pay($islandId, $this->repairCostOf($ship));
             $ship->repair();
             $repaired[] = $ship;
         }
@@ -678,7 +682,7 @@ final class CaptainProfile
     public function repairQueue(): array
     {
         $damaged = array_values(array_filter($this->fleet, static fn (OwnedShip $s) => $s->isDamaged()));
-        usort($damaged, fn (OwnedShip $a, OwnedShip $b) => $this->repairCost($a->type)->total() <=> $this->repairCost($b->type)->total());
+        usort($damaged, fn (OwnedShip $a, OwnedShip $b) => $this->repairCostOf($a)->total() <=> $this->repairCostOf($b)->total());
 
         return $damaged;
     }
@@ -731,7 +735,7 @@ final class CaptainProfile
             if (0 === $repairers) {
                 return;
             }
-            $cost = $this->repairCost($ship->type);
+            $cost = $this->repairCostOf($ship);
             if (!$this->cargo->covers($cost)) {
                 continue;
             }
@@ -754,6 +758,24 @@ final class CaptainProfile
     }
 
     /**
+     * Koszt remontu tego egzemplarza: koszt typu (z Dokiem remontowym), a dla
+     * statku uszkodzonego w wygranej bitwie z perkiem „remont po wygranej”
+     * mniej o REPAIR_DISCOUNT_PERK_PERCENT, z zaokrągleniem w dół (#161).
+     */
+    public function repairCostOf(OwnedShip $ship): Resources
+    {
+        $cost = $this->repairCost($ship->type);
+        if (!$ship->isBattleDamaged() || !$this->hasPerk(Perk::RepairDiscount)) {
+            return $cost;
+        }
+
+        return Resources::fromArray(array_map(
+            static fn (int $amount) => intdiv($amount * (100 - self::REPAIR_DISCOUNT_PERK_PERCENT), 100),
+            $cost->toArray(),
+        ));
+    }
+
+    /**
      * Zwrot ze złomowania (#124): połowa kosztu budowy typu (wariant kosztuje
      * tyle co typ), a za uszkodzony statek mniej o koszt remontu z Dokiem
      * remontowym — każdy surowiec nie mniej niż zero. Tratwa nic nie zwraca.
@@ -762,7 +784,7 @@ final class CaptainProfile
     {
         $value = $ship->type->scrapValue()->toArray();
         if ($ship->isDamaged()) {
-            $repair = $this->repairCost($ship->type)->toArray();
+            $repair = $this->repairCostOf($ship)->toArray();
             foreach ($value as $resource => $amount) {
                 $value[$resource] = max(0, $amount - $repair[$resource]);
             }
@@ -2388,7 +2410,7 @@ final class CaptainProfile
      *                                                bez wpisu stratę ponosi dowolny statek tej długości
      * @param ShipType|null           $boardedType    typ statku wroga zdobytego abordażem (#118); po wygranej czeka na decyzję
      *
-     * @return array{xp:int, loot:Resources, lost:list<string>, damaged:list<string>, cargoLost:Resources, captured:bool, besieged:bool, defense: array{held:bool, stockpileLost:Resources}|null, gateOpened:bool, prize:?Prize}
+     * @return array{xp:int, loot:Resources, lost:list<string>, damaged:list<string>, cargoLost:Resources, captured:bool, besieged:bool, defense: array{held:bool, stockpileLost:Resources}|null, gateOpened:bool, prize:?Prize, lootBonus:Resources}
      */
     public function settleBattle(GameId $gameId, string $result, int $xpAward, ?Resources $loot = null, array $sunkLengths = [], int $enemyShipsSunk = 0, array $sunkVariants = [], ?ShipType $boardedType = null, ?ShipVariant $boardedVariant = null): array
     {
@@ -2406,8 +2428,12 @@ final class CaptainProfile
         $key = (string) $gameId;
         $battle = $this->battles[$key] ?? throw new \DomainException('Battle not registered for this profile');
         if ($battle['settled']) {
-            return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => [], 'cargoLost' => Resources::none(), 'captured' => false, 'besieged' => false, 'defense' => null, 'gateOpened' => false, 'prize' => null];
+            return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => [], 'cargoLost' => Resources::none(), 'captured' => false, 'besieged' => false, 'defense' => null, 'gateOpened' => false, 'prize' => null, 'lootBonus' => Resources::none()];
         }
+
+        // perk „łup z bitew” (#161): premia wchodzi do łupu przed magazynem i ładownią
+        $lootBonus = $this->lootBonus($loot);
+        $loot = $loot->add($lootBonus);
 
         $battle['settled'] = true;
         $battle['result'] = $result;
@@ -2484,7 +2510,20 @@ final class CaptainProfile
         }
         $this->earnFromBattle($kind, $won, $enemyShipsSunk, null !== $prize);
 
-        return ['xp' => $xpAward, 'loot' => $loot, 'lost' => $lost, 'damaged' => $damaged, 'cargoLost' => $cargoLost, 'captured' => $captured, 'besieged' => $besieged, 'defense' => $defense, 'gateOpened' => $gateOpened, 'prize' => $prize];
+        return ['xp' => $xpAward, 'loot' => $loot, 'lost' => $lost, 'damaged' => $damaged, 'cargoLost' => $cargoLost, 'captured' => $captured, 'besieged' => $besieged, 'defense' => $defense, 'gateOpened' => $gateOpened, 'prize' => $prize, 'lootBonus' => $lootBonus];
+    }
+
+    /** Premia perku „łup z bitew” (#161): LOOT_BONUS_PERK_PERCENT każdego surowca, w górę; bez perku zero. */
+    private function lootBonus(Resources $loot): Resources
+    {
+        if (!$this->hasPerk(Perk::LootBonus)) {
+            return Resources::none();
+        }
+
+        return Resources::fromArray(array_map(
+            static fn (int $amount) => intdiv($amount * self::LOOT_BONUS_PERK_PERCENT + 99, 100),
+            $loot->toArray(),
+        ));
     }
 
     /**
@@ -2678,7 +2717,7 @@ final class CaptainProfile
                     $this->fleet = array_values(array_filter($this->fleet, static fn (OwnedShip $s) => $s->id !== $shipId));
                     $lost[] = $ship->type->value;
                 } else {
-                    $ship->markDamaged();
+                    $ship->markBattleDamaged();
                     $damaged[] = $ship->type->value;
                 }
                 break;

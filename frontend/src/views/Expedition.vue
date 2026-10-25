@@ -696,13 +696,13 @@
                                     <span class="ship-name">{{ SHIP_ICONS[g.ships[0].type] }} {{ g.label }} <span class="muted">(uszkodzone: {{ g.ships.length }})</span></span>
                                     <button
                                         class="btn btn-small btn-secondary"
-                                        :disabled="busy || repairBlock(g.ships[0]) !== null"
-                                        :title="repairBlock(g.ships[0]) ?? ''"
-                                        @click="onRepair(g.ships[0])"
+                                        :disabled="busy || repairBlock(g.repair) !== null"
+                                        :title="repairBlock(g.repair) ?? ''"
+                                        @click="onRepair(g.repair)"
                                     >
-                                        Remont 1 szt. ({{ formatResources(g.ships[0].repairCost) }})
+                                        Remont 1 szt. ({{ formatResources(g.repair.repairCost) }}<template v-if="g.repair.repairDiscount"> · perk −20%</template>)
                                     </button>
-                                    <span v-if="repairBlock(g.ships[0])" class="why">{{ repairBlock(g.ships[0]) }}</span>
+                                    <span v-if="repairBlock(g.repair)" class="why">{{ repairBlock(g.repair) }}</span>
                                 </li>
                             </ul>
                             <p v-else class="muted">Cała flota sprawna.</p>
@@ -861,7 +861,7 @@ import { fxMode } from '../fx/speed';
 import { playGate, playVoyage, revealReduced } from '../fx/voyage';
 import { canDefend, defenseHint, FULL_FLAG_BONUS, pendingLabel, routeWarning, ticksLabel } from '../lib/counterattack';
 import {
-    RESOURCES, addResources, covers, formatResources, isEmpty, missing, totalResources,
+    RESOURCES, addResources, cheapestRepair, covers, formatResources, isEmpty, missing, totalResources,
 } from '../lib/resources';
 
 // jak CaptainProfile::LOG_LIMIT
@@ -1575,7 +1575,8 @@ const damagedGroups = computed(() => {
         if (!byKey.has(key)) byKey.set(key, { key, label: fleetShipLabel(ship), ships: [] });
         byKey.get(key)!.ships.push(ship);
     }
-    return [...byKey.values()];
+    // remont 1 szt. bierze najtańszy statek grupy (perk „remont po wygranej”, #161)
+    return [...byKey.values()].map(g => ({ ...g, repair: cheapestRepair(g.ships) }));
 });
 
 const damagedCount = computed(() => (expedition.value?.fleet ?? []).filter(s => s.damaged).length);

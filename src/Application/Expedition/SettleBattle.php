@@ -42,7 +42,7 @@ final class SettleBattle
      * przegrana → stracone.
      *
      * @return array{result:string, awarded:int, xp:int, rank:string, rankUp:bool,
-     *     loot:array{wood:int, steel:int, gold:int},
+     *     loot:array{wood:int, steel:int, gold:int}, lootBonus:array{wood:int, steel:int, gold:int},
      *     stockpile:array{wood:int, steel:int, gold:int}|null,
      *     cargo:array{wood:int, steel:int, gold:int}, cargoLost:array{wood:int, steel:int, gold:int},
      *     lostShips:list<string>, damagedShips:list<string>, captured:bool, besieged:bool, kind:string,
@@ -121,6 +121,8 @@ final class SettleBattle
             'rank' => $profile->rank()->value,
             'rankUp' => $outcome['xp'] > 0 && $profile->rank() !== $rankBefore,
             'loot' => $outcome['loot']->toArray(),
+            // część łupu z perku „łup z bitew” (#161), już wliczona w loot
+            'lootBonus' => $outcome['lootBonus']->toArray(),
             // łup leży w magazynie wyspy bitwy (strażnik i spotkanie: w ładowni, null); ładunek ponad pojemność po stratach przepadł
             'stockpile' => null !== $island ? $profile->stockpile($islandId)->toArray() : null,
             'cargo' => $profile->cargo()->toArray(),

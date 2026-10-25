@@ -69,7 +69,7 @@ final class StartSiege
         $attempt = $profile->siegeAttempts($island->id) + 1;
         $fortSeed = crc32("{$profile->worldSeed()}:{$island->id}:fort:{$attempt}") & 0x7FFFFFFF;
 
-        $game = $this->createGame->handle(null, null, 'fun', $composition, 'player', null, $variants ?: null, $sonarRadius, fortSeed: $fortSeed);
+        $game = $this->createGame->handle(null, null, 'fun', $composition, 'player', null, $variants ?: null, $sonarRadius, fortSeed: $fortSeed, perks: CaptainBattlePerks::of($profile));
         $profile->startSiege($island->id, $game->id(), array_map(static fn ($s) => $s->id, $squad));
         $this->profiles->save($profile);
 

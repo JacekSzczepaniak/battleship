@@ -90,6 +90,7 @@ it('tryb z bronią daje 3⚡ na turę, klasyka jest bez energii', function () {
     expect(energyGame()->energyState())->toBe([
         'left' => 3,
         'max' => 3,
+        'bonus' => 0,
         'costs' => ['shot' => 1, 'sonar' => 1, 'torpedo' => 2, 'airRaid' => 3, 'move' => 1, 'board' => 3],
     ])->and(energyGame(false)->energyState())->toBeNull()
         ->and(energyGame(false)->hasEnergy())->toBeFalse();

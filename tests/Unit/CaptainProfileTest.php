@@ -9,7 +9,7 @@ use App\Domain\Shared\GameId;
 
 function noAwards(): array
 {
-    return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => [], 'cargoLost' => Resources::none(), 'captured' => false, 'besieged' => false, 'defense' => null, 'gateOpened' => false, 'prize' => null];
+    return ['xp' => 0, 'loot' => Resources::none(), 'lost' => [], 'damaged' => [], 'cargoLost' => Resources::none(), 'captured' => false, 'besieged' => false, 'defense' => null, 'gateOpened' => false, 'prize' => null, 'lootBonus' => Resources::none()];
 }
 
 it('startuje jako rozbitek z zerowym XP', function () {

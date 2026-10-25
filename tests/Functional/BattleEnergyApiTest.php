@@ -23,6 +23,7 @@ final class BattleEnergyApiTest extends WebTestCase
         self::assertSame([
             'left' => 3,
             'max' => 3,
+            'bonus' => 0,
             'costs' => ['shot' => 1, 'sonar' => 1, 'torpedo' => 2, 'airRaid' => 3, 'move' => 1, 'board' => 3],
         ], $view['energy']);
 

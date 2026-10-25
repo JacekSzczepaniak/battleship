@@ -54,6 +54,8 @@ final class GameSnapshotMapper
                 'opponentVariants' => $this->opponentVariantsOrNull($game->ruleset()),
                 // promień sonaru gracza (technologia, Epic G) tylko, gdy inny niż bazowy
                 'sonarRadius' => $this->sonarRadiusOrNull($game->ruleset()),
+                // użycia sonaru z perku kapitana (#161) tylko, gdy są
+                'sonarBonus' => $game->ruleset() instanceof FunRuleset && $game->ruleset()->sonarBonus() > 0 ? $game->ruleset()->sonarBonus() : null,
             ],
             'fleet' => $fleet,
             'shots' => $shots,
@@ -70,12 +72,15 @@ final class GameSnapshotMapper
             'weapons' => $this->weaponUsesOrNull($game),
             // Energia zużyta w bieżącej turze (#59) — tylko, gdy coś zużyto
             'energySpent' => [] !== array_filter($game->energySpent()) ? $game->energySpent() : null,
+            // premia energii pierwszej tury gracza z perku kapitana (#161) — tylko, gdy jest
+            'firstTurnEnergy' => $game->firstTurnEnergy(),
             // ruch statku wykorzystany w bieżącej turze (#60) — tylko, gdy był
             'moved' => $game->playerMovedThisTurn() ? true : null,
             // numer tury gracza (#118, seed rzutu abordażu) — od drugiej tury
             'round' => $game->round() > 1 ? $game->round() : null,
             // abordaż (#118) — tylko w bitwie, która go dopuszcza; attempt = jedyna próba
-            'boarding' => $game->boardingEnabled() ? ['attempt' => $game->boardingAttempt()?->toArray()] : null,
+            // edge = obniżenie progu z perku kapitana (#161), tylko gdy jest
+            'boarding' => $game->boardingEnabled() ? ['attempt' => $game->boardingAttempt()?->toArray()] + ($game->boardingEdge() > 0 ? ['edge' => $game->boardingEdge()] : []) : null,
             // układ fortu w bitwie oblężniczej (#119) — tylko, gdy jest
             'fort' => $game->fort()?->toArray(),
             // Iteration 1 meta
@@ -186,6 +191,11 @@ final class GameSnapshotMapper
             $game->setEnergySpentFromSnapshot($state['energySpent']);
         }
 
+        // premia energii pierwszej tury (#161); brak = bez perku
+        if (isset($state['firstTurnEnergy']) && is_array($state['firstTurnEnergy'])) {
+            $game->setFirstTurnEnergyFromSnapshot($state['firstTurnEnergy']);
+        }
+
         // ruch statku w turze (#60); brak = ruch dostępny
         if (true === ($state['moved'] ?? null)) {
             $game->setPlayerMovedFromSnapshot(true);
@@ -198,7 +208,7 @@ final class GameSnapshotMapper
 
         // abordaż (#118); brak klucza = bitwa bez abordażu
         if (isset($state['boarding']) && is_array($state['boarding'])) {
-            $game->enableBoarding();
+            $game->enableBoarding((int) ($state['boarding']['edge'] ?? 0));
             if (isset($state['boarding']['attempt']) && is_array($state['boarding']['attempt'])) {
                 $game->setBoardingAttemptFromSnapshot(BoardingAttempt::fromArray($state['boarding']['attempt']));
             }
@@ -221,9 +231,11 @@ final class GameSnapshotMapper
         $opponentVariants = isset($data['opponentVariants']) ? FleetComposition::variantsFromArray($data['opponentVariants']) : null;
         // promień sonaru gracza: brak = bazowy (snapshoty sprzed Epica G)
         $sonarRadius = isset($data['sonarRadius']) ? (int) $data['sonarRadius'] : null;
+        // użycia sonaru z perku kapitana (#161): brak = bez perku
+        $sonarBonus = (int) ($data['sonarBonus'] ?? 0);
 
         return 'fun' === ($data['type'] ?? 'classic')
-            ? new FunRuleset($size, $ships, $opponentShips, $variants, $opponentVariants, $sonarRadius)
+            ? new FunRuleset($size, $ships, $opponentShips, $variants, $opponentVariants, $sonarRadius, $sonarBonus)
             : new ClassicRuleset($size, $ships, $opponentShips, $variants, $opponentVariants);
     }
 

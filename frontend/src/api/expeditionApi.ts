@@ -196,6 +196,8 @@ export interface FleetShipDTO {
     armed: boolean;
     damaged: boolean;
     repairCost: ResourcesDTO;
+    // perk „remont po wygranej” (#161) obniżył repairCost (statek uszkodzony w wygranej bitwie)
+    repairDiscount: boolean;
     // złomowanie (#124): zwrot do magazynu wyspy (uszkodzony oddaje mniej o remont) i blokada domeny;
     // wymóg stoczni w porcie sprawdza widok
     scrapValue: ResourcesDTO;
@@ -830,6 +832,8 @@ export interface SettleResultDTO {
     rank: RankName;
     rankUp: boolean;
     loot: ResourcesDTO;
+    // część łupu z perku „łup z bitew” (#161), wliczona w loot; brak w zapisach sprzed perku
+    lootBonus?: ResourcesDTO;
     // łup leży w magazynie wyspy bitwy (strażnik: null, łup w ładowni); ładunek ponad pojemność przepadł
     stockpile: ResourcesDTO | null;
     cargo: ResourcesDTO;

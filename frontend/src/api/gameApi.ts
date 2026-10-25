@@ -17,8 +17,9 @@ export interface PlayerFleetItem { x: number; y: number; o: 'h' | 'v'; l: number
 export type RulesetName = 'classic' | 'fun';
 
 export interface WeaponState { used: number; limit: number }
-// promień krzyża sonaru: 3, gracz 4 po zbadaniu Sonaru dalekiego zasięgu
-export interface SonarState extends WeaponState { radius: number }
+// promień krzyża sonaru: 3, gracz 4 po zbadaniu Sonaru dalekiego zasięgu;
+// bonus = użycia z perku kapitana (#161), już wliczone w limit
+export interface SonarState extends WeaponState { radius: number; bonus?: number }
 export interface WeaponsState {
     torpedo: WeaponState;
     sonar: SonarState;
@@ -31,7 +32,7 @@ export interface WeaponsState {
 export type BattleActionName = 'shot' | 'sonar' | 'torpedo' | 'airRaid' | 'move' | 'board';
 
 // modyfikator progu k6 abordażu (#118); value < 0 = próg niższy
-export interface BoardingModifier { code: 'half-hull' | string; value: number }
+export interface BoardingModifier { code: 'half-hull' | 'captain' | string; value: number }
 
 export interface BoardingAttemptDTO {
     round: number;
@@ -58,6 +59,8 @@ export interface BoardingState {
 export interface EnergyState {
     left: number;
     max: number;
+    // część puli z perku kapitana w tej turze (#161: +1⚡ w pierwszej turze); max już ją zawiera
+    bonus?: number;
     costs: Partial<Record<BattleActionName, number>> & Record<string, number>;
 }
 

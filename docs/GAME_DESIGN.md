@@ -695,6 +695,23 @@ to wchłania pomysł „perków kapitanów" z poczekalni.
   kosztu typu.
 - **Magazyn złóż:** +5 tików produkcji do limitu (10 → 15, ze Spichlerzami 20 → 25).
 
+**Perki bojowe (#161)** ✅ — działają w bitwach wyprawy (wyspa, obrona, strażnik,
+spotkanie, oblężenie), nie w treningu; wróg ich nie dostaje (D6):
+
+- **Remont po wygranej (poz. 1):** statek uszkodzony w wygranej bitwie nosi
+  znacznik do naprawy i remontuje się za −20% każdego surowca, w dół, po Doku
+  remontowym (lotniskowiec z Dokiem 10/13 → 8/10). Dotyczy stoczni, remontu
+  floty, kutra remontowego i wartości złomu. Szkoda od sztormu i z wyprawy
+  lądowej kosztuje normalnie (decyzja Jacka 25.10.2026). Zdobycz z abordażu
+  też, bo w tej bitwie nie płynęła we flocie gracza.
+- **Próg abordażu −1 (poz. 2):** modyfikator `captain` na liście z #118.
+- **+1 sonar (poz. 3):** dodatkowe użycie, gdy skład ma nośnik sonaru; karta
+  sonaru pokazuje „+1 perk kapitana”.
+- **Łup +20% (poz. 4):** każdy surowiec, w górę; wynik bitwy pokazuje, ile z tego
+  dał perk.
+- **+1⚡ w pierwszej turze (poz. 5):** pierwsza tura gracza, w obronie więc druga
+  tura bitwy; licznik energii pokazuje dodatkowy segment.
+
 ## Zasady projektowe
 
 1. **Wyspa produkuje dla morza** — każda mechanika lądowa musi oddawać

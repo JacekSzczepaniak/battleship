@@ -6,6 +6,8 @@ use App\Domain\Game\Boarding\BoardingAttempt;
 use App\Domain\Game\Boarding\BoardingOdds;
 use App\Domain\Game\Boarding\BoardingRoll;
 use App\Domain\Game\Boarding\BoardingTarget;
+use App\Domain\Game\Boarding\CaptainBoardingEdge;
+use App\Domain\Game\Boarding\HalfHullHit;
 use App\Domain\Game\Siege\Fort;
 use App\Domain\Game\Siege\FortPiece;
 use App\Domain\Game\Weapon\Loadout;
@@ -67,6 +69,18 @@ final class Game
 
     /** Czy bitwa dopuszcza abordaż (#118): bitwy wyprawy z bronią specjalną. */
     private bool $boardingEnabled = false;
+
+    /** O ile perk kapitana obniża próg abordażu (#161); 0 = bez perku. */
+    private int $boardingEdge = 0;
+
+    /**
+     * Dodatkowa energia gracza w jego pierwszej turze (perk kapitana, #161)
+     * i numer tej tury (round); w obronie pierwszą turę ma AI, więc gracz
+     * dostaje premię w drugiej.
+     *
+     * @var array{bonus:int, round:int}|null
+     */
+    private ?array $firstTurnEnergy = null;
 
     /** Jedyna w bitwie próba abordażu; null = jeszcze nie było. */
     private ?BoardingAttempt $boarding = null;
@@ -185,7 +199,44 @@ final class Game
     /** Energia strony ('player'|'opponent') pozostała w jej bieżącej turze. */
     public function energyLeft(string $side): int
     {
-        return max(0, $this->ruleset->energyPerTurn() - $this->energySpent[$side]);
+        return max(0, $this->energyMax($side) - $this->energySpent[$side]);
+    }
+
+    /** Pula strony w bieżącej turze: stała z rulesetu plus premia pierwszej tury gracza. */
+    private function energyMax(string $side): int
+    {
+        return $this->ruleset->energyPerTurn() + ('player' === $side ? $this->firstTurnEnergyBonus() : 0);
+    }
+
+    /**
+     * Premia energii w pierwszej turze gracza (perk kapitana, #161). Wołana przy
+     * starcie bitwy, po ustaleniu, kto strzela pierwszy; bez energii nic nie robi.
+     */
+    public function grantFirstTurnEnergy(int $bonus): void
+    {
+        if ($bonus <= 0 || !$this->hasEnergy()) {
+            return;
+        }
+        $this->firstTurnEnergy = ['bonus' => $bonus, 'round' => 'player' === $this->turn ? $this->round : $this->round + 1];
+    }
+
+    /** Premia energii gracza działająca w bieżącej turze; 0 poza jego pierwszą turą. */
+    public function firstTurnEnergyBonus(): int
+    {
+        return null !== $this->firstTurnEnergy && $this->firstTurnEnergy['round'] === $this->round ? $this->firstTurnEnergy['bonus'] : 0;
+    }
+
+    /** @return array{bonus:int, round:int}|null premia pierwszej tury (do snapshotu) */
+    public function firstTurnEnergy(): ?array
+    {
+        return $this->firstTurnEnergy;
+    }
+
+    /** @param array<string,mixed> $data premia ze snapshotu */
+    public function setFirstTurnEnergyFromSnapshot(array $data): void
+    {
+        $bonus = (int) ($data['bonus'] ?? 0);
+        $this->firstTurnEnergy = $bonus > 0 ? ['bonus' => $bonus, 'round' => max(1, (int) ($data['round'] ?? 1))] : null;
     }
 
     /** Czy stronę stać na działanie w tej turze (bez energii — zawsze). */
@@ -210,9 +261,10 @@ final class Game
     }
 
     /**
-     * Energia gracza do API: pozostała, pula i koszty działań; null bez energii.
+     * Energia gracza do API: pozostała, pula (z premią) i koszty działań;
+     * bonus = część puli z perku kapitana w tej turze. Null bez energii.
      *
-     * @return array{left:int, max:int, costs:array<string,int>}|null
+     * @return array{left:int, max:int, bonus:int, costs:array<string,int>}|null
      */
     public function energyState(): ?array
     {
@@ -222,7 +274,8 @@ final class Game
 
         return [
             'left' => $this->energyLeft('player'),
-            'max' => $this->ruleset->energyPerTurn(),
+            'max' => $this->energyMax('player'),
+            'bonus' => $this->firstTurnEnergyBonus(),
             'costs' => BattleAction::costs(),
         ];
     }
@@ -294,10 +347,30 @@ final class Game
         $this->round = max(1, $round);
     }
 
-    /** Włącza abordaż w tej bitwie; robi to start bitwy wyprawy, nie bitwa treningowa. */
-    public function enableBoarding(): void
+    /**
+     * Włącza abordaż w tej bitwie; robi to start bitwy wyprawy, nie bitwa
+     * treningowa. $edge = obniżenie progu z perku kapitana (#161).
+     */
+    public function enableBoarding(int $edge = 0): void
     {
         $this->boardingEnabled = true;
+        $this->boardingEdge = max(0, $edge);
+    }
+
+    public function boardingEdge(): int
+    {
+        return $this->boardingEdge;
+    }
+
+    /** Modyfikatory progu tej bitwy: bazowe i perk kapitana, jeśli go ma. */
+    private function boardingOdds(): BoardingOdds
+    {
+        $modifiers = [new HalfHullHit()];
+        if ($this->boardingEdge > 0) {
+            $modifiers[] = new CaptainBoardingEdge($this->boardingEdge);
+        }
+
+        return new BoardingOdds($modifiers);
     }
 
     public function boardingEnabled(): bool
@@ -343,8 +416,9 @@ final class Game
      * Sukces kończy bitwę wygraną, statek zostaje zdobyczą; porażka nic nie
      * zmienia na planszy. Energię i koniec tury rozlicza warstwa aplikacji.
      */
-    public function attemptBoarding(BoardingOdds $odds = new BoardingOdds()): BoardingAttempt
+    public function attemptBoarding(?BoardingOdds $odds = null): BoardingAttempt
     {
+        $odds ??= $this->boardingOdds();
         $blocker = $this->boardingBlocker();
         if (null !== $blocker) {
             throw new \DomainException($blocker);
@@ -381,8 +455,9 @@ final class Game
      *
      * @return array{available:bool, blocker:?string, threshold:int, modifiers:list<array{code:string, value:int}>, cost:int, attempt:array<string,mixed>|null}|null
      */
-    public function boardingState(BoardingOdds $odds = new BoardingOdds()): ?array
+    public function boardingState(?BoardingOdds $odds = null): ?array
     {
+        $odds ??= $this->boardingOdds();
         if (!$this->boardingEnabled || !$this->hasEnergy() || null !== $this->fort) {
             return null;
         }
@@ -399,8 +474,9 @@ final class Game
                 'Not enough energy' => 'energy',
                 default => 'not-available',
             },
-            'threshold' => null !== $target ? $odds->threshold($target[1]) : BoardingOdds::BASE_THRESHOLD,
-            'modifiers' => null !== $target ? $odds->applied($target[1]) : [],
+            'threshold' => null !== $target ? $odds->threshold($target[1]) : max(BoardingOdds::MIN_THRESHOLD, BoardingOdds::BASE_THRESHOLD - $this->boardingEdge),
+            // bez celu (kilka statków wroga) działa tylko perk kapitana — nie zależy od statku
+            'modifiers' => null !== $target ? $odds->applied($target[1]) : ($this->boardingEdge > 0 ? [['code' => 'captain', 'value' => -$this->boardingEdge]] : []),
             'cost' => BattleAction::Board->cost(),
             'attempt' => $this->boarding?->toArray(),
         ];
@@ -626,7 +702,7 @@ final class Game
      * Stan broni specjalnych gracza: użycia i limity z rulesetu, a sonar
      * dodatkowo z promieniem krzyża (zależy od technologii gracza, Epic G).
      *
-     * @return array<string, array{used:int, limit:int, radius?:int}>
+     * @return array<string, array{used:int, limit:int, radius?:int, bonus?:int}>
      */
     public function weaponsState(): array
     {
@@ -636,14 +712,14 @@ final class Game
     /**
      * Stan broni specjalnych przeciwnika (AI).
      *
-     * @return array<string, array{used:int, limit:int, radius?:int}>
+     * @return array<string, array{used:int, limit:int, radius?:int, bonus?:int}>
      */
     public function opponentWeaponsState(): array
     {
         return $this->weaponsStateFor('opponent');
     }
 
-    /** @return array<string, array{used:int, limit:int, radius?:int}> */
+    /** @return array<string, array{used:int, limit:int, radius?:int, bonus?:int}> */
     private function weaponsStateFor(string $shooter): array
     {
         $out = [];
@@ -651,6 +727,10 @@ final class Game
             $out[$weapon] = ['used' => $this->weaponUses[$shooter][$weapon] ?? 0, 'limit' => $limit];
         }
         $out['sonar']['radius'] = $this->weaponsOf($shooter)->sonar->radius;
+        // użycia sonaru z perku kapitana (#161), już wliczone w limit
+        if ('player' === $shooter && $this->ruleset instanceof FunRuleset && $this->ruleset->sonarBonusApplied() > 0) {
+            $out['sonar']['bonus'] = $this->ruleset->sonarBonusApplied();
+        }
 
         return $out;
     }

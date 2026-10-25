@@ -70,6 +70,7 @@ final class StartGuardianBattle
             $sonarRadius,
             opponentVariants: $guardian->loadouts(),
             boarding: true,
+            perks: CaptainBattlePerks::of($profile),
         );
         $profile->startGuardianBattle($gateId, $game->id(), array_map(static fn ($s) => $s->id, $squad));
         $this->profiles->save($profile);

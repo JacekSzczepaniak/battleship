@@ -425,6 +425,7 @@ onMounted(load);
                                     <b>+{{ exp.settle.loot[r.key] }}</b>
                                     <small v-if="exp.settle.stockpile">w magazynie: {{ exp.settle.stockpile[r.key] }}</small>
                                     <small v-else>w ładowni: {{ exp.settle.cargo[r.key] }}</small>
+                                    <small v-if="exp.settle.lootBonus?.[r.key]" class="perk">w tym +{{ exp.settle.lootBonus[r.key] }} z perku</small>
                                 </div>
                             </div>
                             <p class="loot-note">{{ lootNote }}</p>
@@ -530,6 +531,7 @@ h1 { font: 700 60px var(--font-head); line-height: .95; letter-spacing: -.02em; 
 .loot-tile b { font: 700 22px var(--font-head); color: var(--info); }
 .loot-tile small { font: 500 10px var(--font-mono); color: var(--text-dim); }
 .loot-tile.none b { color: var(--text-dim); }
+.loot-tile small.perk { color: var(--accent); }
 .loot-note { margin: 0; font-size: 13px; color: var(--text-muted); }
 .cargo-lost { margin: 0; display: flex; gap: 8px; align-items: flex-start; font: 500 13px var(--font-body); color: var(--danger); }
 .cargo-lost svg { flex: none; margin-top: 2px; }

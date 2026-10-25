@@ -130,7 +130,9 @@ final class GetExpedition
             // nośnik broni = eskorta konwoju; wariant bez broni (kuter remontowy, #152) nim nie jest
             'armed' => $ship->isArmed(),
             'damaged' => $ship->isDamaged(),
-            'repairCost' => $profile->repairCost($ship->type)->toArray(),
+            'repairCost' => $profile->repairCostOf($ship)->toArray(),
+            // perk „remont po wygranej” (#161) obniżył repairCost (uszkodzenie z wygranej bitwy; tratwa i tak nic nie kosztuje)
+            'repairDiscount' => $profile->repairCostOf($ship)->toArray() !== $profile->repairCost($ship->type)->toArray(),
             // złomowanie (#124): zwrot do magazynu wyspy i blokada domeny; stocznię w porcie sprawdza widok
             'scrapValue' => $profile->scrapValue($ship)->toArray(),
             'scrapBlock' => $profile->scrapBlocker($ship)?->value,

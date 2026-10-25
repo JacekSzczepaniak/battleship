@@ -11,7 +11,7 @@ import {
     type FleetShipDTO, type ShipTypeDTO,
 } from '../api/expeditionApi';
 import { VARIANTS, carriedWeapon } from '../lib/ships';
-import { formatResources } from '../lib/resources';
+import { cheapestRepair, formatResources } from '../lib/resources';
 import ScrapButton from './ScrapButton.vue';
 
 const props = defineProps<{
@@ -44,6 +44,8 @@ interface Group {
     role: string;
     sound: FleetShipDTO[];
     damaged: FleetShipDTO[];
+    // remont 1 szt. bierze najtańszy uszkodzony (perk „remont po wygranej”, #161); null = brak uszkodzonych
+    repair: FleetShipDTO | null;
 }
 
 const groups = computed<Group[]>(() => {
@@ -52,12 +54,13 @@ const groups = computed<Group[]>(() => {
         const key = `${ship.type}:${ship.variant ?? ''}`;
         let group = byKey.get(key);
         if (!group) {
-            group = { key, label: fleetShipLabel(ship), count: 0, length: ship.length, role: role(ship), sound: [], damaged: [] };
+            group = { key, label: fleetShipLabel(ship), count: 0, length: ship.length, role: role(ship), sound: [], damaged: [], repair: null };
             byKey.set(key, group);
         }
         group.count++;
         (ship.damaged ? group.damaged : group.sound).push(ship);
     }
+    for (const group of byKey.values()) group.repair = group.damaged.length ? cheapestRepair(group.damaged) : null;
     return [...byKey.values()].sort((a, b) => ORDER.indexOf(a.key.split(':')[0]) - ORDER.indexOf(b.key.split(':')[0]) || a.label.localeCompare(b.label));
 });
 
@@ -125,17 +128,17 @@ function unitsLabel(n: number): string {
                 <div class="len" :title="`${g.length}-masztowiec`">
                     <span v-for="i in g.length" :key="i"></span>
                 </div>
-                <div v-if="g.damaged.length" class="repair">
+                <div v-if="g.repair" class="repair">
                     <span class="state" title="wozi ładunek, ale nie walczy i nie eskortuje — do remontu w stoczni">🔧 uszkodzone: {{ g.damaged.length }} z {{ g.count }}</span>
                     <button
                         class="btn btn-small btn-secondary"
-                        :disabled="busy || repairBlock(g.damaged[0]) !== null"
-                        :title="repairBlock(g.damaged[0]) ?? ''"
-                        @click="emit('repair', g.damaged[0])"
+                        :disabled="busy || repairBlock(g.repair) !== null"
+                        :title="repairBlock(g.repair) ?? ''"
+                        @click="emit('repair', g.repair)"
                     >
-                        Remont 1 szt. ({{ formatResources(g.damaged[0].repairCost) }})
+                        Remont 1 szt. ({{ formatResources(g.repair.repairCost) }}<template v-if="g.repair.repairDiscount"> · perk −20%</template>)
                     </button>
-                    <span v-if="repairBlock(g.damaged[0])" class="block">{{ repairBlock(g.damaged[0]) }}</span>
+                    <span v-if="repairBlock(g.repair)" class="block">{{ repairBlock(g.repair) }}</span>
                     <ScrapButton :ship="scrapCandidate(g.damaged)" :busy="busy" :block="scrapBlock(scrapCandidate(g.damaged))" @scrap="emit('scrap', $event)" />
                 </div>
                 <div v-if="g.sound.length" class="repair">

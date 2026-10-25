@@ -77,10 +77,18 @@ function lacksEnergy(action: BattleActionName): boolean {
 }
 
 // segmenty paska energii w HUD: true = pełny
+// ostatnie segmenty puli pochodzą z perku kapitana (#161)
 const energySegments = computed(() => {
     const e = energy.value;
-    return e ? Array.from({ length: e.max }, (_, i) => i < e.left) : [];
+    const bonus = e?.bonus ?? 0;
+    return e ? Array.from({ length: e.max }, (_, i) => ({ full: i < e.left, perk: i >= e.max - bonus })) : [];
 });
+
+const energyBonus = computed(() => energy.value?.bonus ?? 0);
+const energyBase = computed(() => (energy.value?.max ?? 0) - energyBonus.value);
+
+// użycia sonaru z perku kapitana (#161), już wliczone w limit
+const sonarBonus = computed(() => weapons.value?.sonar.bonus ?? 0);
 
 const CARRIER_NAME: Record<Exclude<WeaponMode, 'shot'>, string> = {
     sonar: 'kuter',
@@ -134,7 +142,7 @@ const sonarRadius = computed(() => weapons.value?.sonar.radius ?? 3);
 
 const weaponCards = computed<WeaponCard[]>(() => [
     { key: 'shot', hotkey: '1', name: 'Salwa', icon: Crosshair, area: 'jedno pole', source: 'każdy okręt', charges: '∞', cost: energyCost('shot'), locked: lacksEnergy('shot') ? 'brak energii' : null },
-    { key: 'sonar', hotkey: '2', name: 'Sonar', icon: Radar, area: `krzyż · promień ${sonarRadius.value}`, source: `${carrierSource('sonar')} · nie kończy tury`, charges: charges('sonar'), cost: energyCost('sonar'), locked: lockReason('sonar') },
+    { key: 'sonar', hotkey: '2', name: 'Sonar', icon: Radar, area: `krzyż · promień ${sonarRadius.value}`, source: `${carrierSource('sonar')}${sonarBonus.value ? ` · +${sonarBonus.value} perk kapitana` : ''} · nie kończy tury`, charges: charges('sonar'), cost: energyCost('sonar'), locked: lockReason('sonar') },
     { key: 'torpedo', hotkey: '3', name: 'Torpeda', icon: Rocket, area: 'linia do krawędzi', source: carrierSource('torpedo'), charges: charges('torpedo'), cost: energyCost('torpedo'), locked: lockReason('torpedo') },
     { key: 'airraid', hotkey: '4', name: 'Nalot', icon: Plane, area: 'obszar 3×3', source: carrierSource('airraid'), charges: charges('airraid'), cost: energyCost('airRaid'), locked: lockReason('airraid') },
 ]);
@@ -160,6 +168,7 @@ const BOARDING_BLOCKERS: Record<string, string> = {
 
 const BOARDING_MODIFIERS: Record<string, string> = {
     'half-hull': 'połowa kadłuba trafiona',
+    captain: 'perk kapitana',
 };
 
 const boardingCard = computed(() => {
@@ -630,11 +639,12 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
             </div>
             <template v-if="energy">
                 <span class="sep"></span>
-                <div class="hud-block" :title="`energia na turę: ${energy.left} z ${energy.max}, odnawia się po ruchu wroga`">
+                <div class="hud-block" :title="`energia na turę: ${energy.left} z ${energy.max}, odnawia się po ruchu wroga${energyBonus ? ` · +${energyBonus}⚡ z perku kapitana w pierwszej turze` : ''}`">
                     <div class="kicker">ENERGIA</div>
                     <div class="energy-bar">
-                        <span v-for="(full, i) in energySegments" :key="i" class="energy-seg" :class="{ full }"></span>
+                        <span v-for="(seg, i) in energySegments" :key="i" class="energy-seg" :class="{ full: seg.full, perk: seg.perk }"></span>
                         <span class="energy-num">{{ energy.left }}/{{ energy.max }}</span>
+                        <span v-if="energyBonus" class="energy-perk">+{{ energyBonus }} perk</span>
                     </div>
                 </div>
             </template>
@@ -779,7 +789,7 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
                     jedną salwę na turę, dopóki ma choć jedno działo.
                 </div>
                 <div v-else-if="energy" class="note">
-                    Masz {{ energy.max }}⚡ na turę. Salwa, torpeda i nalot kosztują energię i kończą turę;
+                    Masz {{ energyBase }}⚡ na turę<template v-if="energyBonus">, a w tej pierwszej turze +{{ energyBonus }}⚡ z perku kapitana</template>. Salwa, torpeda i nalot kosztują energię i kończą turę;
                     sonar i ruch statku (raz na turę) tylko zużywają energię. „Zakończ turę” oddaje ruch
                     bez ataku, a po ruchu wroga energia wraca.
                 </div>
@@ -876,6 +886,9 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
 .energy-bar { display: flex; align-items: center; gap: 5px; margin-top: 8px; }
 .energy-seg { width: 22px; height: 11px; border-radius: 3px; background: var(--bg-card); border: 1px solid var(--line-btn); }
 .energy-seg.full { background: var(--info); border-color: var(--info); box-shadow: 0 0 8px #3fb6c477; }
+.energy-seg.perk { border-color: var(--accent); }
+.energy-seg.perk.full { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.energy-perk { font: 600 10px var(--font-mono); color: var(--accent); white-space: nowrap; }
 .energy-num { margin-left: 6px; font: 600 11px var(--font-mono); color: var(--text-muted); }
 .bonus-strip { margin: 0; padding: 8px 32px; border-bottom: 1px solid var(--line); font: 600 12px var(--font-mono); color: var(--info); }
 .hud-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }

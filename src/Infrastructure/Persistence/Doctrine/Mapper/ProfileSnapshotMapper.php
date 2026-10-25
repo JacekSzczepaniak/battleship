@@ -37,6 +37,8 @@ final class ProfileSnapshotMapper
                 'id' => $ship->id,
                 'type' => $ship->type->value,
                 'damaged' => $ship->isDamaged(),
+                // uszkodzenie z wygranej bitwy (#161); brak klucza = inne albo brak
+                'battleDamage' => $ship->isBattleDamaged() ?: null,
                 'variant' => $ship->variant?->value,
             ], static fn ($v) => null !== $v), $profile->fleet()),
             'worldSeed' => $profile->worldSeed(),
@@ -140,7 +142,7 @@ final class ProfileSnapshotMapper
                 }
                 // niszczyciel sprzed wariantów jest torpedowy; wariant obcego typu się pomija
                 $variant = ShipVariant::tryFrom((string) ($ship['variant'] ?? ''));
-                $fleet[] = new OwnedShip((string) $ship['id'], $type, (bool) ($ship['damaged'] ?? false), $variant?->type() === $type ? $variant : null);
+                $fleet[] = new OwnedShip((string) $ship['id'], $type, (bool) ($ship['damaged'] ?? false), $variant?->type() === $type ? $variant : null, (bool) ($ship['battleDamage'] ?? false));
             }
         }
 

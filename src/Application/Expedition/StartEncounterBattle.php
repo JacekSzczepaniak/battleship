@@ -57,6 +57,7 @@ final class StartEncounterBattle
             $sonarRadius,
             opponentVariants: [],
             boarding: true,
+            perks: CaptainBattlePerks::of($profile),
         );
         $profile->startEncounterBattle($game->id(), array_map(static fn ($s) => $s->id, $squad));
         $this->profiles->save($profile);

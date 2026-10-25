@@ -18,11 +18,13 @@ final class OwnedShip
         public readonly ShipType $type,
         private bool $damaged = false,
         ?ShipVariant $variant = null,
+        private bool $battleDamage = false,
     ) {
         if (null !== $variant && $variant->type() !== $type) {
             throw new \InvalidArgumentException('Ship variant not available for this ship type');
         }
         $this->variant = $variant ?? ShipVariant::defaultFor($type);
+        $this->battleDamage = $damaged && $battleDamage;
     }
 
     public static function build(ShipType $type, ?ShipVariant $variant = null): self
@@ -52,8 +54,25 @@ final class OwnedShip
         $this->damaged = true;
     }
 
+    /**
+     * Uszkodzenie z wygranej bitwy: do naprawy statek nosi znacznik, który
+     * daje zniżkę perku „remont po wygranej” (#161). Sztorm i wyprawa lądowa
+     * uszkadzają zwykłym markDamaged().
+     */
+    public function markBattleDamaged(): void
+    {
+        $this->damaged = true;
+        $this->battleDamage = true;
+    }
+
+    public function isBattleDamaged(): bool
+    {
+        return $this->battleDamage;
+    }
+
     public function repair(): void
     {
         $this->damaged = false;
+        $this->battleDamage = false;
     }
 }

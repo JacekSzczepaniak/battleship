@@ -172,7 +172,7 @@ Wszystkie ścieżki pod `/api`, JSON. Pełna lista: `docker compose exec app php
 | metoda | ścieżka | co robi |
 |---|---|---|
 | `POST` | `/games` | nowa gra: `mode` (`classic`/`fun`), `width`, `height`, opcjonalnie `ships` i `variants` (`{"3": [{"sonar": 2}]}`); `siege: true` (+ opcjonalny `seed`) = oblężenie fortu 10×10 z zasadami fun, odpowiedź z `fortSeed` |
-| `GET` | `/games/{id}` | projekcja gry: plansze, mgła wroga, bronie (`used`/`limit`, sonar też `radius`), warianty obu stron (`variants`/`opponentVariants`), tura, energia gracza (`energy`: `left`/`max`/`costs`, `null` w classic), ruch statku w tej turze (`moveUsed`), abordaż (`boarding`: `available`, `blocker`, `threshold`, `modifiers`, `cost`, `attempt`; `null` poza bitwą wyprawy z energią i w oblężeniu), fort w oblężeniu (`fort`: `guns` `left`/`total`, `revealed` z rodzajem trafionych konstrukcji, pola `explosion`; `null` w zwykłej bitwie) |
+| `GET` | `/games/{id}` | projekcja gry: plansze, mgła wroga, bronie (`used`/`limit`, sonar też `radius` i `bonus` z perku kapitana, #161), warianty obu stron (`variants`/`opponentVariants`), tura, energia gracza (`energy`: `left`/`max`/`bonus`/`costs`, `bonus` = +⚡ z perku w pierwszej turze, `null` w classic), ruch statku w tej turze (`moveUsed`), abordaż (`boarding`: `available`, `blocker`, `threshold`, `modifiers` (`half-hull`, `captain` z perku), `cost`, `attempt`; `null` poza bitwą wyprawy z energią i w oblężeniu), fort w oblężeniu (`fort`: `guns` `left`/`total`, `revealed` z rodzajem trafionych konstrukcji, pola `explosion`; `null` w zwykłej bitwie) |
 | `POST` | `/games/{id}/fleet` | rozstawienie floty gracza; statek z wariantem niesie `w` (`{"sonar": 2}`) |
 | `POST` | `/games/{id}/shots` | salwa w pole `x`, `y` |
 | `GET` | `/games/{id}/shots` | strzały gracza z wynikami |
@@ -195,7 +195,7 @@ Wszystkie ścieżki pod `/api`, JSON. Pełna lista: `docker compose exec app php
 | `POST` | `/profiles/{id}/encounter/decide` | decyzja przy spotkaniu na morzu: `decision` `pass` (minięcie handlarza), `flee` (ucieczka przed piratem: 1 tik i 20% ładunku) albo `ransom` (okup w złocie z ładowni); `409 NO_ENCOUNTER`, `409 ENCOUNTER_CHOICE_UNAVAILABLE`, `409 NOT_ENOUGH_GOLD` |
 | `POST` | `/profiles/{id}/encounter/trade` | handel z handlarzem jednym zleceniem za 1 tik: `sell` i `buy` (`{wood, steel}`) za złoto z ładowni, ceny o 25% gorsze niż w porcie (z mnożnikiem reputacji); +2 reputacji |
 | `POST` | `/profiles/{id}/encounter/battle` | napad na handlarza (reputacja −20 od razu), walka z piratem (wygrana: reputacja +5) albo z łowcami nagród, z którymi nie ma innego wyboru (opcjonalnie `shipIds`); łup do ładowni. Dopóki spotkanie czeka, `/sail` zwraca `409 ENCOUNTER_PENDING` |
-| `POST` | `/profiles/{id}/battles/{gameId}/settle` | rozliczenie zakończonej bitwy |
+| `POST` | `/profiles/{id}/battles/{gameId}/settle` | rozliczenie zakończonej bitwy; `lootBonus` = część łupu z perku „łup z bitew” (#161), wliczona w `loot` |
 | `POST` | `/profiles/{id}/ships` | budowa statku w stoczni (`type`, `islandId`, opcjonalnie `variant` niszczyciela: `torpedowy`/`zwiadowczy`) |
 | `POST` | `/profiles/{id}/ships/{shipId}/repair` | remont statku |
 | `PUT` | `/profiles/{id}/fleet/field-repairs` | przełącznik napraw kutrów remontowych poza stocznią (`enabled: bool`, #152), bez tiku; w odpowiedzi `fieldRepairs`; stan w `profile.fieldRepairs` widoku wyprawy; `400 VALIDATION_ERROR` |

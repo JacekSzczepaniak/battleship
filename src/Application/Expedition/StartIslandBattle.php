@@ -95,7 +95,7 @@ final class StartIslandBattle
 
         $sonarRadius = $profile->hasResearched(Technology::SonarDalekiegoZasiegu) ? SonarSpec::LONG_RANGE_RADIUS : null;
 
-        $game = $this->createGame->handle($island->boardWidth, $island->boardHeight, $island->mode, $composition, $firstTurn, $opponentComposition, $variants ?: null, $sonarRadius, $opponentVariants, boarding: true);
+        $game = $this->createGame->handle($island->boardWidth, $island->boardHeight, $island->mode, $composition, $firstTurn, $opponentComposition, $variants ?: null, $sonarRadius, $opponentVariants, boarding: true, perks: CaptainBattlePerks::of($profile));
         $shipIds = array_map(static fn ($s) => $s->id, $squad);
         $defense
             ? $profile->startDefense($island->id, $game->id(), $shipIds)

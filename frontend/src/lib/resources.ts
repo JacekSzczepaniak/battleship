@@ -21,6 +21,14 @@ export function addResources(a: ResourcesDTO, b: ResourcesDTO): ResourcesDTO {
     return { wood: a.wood + b.wood, steel: a.steel + b.steel, gold: a.gold + b.gold };
 }
 
+/**
+ * Statek grupy, który remont 1 szt. weźmie pierwszy: najtańszy. Statek uszkodzony
+ * w wygranej bitwie z perkiem „remont po wygranej” (#161) kosztuje mniej niż ten sam typ po sztormie.
+ */
+export function cheapestRepair<T extends { repairCost: ResourcesDTO }>(ships: T[]): T {
+    return ships.reduce((best, s) => (totalResources(s.repairCost) < totalResources(best.repairCost) ? s : best));
+}
+
 export function totalResources(r: ResourcesDTO): number {
     return r.wood + r.steel + r.gold;
 }

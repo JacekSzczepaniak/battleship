@@ -680,6 +680,21 @@ to wchłania pomysł „perków kapitanów" z poczekalni.
   źródła punktów z resztą do kolejnego punktu, perki zdobyte i następny),
   poziomy w HUD, komunikat o awansie do potwierdzenia i wpis w dzienniku.
 
+**Perki ekonomiczne (#162)** ✅ — liczone w profilu kapitana:
+
+- **Ceny:** mnożnik ceny rynku = reputacja (#142) × perk (95% od poziomu 2,
+  90% od poziomu 5), z zaokrągleniem w dół, w jednym miejscu
+  (`CaptainProfile::marketPricePercent()`). Idą za nim kupno i sprzedaż na
+  rynku, sprzedaż statku, mapa akwenu (#143) i handlarz na morzu. Kupiec
+  z mistrzem handlu płaci 81% ceny bazowej.
+- **Handlarz:** do poziomu 4 dolicza 25% do mnożnika rynku, od poziomu 5 handluje
+  po cenach portu.
+- **Ładownia:** premie w procentach ładowni bazowej statku się sumują —
+  Pojemne ładownie +50%, perk +10% — z zaokrągleniem w dół (kuter 15 → 24).
+- **Budowa statków:** −10% każdego surowca, w dół. Złom liczy się dalej od
+  kosztu typu.
+- **Magazyn złóż:** +5 tików produkcji do limitu (10 → 15, ze Spichlerzami 20 → 25).
+
 ## Zasady projektowe
 
 1. **Wyspa produkuje dla morza** — każda mechanika lądowa musi oddawać

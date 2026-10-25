@@ -186,7 +186,7 @@
                     <template v-if="encounter.type === 'merchant' && encounter.trade">
                         <div class="encounter-option">
                             <div class="kicker">Handel na miejscu · {{ encounter.trade.ticks }} tik</div>
-                            <span class="muted">Ceny o {{ encounter.trade.worsePercent }}% gorsze niż w porcie. Za 1 złoto kupisz {{ encounter.trade.rate.wood.buy }} drewna albo {{ encounter.trade.rate.steel.buy }} stali (w porcie {{ encounter.trade.portRate.wood.buy }} i {{ encounter.trade.portRate.steel.buy }}), a sprzedasz za nie {{ encounter.trade.rate.wood.sell }} drewna albo {{ encounter.trade.rate.steel.sell }} stali (w porcie {{ encounter.trade.portRate.wood.sell }} i {{ encounter.trade.portRate.steel.sell }}).</span>
+                            <span class="muted">{{ encounter.trade.worsePercent > 0 ? `Ceny o ${encounter.trade.worsePercent}% gorsze niż w porcie.` : 'Perk kupiecki: ceny jak w porcie, bez dopłaty handlarza.' }} Za 1 złoto kupisz {{ encounter.trade.rate.wood.buy }} drewna albo {{ encounter.trade.rate.steel.buy }} stali (w porcie {{ encounter.trade.portRate.wood.buy }} i {{ encounter.trade.portRate.steel.buy }}), a sprzedasz za nie {{ encounter.trade.rate.wood.sell }} drewna albo {{ encounter.trade.rate.steel.sell }} stali (w porcie {{ encounter.trade.portRate.wood.sell }} i {{ encounter.trade.portRate.steel.sell }}).</span>
                             <div class="trade-grid">
                                 <span></span><span class="muted">sprzedaj</span><span class="muted">kup</span>
                                 <span class="trade-res"><span class="res-dot" style="background: var(--res-wood)"></span> drewno</span>

@@ -8,6 +8,7 @@ namespace App\Domain\Expedition;
  * nie należy do trasy wysp katalogu (IslandCatalog::all()). Ma magazyn jak
  * każda wyspa i rynek ze stałym kursem akwenu. Pozycję na mapie losuje seed
  * akwenu osobnym rzutem, więc rozkład wysp trasy się nie zmienia.
+ * Port może też sprzedawać mapę akwenu (#143).
  */
 final class TradePort
 {
@@ -16,6 +17,7 @@ final class TradePort
         public readonly string $name,
         public readonly string $description,
         public readonly MarketRate $rate,
+        public readonly ?SeaChartOffer $chart = null,
     ) {
         if ('' === $id || '' === $name) {
             throw new \InvalidArgumentException('Trade port needs an id and a name');

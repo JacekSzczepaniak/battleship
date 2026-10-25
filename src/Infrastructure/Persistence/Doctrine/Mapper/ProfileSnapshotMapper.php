@@ -47,6 +47,8 @@ final class ProfileSnapshotMapper
             ], $profile->seaStates()),
             // bramy otwarte na stałe: id bramy → tik otwarcia (#107)
             'gates' => $profile->openedGates(),
+            // mapy akwenów: id akwenu → tik zdobycia (#143)
+            'charts' => $profile->seaCharts(),
             'moveCount' => $profile->moveCount(),
             'tick' => $profile->tick(),
             // surowce czekające na magazyn wyspy — rozłoży je ensureWorldState()
@@ -186,6 +188,8 @@ final class ProfileSnapshotMapper
             encounter: $this->encounterFrom($state),
             // brak klucza = profil sprzed kutra remontowego, naprawy włączone
             fieldRepairs: (bool) ($state['fieldRepairs'] ?? true),
+            // brak klucza = profil sprzed map akwenów, bez map
+            seaCharts: array_map('intval', (array) ($state['charts'] ?? [])),
         );
     }
 

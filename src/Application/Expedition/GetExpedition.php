@@ -4,6 +4,7 @@ namespace App\Application\Expedition;
 
 use App\Domain\Expedition\BuildingType;
 use App\Domain\Expedition\CaptainProfile;
+use App\Domain\Expedition\ChartCondition;
 use App\Domain\Expedition\EncounterCatalog;
 use App\Domain\Expedition\EncounterType;
 use App\Domain\Expedition\FleetPreset;
@@ -175,6 +176,12 @@ final class GetExpedition
                     $this->islands->all(),
                     static fn ($island) => $profile->ownsIsland($island->id),
                 )),
+                // mapy akwenów w profilu (#143): przedmiot i warunek bramy „wody nieznane”
+                'seaCharts' => array_map(fn (string $seaId, int $tick) => [
+                    'sea' => $seaId,
+                    'name' => $this->seas->sea($seaId)->name ?? $seaId,
+                    'tick' => $tick,
+                ], array_keys($profile->seaCharts()), array_values($profile->seaCharts())),
             ],
             'fleet' => $fleet,
             // statki zdobyte abordażem, czekające na decyzję (#118); scrapValue = zwrot z rozbiórki,
@@ -278,6 +285,13 @@ final class GetExpedition
             // mnożnik ceny w procentach (100 = kurs bazowy); pod reputację z #142
             'pricePercent' => $profile->marketPricePercent(),
             'stockpile' => $profile->stockpile($port->id)->toArray(),
+            // mapa akwenu na sprzedaż (#143); null = port bez mapy
+            'chart' => null !== $port->chart ? [
+                'sea' => $port->chart->seaId,
+                'seaName' => $this->seas->sea($port->chart->seaId)->name ?? $port->chart->seaId,
+                'price' => $profile->chartPrice($port->chart),
+                'owned' => $profile->hasSeaChart($port->chart->seaId),
+            ] : null,
         ];
     }
 
@@ -356,11 +370,13 @@ final class GetExpedition
                 'discovered' => $discovered,
                 'position' => $discovered ? $pos : null,
                 'present' => $discovered && $pos === $position,
-                // null = otwarta; rank | guardian | technology
+                // null = otwarta; rank | guardian | technology | chart
                 'blocker' => $blocker?->value,
                 'open' => null === $blocker,
                 // technologia, która otwiera bramę (otwarty ocean); null = inny warunek
                 'technology' => $gate->condition instanceof TechnologyCondition ? $gate->condition->technology->value : null,
+                // akwen, którego mapy wymaga brama (wody nieznane, #143); null = inny warunek
+                'chart' => $gate->condition instanceof ChartCondition ? $gate->condition->seaId : null,
                 'guardian' => null !== $guardian ? [
                     'name' => $guardian->name,
                     'description' => $guardian->description,

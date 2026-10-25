@@ -653,6 +653,7 @@
                             :busy="busy"
                             @trade="onTrade"
                             @sell-ship="onSellShip"
+                            @buy-chart="onBuyChart"
                         />
                     </div>
 
@@ -704,7 +705,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
-    buildBuilding, buildShip, createProfile, decideEncounter, decidePrize, getExpedition, passGate, repairFleet, repairShip, sail, scrapShip, sellShip, setFieldRepairs, settleBattle, startEncounterBattle, startGuardianBattle, startIslandBattle, startSiege,
+    buildBuilding, buildShip, buySeaChart, createProfile, decideEncounter, decidePrize, getExpedition, passGate, repairFleet, repairShip, sail, scrapShip, sellShip, setFieldRepairs, settleBattle, startEncounterBattle, startGuardianBattle, startIslandBattle, startSiege,
     startResearch, trade, tradeWithMerchant, transferCargo,
     BUILDING_ICONS, BUILDING_LABELS, RANK_LABELS, RANK_ORDER, SHIP_ICONS, SHIP_LABELS, SHIP_VARIANT_LABELS, SHIP_VARIANT_NAMES, TECH_LABELS, fleetShipLabel,
     type BuildingTypeName, type EncounterDecisionName, type ShipTypeName, type TechnologyName, type ExpeditionDTO, type TradePortDTO, type FleetShipDTO, type GateDTO, type GuardianDTO, type IslandDTO,
@@ -1022,6 +1023,7 @@ function gateStatus(gate: GateDTO): string {
     switch (gate.blocker) {
         case 'rank': return gate.guardian ? `🔒 od rangi ${rankLabel(gate.guardian.requiredRank)}` : '🔒 zamknięta';
         case 'technology': return '🔒 wymaga technologii';
+        case 'chart': return '🔒 wymaga mapy';
         default: return '🔒 strzeżona';
     }
 }
@@ -1033,6 +1035,7 @@ function gateBlockText(gate: GateDTO): string {
         case 'rank': return gate.guardian ? `strażnik przyjmie bitwę od rangi ${rankLabel(gate.guardian.requiredRank)}` : 'zamknięta rangą';
         case 'guardian': return gate.guardian ? `strzeże jej ${gate.guardian.name} — pokonaj go na sektorze bramy` : 'strzeżona';
         case 'technology': return gate.technology ? `otworzy ją zbadana technologia „${TECH_LABELS[gate.technology]}” (uczelnia)` : 'wymaga technologii';
+        case 'chart': return `poprowadzi przez nią tylko mapa akwenu ${gate.to.name} — do kupienia na Bazarze we Mgle`;
     }
 }
 
@@ -1353,6 +1356,11 @@ function onTrade(side: MarketSideName, good: MarketGoodName, gold: number) {
 
 function onSellShip(ship: FleetShipDTO) {
     return inTradePort((profileId, port) => sellShip(profileId, port.id, ship.id), 'Sprzedaż statku nie powiodła się');
+}
+
+/** Kupno mapy akwenu na rynku — 1 tik (#143). */
+function onBuyChart() {
+    return inTradePort((profileId, port) => buySeaChart(profileId, port.id), 'Kupno mapy nie powiodło się');
 }
 
 // --- zdobycz z abordażu (#118): opcje decyzji; „zbadaj konstrukcję” tylko dla nieznanego wariantu (#121) ---

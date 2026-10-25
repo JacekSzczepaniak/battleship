@@ -181,6 +181,9 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             // port handlowy i rynek (#140)
             'Trade port not found' => ['TRADE_PORT_NOT_FOUND', 404],
             'Not at trade port' => ['NOT_AT_TRADE_PORT', 409],
+            // mapy akwenów (#143)
+            'No sea chart for sale here' => ['NO_CHART_FOR_SALE', 409],
+            'Sea chart already owned' => ['CHART_ALREADY_OWNED', 409],
             // spotkania na morzu (#141)
             'Encounter pending' => ['ENCOUNTER_PENDING', 409],
             'No encounter pending' => ['NO_ENCOUNTER', 409],

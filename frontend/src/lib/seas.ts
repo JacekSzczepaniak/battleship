@@ -5,6 +5,7 @@ const SEA_NUMERALS: Record<string, string> = {
     'morze-rozbitkow': 'I',
     'ocean-sztormow': 'II',
     'morze-mgiel': 'III',
+    'wody-czarnej-perly': 'IV',
 };
 
 /** „AKWEN I”; akwen spoza listy dostaje sam napis. */

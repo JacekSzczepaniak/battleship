@@ -131,6 +131,15 @@ export interface ExpeditionProfileDTO extends ProfileDTO {
     ownedIslands: number;
     // naprawy kutrów remontowych poza stocznią (#152); przełącznik w zakładce Flota
     fieldRepairs: boolean;
+    // mapy akwenów w profilu (#143): warunek bramy „wody nieznane”
+    seaCharts: SeaChartDTO[];
+}
+
+// mapa akwenu (#143): prowadzi przez wody nieznane na akwen `sea`; tick = kiedy kapitan ją zdobył
+export interface SeaChartDTO {
+    sea: string;
+    name: string;
+    tick: number;
 }
 
 export interface FleetShipDTO {
@@ -231,7 +240,7 @@ export interface SeaDTO {
 }
 
 // powód zamknięcia bramy (Domain/Expedition/GateBlock); null = brama otwarta
-export type GateBlockCode = 'rank' | 'guardian' | 'technology';
+export type GateBlockCode = 'rank' | 'guardian' | 'technology' | 'chart';
 
 // strażnik strzeżonej cieśniny (#107): stała flota wroga, nagrody jak za wyspę
 export interface GuardianDTO {
@@ -267,6 +276,8 @@ export interface GateDTO {
     open: boolean;
     // technologia, która otwiera bramę (otwarty ocean, #108); null = inny warunek
     technology: TechnologyName | null;
+    // akwen, którego mapy wymaga brama (wody nieznane, #143); null = inny warunek
+    chart: string | null;
     guardian: GuardianDTO | null;
 }
 
@@ -310,6 +321,8 @@ export interface TradePortDTO {
     // mnożnik ceny w procentach (100 = kurs bazowy); pod reputację z #142
     pricePercent: number;
     stockpile: ResourcesDTO;
+    // mapa akwenu na sprzedaż (#143): cena w złocie z mnożnikiem rynku; null = port bez mapy
+    chart: { sea: string; seaName: string; price: number; owned: boolean } | null;
 }
 
 export interface SeaFlagDTO {
@@ -452,7 +465,7 @@ export type LogEventName =
     | 'storm' | 'island-captured' | 'island-lost' | 'island-defended' | 'island-plundered' | 'counterattack-announced'
     | 'research-completed' | 'ship-built' | 'building-built' | 'gate-opened' | 'gate-passed'
     | 'ship-boarded' | 'prize-decided' | 'island-besieged' | 'siege-failed' | 'ship-scrapped'
-    | 'market-trade' | 'ship-sold'
+    | 'market-trade' | 'ship-sold' | 'chart-acquired'
     | 'encounter-met' | 'encounter-resolved' | 'encounter-battle' | 'field-repair';
 
 export interface LogEntryDTO {
@@ -497,6 +510,8 @@ export interface LogEntryDTO {
     result?: 'won' | 'lost';
     sea?: string;
     seaName?: string;
+    // mapa akwenu (#143): skąd (cena w gold, port w island)
+    source?: 'market' | 'expedition';
     // okup w złocie (pole gold); handel: sprzedane i kupione surowce z zapłatą w złocie
     sold?: ResourcesDTO;
     bought?: ResourcesDTO;
@@ -764,6 +779,19 @@ export interface SellShipDTO {
 /** Sprzedaż statku za złoto w porcie handlowym (#140); kosztuje tik. */
 export async function sellShip(profileId: string, portId: string, shipId: string): Promise<SellShipDTO> {
     return http.post<SellShipDTO>(`/profiles/${profileId}/trade-ports/${portId}/ships/${shipId}/sell`);
+}
+
+export interface BuySeaChartDTO {
+    sea: string;
+    gold: number;
+    cargo: ResourcesDTO;
+    stockpile: ResourcesDTO;
+    tick: number;
+}
+
+/** Kupno mapy akwenu w porcie handlowym (#143): płaci magazyn portu, resztę ładownia; kosztuje tik. */
+export async function buySeaChart(profileId: string, portId: string): Promise<BuySeaChartDTO> {
+    return http.post<BuySeaChartDTO>(`/profiles/${profileId}/trade-ports/${portId}/chart`);
 }
 
 export interface BuildBuildingDTO {

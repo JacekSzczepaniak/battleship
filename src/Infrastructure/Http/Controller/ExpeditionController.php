@@ -4,6 +4,7 @@ namespace App\Infrastructure\Http\Controller;
 
 use App\Application\Expedition\BuildBuilding;
 use App\Application\Expedition\BuildShip;
+use App\Application\Expedition\BuySeaChart;
 use App\Application\Expedition\CreateProfile;
 use App\Application\Expedition\DecidePrize;
 use App\Application\Expedition\DeleteFleetPreset;
@@ -67,6 +68,7 @@ final class ExpeditionController
         private TradeAtPort $tradeAtPort,
         private SellShip $sellShip,
         private SetFieldRepairs $setFieldRepairs,
+        private BuySeaChart $buySeaChart,
     ) {
     }
 
@@ -286,6 +288,15 @@ final class ExpeditionController
         $this->assertUuid($id, 'profile');
 
         return new JsonResponse($this->sellShip->handle($id, $portId, $shipId));
+    }
+
+    /** Kupno mapy akwenu na rynku portu handlowego (#143); oferta i cena z portu. */
+    #[Route('/{id}/trade-ports/{portId}/chart', name: 'api_profiles_buy_chart', methods: ['POST'])]
+    public function buySeaChart(string $id, string $portId): JsonResponse
+    {
+        $this->assertUuid($id, 'profile');
+
+        return new JsonResponse($this->buySeaChart->handle($id, $portId));
     }
 
     /** Decyzja o statku zdobytym abordażem (#118): {decision: join|scrap|study}; study = zbadaj konstrukcję (#121). */

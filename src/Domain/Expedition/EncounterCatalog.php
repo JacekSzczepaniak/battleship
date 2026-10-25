@@ -28,7 +28,8 @@ final class EncounterCatalog
     {
         return match ($seaId) {
             StaticSeaGraph::STORM_OCEAN => 25,
-            StaticSeaGraph::MIST_SEA => 35,
+            // Wody Czarnej Perły (#143) mają spotkania jak Morze Mgieł
+            StaticSeaGraph::MIST_SEA, StaticSeaGraph::BLACK_PEARL => 35,
             default => 10,
         };
     }
@@ -55,7 +56,8 @@ final class EncounterCatalog
                 boardWidth: 10,
                 boardHeight: 10,
             ),
-            StaticSeaGraph::MIST_SEA => new EncounterFleet(
+            // Wody Czarnej Perły (#143) mają spotkania jak Morze Mgieł
+            StaticSeaGraph::MIST_SEA, StaticSeaGraph::BLACK_PEARL => new EncounterFleet(
                 name: 'Piraci z mgły',
                 mode: 'fun',
                 fleet: [ShipType::Lotniskowiec, ShipType::Niszczyciel, ShipType::Niszczyciel, ShipType::Kuter, ShipType::Kuter, ShipType::Tratwa],
@@ -91,7 +93,8 @@ final class EncounterCatalog
                 boardWidth: 10,
                 boardHeight: 10,
             ),
-            StaticSeaGraph::MIST_SEA => new EncounterFleet(
+            // Wody Czarnej Perły (#143) mają spotkania jak Morze Mgieł
+            StaticSeaGraph::MIST_SEA, StaticSeaGraph::BLACK_PEARL => new EncounterFleet(
                 name: 'Handlarz z eskortą',
                 mode: 'fun',
                 fleet: [ShipType::Transportowiec, ShipType::Niszczyciel, ShipType::Kuter, ShipType::Kuter],

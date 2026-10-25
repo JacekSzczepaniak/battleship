@@ -109,6 +109,31 @@ final class StormOceanIslandCatalog implements IslandCatalog
         );
     }
 
+    /**
+     * Dzika wyspa Oceanu Sztormów (#144): poza trasą, bez areny i bandery,
+     * z ekspedycją w głąb lądu na trzy etapy.
+     */
+    public function wildIsland(): WildIsland
+    {
+        return new WildIsland(
+            id: 'wyspa-dymiacej-gory',
+            name: 'Wyspa Dymiącej Góry',
+            description: 'Wulkan dymi nad wyspą od stuleci. Na jego zboczach koloniści zostawili kopalnie i coś, czego nie zdążyli zabrać.',
+            requiredRank: Rank::Porucznik,
+            stageRewards: [
+                new Resources(wood: 15),
+                new Resources(wood: 12, steel: 12),
+                new Resources(steel: 12, gold: 10),
+            ],
+            treasures: [[InlandTreasure::Artifact, 30]],
+            stories: [
+                'Czarny piasek i las paproci. Z pni spalonych przez lawę da się zebrać budulec.',
+                'Stara sztolnia w zboczu. Wagoniki wciąż pełne rudy, ale strop trzeszczy.',
+                'Krawędź krateru. Stoi tu kamienna kaplica kolonistów z zamkniętą skrzynią.',
+            ],
+        );
+    }
+
     public function byId(string $id): ?Island
     {
         foreach ($this->all() as $island) {

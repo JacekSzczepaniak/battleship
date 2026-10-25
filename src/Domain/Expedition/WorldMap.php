@@ -31,6 +31,7 @@ final class WorldMap
      * @param array<string, bool>               $safeHarbors bezpieczne przystanie (klucz: id) — kontrataki ich nie dotyczą
      * @param array<string, array{x:int,y:int}> $gates       sektory bram akwenu (klucz: id bramy)
      * @param array{x:int,y:int}|null           $tradePort   sektor portu handlowego (#140); null = akwen bez portu
+     * @param array{x:int,y:int}|null           $wildIsland  sektor dzikiej wyspy (#144); null = akwen bez niej
      */
     private function __construct(
         private array $islands,
@@ -41,17 +42,20 @@ final class WorldMap
         private array $gates,
         private ?string $tradePortId = null,
         private ?array $tradePort = null,
+        private ?string $wildIslandId = null,
+        private ?array $wildIsland = null,
     ) {
     }
 
     /**
-     * @param list<string>           $islandIds   wyspy w kolejności trasy
-     * @param list<Island>           $deposits    definicje wysp: złoża i bezpieczne przystanie — nie zmieniają rozkładu wysp
-     * @param SeaTheme               $theme       motyw akwenu; domyślny = Morze Rozbitków
-     * @param array<string, SeaEdge> $gates       bramy akwenu (klucz: id bramy) i krawędź, na której leżą
-     * @param string|null            $tradePortId port handlowy akwenu (#140) — osobny rzut, nie zmienia rozkładu wysp ani bram
+     * @param list<string>           $islandIds    wyspy w kolejności trasy
+     * @param list<Island>           $deposits     definicje wysp: złoża i bezpieczne przystanie — nie zmieniają rozkładu wysp
+     * @param SeaTheme               $theme        motyw akwenu; domyślny = Morze Rozbitków
+     * @param array<string, SeaEdge> $gates        bramy akwenu (klucz: id bramy) i krawędź, na której leżą
+     * @param string|null            $tradePortId  port handlowy akwenu (#140) — osobny rzut, nie zmienia rozkładu wysp ani bram
+     * @param string|null            $wildIslandId dzika wyspa akwenu (#144) — osobny rzut po porcie, nie zmienia niczego wcześniej
      */
-    public static function generate(int $seed, array $islandIds, array $deposits = [], SeaTheme $theme = new SeaTheme(), string $seaId = Sea::START, array $gates = [], ?string $tradePortId = null): self
+    public static function generate(int $seed, array $islandIds, array $deposits = [], SeaTheme $theme = new SeaTheme(), string $seaId = Sea::START, array $gates = [], ?string $tradePortId = null, ?string $wildIslandId = null): self
     {
         $state = $seed & 0x7FFFFFFF;
         $next = static function (int $mod) use (&$state): int {
@@ -90,8 +94,12 @@ final class WorldMap
         $tradePort = null !== $tradePortId
             ? self::tradePortSector($seed, $tradePortId, array_values($islands), array_values($gateSectors))
             : null;
+        // dzika wyspa (#144) tym samym rzutem co port, z dala od wysp i portu
+        $wildIsland = null !== $wildIslandId
+            ? self::tradePortSector($seed, $wildIslandId, [...array_values($islands), ...(null !== $tradePort ? [$tradePort] : [])], array_values($gateSectors))
+            : null;
 
-        return new self($islands, $withDeposit, $safeHarbors, $theme, $seaId, $gateSectors, $tradePortId, $tradePort);
+        return new self($islands, $withDeposit, $safeHarbors, $theme, $seaId, $gateSectors, $tradePortId, $tradePort, $wildIslandId, $wildIsland);
     }
 
     /**
@@ -99,7 +107,8 @@ final class WorldMap
      * wnętrzu mapy (krawędzie zostają bramom), przesunięte dalej, gdy sektor
      * zajmuje brama albo wyspa lub jej sąsiedztwo. Wyspy nie stoją obok
      * siebie, więc ich znaczniki na mapie mogą wychodzić na sąsiednią wodę
-     * (#131) — port też ich nie zasłania.
+     * (#131) — port też ich nie zasłania. Tak samo losuje się sektor dzikiej
+     * wyspy (#144), z portem na liście zajętych miejsc.
      *
      * @param list<array{x:int,y:int}> $islands
      * @param list<array{x:int,y:int}> $gates
@@ -280,6 +289,18 @@ final class WorldMap
     public function tradePortPosition(): ?array
     {
         return $this->tradePort;
+    }
+
+    /** Id dzikiej wyspy akwenu (#144); null = akwen bez niej. */
+    public function wildIslandId(): ?string
+    {
+        return $this->wildIslandId;
+    }
+
+    /** @return array{x:int,y:int}|null sektor dzikiej wyspy; null = akwen bez niej */
+    public function wildIslandPosition(): ?array
+    {
+        return $this->wildIsland;
     }
 
     /** Id bramy na sektorze; null = brak bramy. */

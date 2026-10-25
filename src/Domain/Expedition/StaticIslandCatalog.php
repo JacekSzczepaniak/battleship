@@ -125,6 +125,31 @@ final class StaticIslandCatalog implements IslandCatalog
         );
     }
 
+    /**
+     * Dzika wyspa Morza Rozbitków (#144): poza trasą, bez areny i bandery,
+     * z ekspedycją w głąb lądu na trzy etapy.
+     */
+    public function wildIsland(): WildIsland
+    {
+        return new WildIsland(
+            id: 'wyspa-papug',
+            name: 'Wyspa Papug',
+            description: 'Papugi krzyczą z dżungli, zanim szalupa dotknie piasku. Rozbitkowie mówią, że ktoś przed nimi zakopał w głębi wyspy skrzynie.',
+            requiredRank: Rank::Majtek,
+            stageRewards: [
+                new Resources(wood: 8),
+                new Resources(wood: 6, steel: 6),
+                new Resources(steel: 6, gold: 5),
+            ],
+            treasures: [[InlandTreasure::Artifact, 20]],
+            stories: [
+                'Plaża i skraj dżungli. Między palmami leży drewno z rozbitych łodzi.',
+                'Ścieżka przez bagno prowadzi do opuszczonego obozu. W szałasach zostały narzędzia i sztaby stali.',
+                'Na szczycie wzgórza papugi strzegą jaskini. W środku stoją stare skrzynie.',
+            ],
+        );
+    }
+
     public function byId(string $id): ?Island
     {
         foreach ($this->all() as $island) {

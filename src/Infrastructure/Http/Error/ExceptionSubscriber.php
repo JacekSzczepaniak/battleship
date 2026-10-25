@@ -109,6 +109,9 @@ final class ExceptionSubscriber implements EventSubscriberInterface
         if (str_starts_with($message, 'Gate locked')) {
             return ['GATE_LOCKED', 403];
         }
+        if (str_starts_with($message, 'Wild island locked')) {
+            return ['WILD_ISLAND_LOCKED', 403];
+        }
 
         return match ($message) {
             'Fleet not placed' => ['FLEET_NOT_PLACED', 422],
@@ -137,6 +140,8 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             // zbadanie konstrukcji (#121)
             'Prize cannot be studied' => ['PRIZE_NOT_STUDIABLE', 409],
             'Technology available only from boarded ships' => ['TECHNOLOGY_BOARDING_ONLY', 409],
+            // legenda z questu (#144)
+            'Technology available only from quests' => ['TECHNOLOGY_QUEST_ONLY', 409],
             'Game already finished' => ['GAME_ALREADY_FINISHED', 409],
             'Profile not found' => ['PROFILE_NOT_FOUND', 404],
             'Island not found' => ['ISLAND_NOT_FOUND', 404],
@@ -192,6 +197,13 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             'Merchant trades wood and steel for gold' => ['VALIDATION_ERROR', 400],
             'No market on this sea' => ['NO_MARKET', 409],
             'Empty trade order' => ['VALIDATION_ERROR', 400],
+            // ekspedycje w głąb dzikich wysp (#144)
+            'Wild island not found' => ['WILD_ISLAND_NOT_FOUND', 404],
+            'Not at wild island' => ['NOT_AT_WILD_ISLAND', 409],
+            'Inland expedition in progress' => ['INLAND_IN_PROGRESS', 409],
+            'Wild island needs rest' => ['WILD_ISLAND_RESTING', 409],
+            'No inland expedition' => ['NO_INLAND_EXPEDITION', 409],
+            'No deeper stage' => ['NO_DEEPER_STAGE', 409],
             // zestawy floty (#125)
             'Fleet preset not found' => ['FLEET_PRESET_NOT_FOUND', 404],
             'Fleet preset limit exceeded' => ['FLEET_PRESET_LIMIT', 409],

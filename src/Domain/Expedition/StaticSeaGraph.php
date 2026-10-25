@@ -9,7 +9,8 @@ namespace App\Domain\Expedition;
  * jego wschodniej krawędzi Morze Mgieł (10% / 0 / ×2, #108). Za wodami
  * nieznanymi na wschodzie Mgieł leżą Wody Czarnej Perły (30% / 1 / ×3, #143),
  * do których prowadzi tylko mapa akwenu. Akweny 1–3 mają neutralny port
- * handlowy z katalogu swoich wysp (#140); tajny akwen 4 go nie ma.
+ * handlowy z katalogu swoich wysp (#140); tajny akwen 4 go nie ma. Każdy akwen
+ * ma dziką wyspę z ekspedycją w głąb lądu (#144).
  */
 final class StaticSeaGraph implements SeaGraph
 {
@@ -37,11 +38,11 @@ final class StaticSeaGraph implements SeaGraph
             $mistIslands = new MistSeaIslandCatalog();
             $pearlIslands = new BlackPearlIslandCatalog();
             $this->seas = [
-                new Sea(Sea::START, 'Morze Rozbitków', new SeaTheme(stormChance: 20, visibility: 1, depositMultiplier: 1), $shipwreckIslands, tradePort: $shipwreckIslands->tradePort()),
-                new Sea(self::STORM_OCEAN, 'Ocean Sztormów', new SeaTheme(stormChance: 40, visibility: 1, depositMultiplier: 2), $stormIslands, [ShipVariant::KuterTorpedowy, ShipVariant::CiezkiNiszczyciel], $stormIslands->tradePort()),
-                new Sea(self::MIST_SEA, 'Morze Mgieł', new SeaTheme(stormChance: 10, visibility: 0, depositMultiplier: 2), $mistIslands, [ShipVariant::LotniskowiecEskortowy], $mistIslands->tradePort()),
+                new Sea(Sea::START, 'Morze Rozbitków', new SeaTheme(stormChance: 20, visibility: 1, depositMultiplier: 1), $shipwreckIslands, tradePort: $shipwreckIslands->tradePort(), wildIsland: $shipwreckIslands->wildIsland()),
+                new Sea(self::STORM_OCEAN, 'Ocean Sztormów', new SeaTheme(stormChance: 40, visibility: 1, depositMultiplier: 2), $stormIslands, [ShipVariant::KuterTorpedowy, ShipVariant::CiezkiNiszczyciel], $stormIslands->tradePort(), $stormIslands->wildIsland()),
+                new Sea(self::MIST_SEA, 'Morze Mgieł', new SeaTheme(stormChance: 10, visibility: 0, depositMultiplier: 2), $mistIslands, [ShipVariant::LotniskowiecEskortowy], $mistIslands->tradePort(), $mistIslands->wildIsland()),
                 // tajny akwen (#143): wróg pływa ze wszystkimi wariantami ze zdobyczy, portu nie ma
-                new Sea(self::BLACK_PEARL, 'Wody Czarnej Perły', new SeaTheme(stormChance: 30, visibility: 1, depositMultiplier: 3), $pearlIslands, [ShipVariant::KuterTorpedowy, ShipVariant::CiezkiNiszczyciel, ShipVariant::LotniskowiecEskortowy]),
+                new Sea(self::BLACK_PEARL, 'Wody Czarnej Perły', new SeaTheme(stormChance: 30, visibility: 1, depositMultiplier: 3), $pearlIslands, [ShipVariant::KuterTorpedowy, ShipVariant::CiezkiNiszczyciel, ShipVariant::LotniskowiecEskortowy], wildIsland: $pearlIslands->wildIsland()),
             ];
             $strait = self::guardedStrait();
             // otwarty ocean: bez bitwy, otwiera go technologia (#108)
@@ -69,10 +70,12 @@ final class StaticSeaGraph implements SeaGraph
             throw new \InvalidArgumentException('Sea ids must be unique');
         }
         // wyspy szuka się po id w całym świecie (bandery, magazyny, budynki), więc id nie mogą się powtarzać między akwenami;
-        // magazyn ma też port handlowy (#140), więc jego id liczy się razem z wyspami
+        // magazyn ma też port handlowy (#140), więc jego id liczy się razem z wyspami; dzika wyspa (#144) też,
+        // bo dziennik szuka nazwy po id
         $islandIds = array_merge(...array_map(static fn (Sea $sea) => [
             ...array_map(static fn (Island $i) => $i->id, $sea->islands->all()),
             ...(null !== $sea->tradePort ? [$sea->tradePort->id] : []),
+            ...(null !== $sea->wildIsland ? [$sea->wildIsland->id] : []),
         ], $this->seas));
         if (count($islandIds) !== count(array_unique($islandIds))) {
             throw new \InvalidArgumentException('Island ids must be unique across seas');
@@ -168,6 +171,17 @@ final class StaticSeaGraph implements SeaGraph
         foreach ($this->seas as $sea) {
             if (null !== $sea->tradePort && $sea->tradePort->id === $portId) {
                 return $sea->tradePort;
+            }
+        }
+
+        return null;
+    }
+
+    public function wildIsland(string $islandId): ?WildIsland
+    {
+        foreach ($this->seas as $sea) {
+            if (null !== $sea->wildIsland && $sea->wildIsland->id === $islandId) {
+                return $sea->wildIsland;
             }
         }
 

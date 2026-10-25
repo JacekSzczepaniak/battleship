@@ -7,7 +7,8 @@ namespace App\Domain\Expedition;
  * działają; efekt każdej liczy profil kapitana tam, gdzie zmienia regułę.
  * Działa wyłącznie po stronie gracza — lustrzany skład wroga jej nie dostaje.
  * Technologie ze zdobyczy (#121) są poza poziomami drzewka: odblokowuje je
- * tylko zbadanie konstrukcji zdobytego statku (TechUnlock::Boarding).
+ * tylko zbadanie konstrukcji zdobytego statku (TechUnlock::Boarding), a legendę
+ * tylko ekspedycja w głąb dzikiej wyspy (TechUnlock::Quest, #144).
  */
 enum Technology: string
 {
@@ -50,35 +51,57 @@ enum Technology: string
     /** Stocznia buduje kuter remontowy: warsztat zamiast sonaru, naprawy floty poza stocznią (#152). */
     case KuterRemontowy = 'kuter-remontowy';
 
+    /** Legenda tylko z questu (#144): +1 do widoczności na wszystkich akwenach. */
+    case CzarnaPerla = 'czarna-perla';
+
     public function branch(): TechBranch
     {
         return match ($this) {
             self::Spichlerze, self::LepszeNarzedzia => TechBranch::Osady,
             self::PojemneLadownie, self::DokRemontowy, self::KuterRemontowy => TechBranch::Kadluby,
-            self::MapySztormowe, self::ZeglugaDwusektorowa, self::NawigacjaOceaniczna => TechBranch::Nawigacja,
+            self::MapySztormowe, self::ZeglugaDwusektorowa, self::NawigacjaOceaniczna, self::CzarnaPerla => TechBranch::Nawigacja,
             self::SonarDalekiegoZasiegu, self::NiszczycielZwiadowczy,
             self::KuterTorpedowy, self::CiezkiNiszczyciel, self::LotniskowiecEskortowy => TechBranch::Uzbrojenie,
         };
     }
 
-    /** Poziom drzewka; null = technologia spoza drzewka, ze zdobyczy (TechUnlock::Boarding). */
+    /** Poziom drzewka; null = technologia spoza drzewka: ze zdobyczy albo z questu. */
     public function level(): ?TechLevel
     {
         return match ($this) {
             self::Spichlerze, self::MapySztormowe, self::SonarDalekiegoZasiegu, self::PojemneLadownie => TechLevel::First,
             self::ZeglugaDwusektorowa, self::LepszeNarzedzia, self::DokRemontowy, self::NiszczycielZwiadowczy => TechLevel::Second,
             self::NawigacjaOceaniczna, self::KuterRemontowy => TechLevel::Third,
-            self::KuterTorpedowy, self::CiezkiNiszczyciel, self::LotniskowiecEskortowy => null,
+            self::KuterTorpedowy, self::CiezkiNiszczyciel, self::LotniskowiecEskortowy, self::CzarnaPerla => null,
         };
     }
 
-    /** Ścieżka odblokowania (#121): badanie na uczelni albo zbadanie konstrukcji zdobytego statku. */
+    /**
+     * Ścieżka odblokowania: badanie na uczelni, zbadanie konstrukcji zdobytego
+     * statku (#121) albo legenda z ekspedycji (#144).
+     */
     public function unlock(): TechUnlock
     {
-        return null === $this->level() ? TechUnlock::Boarding : TechUnlock::Academy;
+        return match (true) {
+            self::CzarnaPerla === $this => TechUnlock::Quest,
+            null === $this->level() => TechUnlock::Boarding,
+            default => TechUnlock::Academy,
+        };
     }
 
-    /** Poziom technologii z uczelni (badanie w toku, koszt, tiki); technologia ze zdobyczy go nie ma. */
+    /**
+     * Czy technologia może wypaść jako artefakt z ekspedycji (#144): poziomy
+     * 1–2 uczelni. Poziom 3 (klucz do Morza Mgieł, kuter remontowy) zostaje
+     * na uczelni, żeby artefakt nie przeskoczył progresji.
+     */
+    public function isArtifactCandidate(): bool
+    {
+        $level = $this->level();
+
+        return null !== $level && $level->value <= TechLevel::Second->value;
+    }
+
+    /** Poziom technologii z uczelni (badanie w toku, koszt, tiki); technologia ze zdobyczy i z questu go nie ma. */
     public function academyLevel(): TechLevel
     {
         return $this->level() ?? throw new \LogicException('Technology is not researched at academy');

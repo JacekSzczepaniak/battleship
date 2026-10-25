@@ -15,6 +15,7 @@ final class Sea
     /**
      * @param list<ShipVariant> $enemyVariants warianty ze zdobyczy, które wróg ma w składzie na wyspach akwenu (#121)
      * @param TradePort|null    $tradePort     neutralna wyspa handlowa akwenu z kursem rynku (#140); null = akwen bez portu
+     * @param WildIsland|null   $wildIsland    dzika wyspa akwenu z ekspedycją w głąb lądu (#144); null = akwen bez niej
      */
     public function __construct(
         public readonly string $id,
@@ -23,6 +24,7 @@ final class Sea
         public readonly IslandCatalog $islands,
         public readonly array $enemyVariants = [],
         public readonly ?TradePort $tradePort = null,
+        public readonly ?WildIsland $wildIsland = null,
     ) {
         if ('' === $id || [] === $islands->all()) {
             throw new \InvalidArgumentException('Sea needs an id and islands');
@@ -54,7 +56,8 @@ final class Sea
 
     /**
      * Mapa akwenu dla danego seeda świata, z sektorami bram wychodzących
-     * z akwenu (przejścia z innych akwenów są pomijane) i portu handlowego.
+     * z akwenu (przejścia z innych akwenów są pomijane), portu handlowego
+     * i dzikiej wyspy.
      *
      * @param list<SeaPassage> $passages
      */
@@ -76,6 +79,7 @@ final class Sea
             $this->id,
             $gates,
             $this->tradePort?->id,
+            $this->wildIsland?->id,
         );
     }
 }

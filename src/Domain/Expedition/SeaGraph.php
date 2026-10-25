@@ -22,6 +22,9 @@ interface SeaGraph
     /** Port handlowy o danym id (z dowolnego akwenu, #140); null = nieznany. */
     public function tradePort(string $portId): ?TradePort;
 
+    /** Dzika wyspa o danym id (z dowolnego akwenu, #144); null = nieznana. */
+    public function wildIsland(string $islandId): ?WildIsland;
+
     /** Brama o danym id (z dowolnego akwenu); null = nieznana. */
     public function gate(string $gateId): ?SeaGate;
 }

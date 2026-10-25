@@ -155,7 +155,8 @@ kosztuje 1 tik i działa w obie strony; mapy się nie zużywa.
 - Mapę kupuje się tylko na rynku Bazaru we Mgle za 150 złota razy mnożnik
   ceny rynku z reputacji (#142): kupiec 135, korsarz 188 złota.
   Płaci magazyn portu, resztę ładownia, a transakcja kosztuje 1 tik.
-- Drugim źródłem będzie nagroda z ekspedycji (#144).
+- Drugie źródło to skarb ekspedycji na Wyspie Zaginionych (Morze Mgieł, #144):
+  35% po etapie 3, mapa przychodzi z `SeaChartSource::Expedition`.
 - **Mapy nie ma w łupach z bitew** — ma zostać najcenniejszym przedmiotem
   w grze (pytanie z #56 rozstrzygnięte).
 
@@ -172,7 +173,7 @@ na Mgłach. Zdobycie, złoża i kontrataki działają tak jak na innych akwenach
 **Przejścia między akwenami — trzy rodzaje bram (mieszane), wszystkie działają ✅:**
 1. **Strzeżona cieśnina** — bitwa ze strażnikiem (#107); fort w cieśninie odłożony,
 2. **Otwarty ocean** — wymaga technologii („Nawigacja oceaniczna", #108),
-3. **Wody nieznane** — wymaga **mapy akwenu** (rynek Mgieł, ekspedycja #144; #143).
+3. **Wody nieznane** — wymaga **mapy akwenu** (rynek Mgieł albo ekspedycja na Wyspie Zaginionych; #143, #144).
 
 Mapa akwenu = najcenniejszy przedmiot w grze; to domyka wątek „mapy jako
 towar" i daje sens handlowi i questom.
@@ -204,6 +205,11 @@ powroty. Odrzucone: czas rzeczywisty i hybrydy czasowe.
   podnosi istniejącą stocznię o poziom (Zatoka 1→2). Uczelnia prowadzi
   badania drzewka (filar V). Po utracie wyspy budynki stoją nieczynne do odbicia.
 - **Dzika/questowa** — wraki, ekspedycje, sekrety (czarna perła)
+  ✅ (#144) Jedna dzika wyspa na akwen: Wyspa Papug, Wyspa Dymiącej Góry,
+  Wyspa Zaginionych i Wyspa Czaszki. Nie ma na niej bitwy, bandery, magazynu
+  ani złoża. Sektor losuje seed akwenu osobnym rzutem po porcie handlowym, więc
+  wyspy, bramy i port stoją tam, gdzie stały. Na mapie: zielona wyspa z palmą.
+  Spotkania na morzu nie trafiają na jej sektor. Ekspedycja: filar VII.
 
 ✅ (#48) Morze Rozbitków: stocznie tylko na Zatoce Rozbitka (poziom 1)
 i Wyspie Sygnałowej (poziom 3); złoża na Mieliznach (3 drewna/tik),
@@ -408,6 +414,22 @@ które wróg ma w składzie na swoim akwenie:
 | Ciężki niszczyciel | niszczyciel (3) | 2 torpedy | Ocean Sztormów |
 | Lotniskowiec eskortowy | lotniskowiec (4) | nalot + sonar | Morze Mgieł |
 
+✅ (#144) **Trzecia ścieżka to quest** (rozstrzyga otwarte pytanie o ścieżkę
+questową, Epic J D7):
+- **Artefakt** to skarb etapu 3 ekspedycji (filar VII). Od razu odblokowuje
+  losową niezbadaną technologię z poziomów 1–2 uczelni, bez kosztu, tików
+  i uczelni. Nie wypada technologia badana w tej chwili. Poziom 3 (Nawigacja
+  oceaniczna, Kuter remontowy) zostaje na uczelni, żeby artefakt nie
+  przeskoczył progresji akwenów. Technologia z artefaktu ma dalej
+  `unlock = academy`, a profil pamięta, że przyszła z questu
+  (`CaptainProfile::artifacts()`). W drzewku węzeł dostaje znacznik
+  „artefakt” i trafia też do sekcji „Z questu”.
+- **Legenda „Czarna perła”** (`unlock = quest`) to jedyna technologia tylko
+  z questu, skarb Wyspy Czaszki na Wodach Czarnej Perły. Daje +1 do
+  widoczności na wszystkich akwenach, więc na Morzu Mgieł flota widzi
+  sąsiednie sektory zamiast tylko swojego. Uczelnia jej nie bada
+  (`409 TECHNOLOGY_QUEST_ONLY`).
+
 Skład wroga (decyzje Jacka z 23.10): każda wyspa akwenu ma jeden z jego
 wariantów, wybrany z seeda świata i id wyspy. Wariant zastępuje pierwszy zwykły
 statek swojego kadłuba w lustrze, więc pojawia się tylko wtedy, gdy gracz
@@ -513,6 +535,36 @@ od 0. Wartość jest zapisana w profilu, a nie liczona z historii.
 - Nagrody: mapy akwenów, artefakty (questowe ścieżki drzewka), statki,
   reputacja. Fabuła = krótkie teksty przy questach i bramach akwenów.
 
+✅ (#144, Epic J D6) **Ekspedycja w głąb dzikiej wyspy.** Decyzje Jacka z 25.10
+(przyciski, wszystko według rekomendacji):
+- **Etapy:** są 3, ryzyko porażki 20%, 35% i 50%. Rzut liczy się z seeda
+  świata, tiku, wyspy i etapu. Start to od razu etap 1. Przed każdym
+  następnym kapitan wybiera „głębiej” albo „wracaj”.
+- **Koszt:** każdy etap kosztuje 1 tik (przez `passTicks()`), powrót nic.
+- **Odpoczynek:** po zakończonej ekspedycji ta sama wyspa czeka 15 tików.
+- **Warunki startu:** ranga wyspy i choć jeden sprawny statek. W trakcie
+  ekspedycji flota nie odpływa (`409 INLAND_IN_PROGRESS`).
+- **Porażka:** zabiera wszystko zebrane w tej ekspedycji i uszkadza jeden
+  sprawny statek floty, wybrany z seeda. Ładunek sprzed ekspedycji zostaje.
+- **Powrót:** zebrane nagrody idą do ładowni. Na wyspie nie ma magazynu,
+  więc nadmiar ponad pojemność przepada.
+- **Fabuła:** każdy etap ma krótki tekst, odsłaniany po jego przejściu.
+
+| dzika wyspa | akwen | ranga | etap 1 | etap 2 (+) | etap 3 (+) | skarb po etapie 3 |
+|---|---|---|---|---|---|---|
+| Wyspa Papug | Morze Rozbitków | majtek | 8 drewna | 6 drewna, 6 stali | 6 stali, 5 złota | artefakt 20% |
+| Wyspa Dymiącej Góry | Ocean Sztormów | porucznik | 15 drewna | 12 drewna, 12 stali | 12 stali, 10 złota | artefakt 30% |
+| Wyspa Zaginionych | Morze Mgieł | komandor | 20 drewna | 16 drewna, 16 stali | 16 stali, 14 złota | mapa Wód Czarnej Perły 35%, artefakt 30% |
+| Wyspa Czaszki | Wody Czarnej Perły | admirał | 25 drewna | 20 drewna, 20 stali | 20 stali, 20 złota | Czarna perła 30%, artefakt 30% |
+
+Pełną ekspedycję przechodzi się z szansą 26% (80% × 65% × 50%). Skarb losuje
+jeden rzut po szansach z tabeli. Gdy kapitan już ma wylosowany skarb (mapę,
+legendę) albo nie ma czego wylosować jako artefakt, dostaje 20 złota.
+API: `POST /profiles/{id}/wild-islands/{islandId}/expedition {action: start|deeper|return}`.
+W `/expedition`: `world.wildIsland`, czyli etapy z ryzykiem, nagrodą
+i tekstem, skarby, odpoczynek, blokadę i ekspedycję w toku, a także
+`world.visibility` i `research.artifacts`.
+
 ## Filar VIII — Kapitan: rangi i specjalizacje ✅
 
 **Rozszerzona drabina rang** ✅ (2026-10-21) — 4 stopnie to za mało na
@@ -598,7 +650,6 @@ Akwenu 1 zacznie uwierać.
 
 ## Otwarte pytania
 
-- Które technologie dostaną ścieżkę questową (Epic J) i czy dojdą technologie tylko questowe?
 - Rangi vs akweny: czy progi rosną z liczbą akwenów; gdzie osiągalny admirał; czym zapełnić lukę 250–600 XP (dziś wyspy II poziomu, a od Epica G także drugi poziom drzewka) i które rangi bramkują akwen 2? Akwen 2 otwiera się od porucznika, a admirał to końcówka gry na akwenie 3.
 - Specjalizacje: konkretne perki i progi; czy bojowa wpływa na samą bitwę, czy tylko na otoczkę (remont, zwiad)?
 - Pobojowisko: procent odzysku, po ilu tikach resztki znikają?

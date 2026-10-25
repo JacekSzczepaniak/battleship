@@ -7,6 +7,7 @@ use App\Domain\Expedition\CaptainProfile;
 use App\Domain\Expedition\Encounter;
 use App\Domain\Expedition\EncounterType;
 use App\Domain\Expedition\FleetPreset;
+use App\Domain\Expedition\InlandExpedition;
 use App\Domain\Expedition\LogEntry;
 use App\Domain\Expedition\LogEvent;
 use App\Domain\Expedition\OwnedShip;
@@ -82,6 +83,10 @@ final class ProfileSnapshotMapper
             'encounter' => $profile->encounter()?->toArray(),
             // naprawy kutrów remontowych poza stocznią (#152)
             'fieldRepairs' => $profile->fieldRepairsEnabled(),
+            // ekspedycja w głąb dzikiej wyspy w toku, odpoczynek wysp i technologie z questu (#144)
+            'inland' => $profile->inlandExpedition()?->toArray(),
+            'wildVisits' => $profile->wildVisits(),
+            'artifacts' => $profile->artifacts(),
             // reputacja kupiec ↔ korsarz (#142)
             'reputation' => $profile->reputation()->value,
         ];
@@ -192,9 +197,36 @@ final class ProfileSnapshotMapper
             fieldRepairs: (bool) ($state['fieldRepairs'] ?? true),
             // brak klucza = profil sprzed map akwenów, bez map
             seaCharts: array_map('intval', (array) ($state['charts'] ?? [])),
+            // brak kluczy = profil sprzed ekspedycji w głąb lądu (#144)
+            inland: $this->inlandFrom($state),
+            wildVisits: array_map('intval', (array) ($state['wildVisits'] ?? [])),
+            artifacts: array_map('intval', (array) ($state['artifacts'] ?? [])),
             // brak klucza = profil sprzed reputacji, start od 0
             reputation: (int) ($state['reputation'] ?? 0),
         );
+    }
+
+    /**
+     * Ekspedycja w głąb dzikiej wyspy w toku (#144); nieczytelny wpis = brak ekspedycji.
+     *
+     * @param array<string,mixed> $state
+     */
+    private function inlandFrom(array $state): ?InlandExpedition
+    {
+        $inland = $state['inland'] ?? null;
+        if (!is_array($inland) || !isset($inland['island'], $inland['stage'])) {
+            return null;
+        }
+        try {
+            return new InlandExpedition(
+                (string) $inland['island'],
+                (int) $inland['stage'],
+                Resources::fromArray((array) ($inland['collected'] ?? [])),
+                (int) ($inland['startedAt'] ?? 0),
+            );
+        } catch (\InvalidArgumentException) {
+            return null;
+        }
     }
 
     /**

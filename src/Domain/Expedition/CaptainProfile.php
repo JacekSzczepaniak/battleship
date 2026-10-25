@@ -214,6 +214,25 @@ final class CaptainProfile
     /** Naprawy kutrów remontowych poza stocznią (#152); kapitan wyłącza je, żeby oszczędzać ładunek. */
     private bool $fieldRepairs = true;
 
+    /** Ekspedycja w głąb dzikiej wyspy w toku (#144); null = żadna nie trwa. */
+    private ?InlandExpedition $inland = null;
+
+    /**
+     * Koniec ostatniej ekspedycji na każdej dzikiej wyspie (#144): od niego
+     * wyspa odpoczywa WildIsland::REST_TICKS tików.
+     *
+     * @var array<string, int> klucz: id dzikiej wyspy, wartość: tik końca
+     */
+    private array $wildVisits = [];
+
+    /**
+     * Technologie z artefaktów i legendy z ekspedycji (#144): leżą też
+     * w $researched, tu jest tylko ścieżka questowa dla drzewka.
+     *
+     * @var array<string, int> klucz: id technologii, wartość: tik znalezienia
+     */
+    private array $artifacts = [];
+
     /** Reputacja na osi kupiec ↔ korsarz (#142): ceny rynku, embargo i łowcy nagród. */
     private Reputation $reputation;
 
@@ -834,7 +853,7 @@ final class CaptainProfile
     /**
      * Dlaczego badania nie da się teraz zacząć na wyspie (null = kapitan na
      * morzu); null = można badać. Kolejność: zbadana, trwa inne badanie,
-     * technologia ze zdobyczy (nie bada się jej na uczelni, #121),
+     * technologia ze zdobyczy albo z questu (nie bada się ich na uczelni, #121, #144),
      * reguła drzewka (poprzedni poziom, ranga), czynna uczelnia, obecność
      * kapitana, koszt (magazyn wyspy i ładownia).
      */
@@ -845,6 +864,9 @@ final class CaptainProfile
         }
         if (TechUnlock::Boarding === $technology->unlock()) {
             return ResearchBlock::BoardingOnly;
+        }
+        if (TechUnlock::Quest === $technology->unlock()) {
+            return ResearchBlock::QuestOnly;
         }
         if (null !== $this->research) {
             return ResearchBlock::Busy;
@@ -936,6 +958,15 @@ final class CaptainProfile
     public function stormChance(SeaTheme $theme = new SeaTheme()): int
     {
         return $this->hasResearched(Technology::MapySztormowe) ? intdiv($theme->stormChance, 2) : $theme->stormChance;
+    }
+
+    /**
+     * Promień odkrywania wokół floty: z motywu akwenu, a legenda „Czarna perła”
+     * (#144) dokłada 1 na wszystkich akwenach (na Morzu Mgieł 1 zamiast 0).
+     */
+    public function visibility(SeaTheme $theme = new SeaTheme()): int
+    {
+        return $theme->visibility + ($this->hasResearched(Technology::CzarnaPerla) ? 1 : 0);
     }
 
     /** Najdalszy sektor osiągalny w jednym rejsie (za 1 tik). */
@@ -1229,6 +1260,9 @@ final class CaptainProfile
         if (null !== $this->encounter) {
             throw new \DomainException('Encounter pending');
         }
+        if (null !== $this->inland) {
+            throw new \DomainException('Inland expedition in progress');
+        }
 
         if (!$world->isInside($x, $y)) {
             throw new \DomainException('Sector out of bounds');
@@ -1339,11 +1373,11 @@ final class CaptainProfile
 
     /**
      * @return list<array{0:int,1:int}> sektor + sąsiedztwo w promieniu widoczności
-     *                                  akwenu (1 = jak przed akwenami, 0 = tylko sektor) w granicach mapy
+     *                                  kapitana na akwenie (1 = jak przed akwenami, 0 = tylko sektor) w granicach mapy
      */
     private function neighborhood(int $x, int $y, WorldMap $world): array
     {
-        $radius = $world->theme()->visibility;
+        $radius = $this->visibility($world->theme());
         $out = [];
         for ($dx = -$radius; $dx <= $radius; ++$dx) {
             for ($dy = -$radius; $dy <= $radius; ++$dy) {
@@ -1597,6 +1631,254 @@ final class CaptainProfile
         return true;
     }
 
+    // --- Ekspedycje w głąb dzikich wysp (#144) ---
+
+    /** Ekspedycja w toku; null = żadna nie trwa. */
+    public function inlandExpedition(): ?InlandExpedition
+    {
+        return $this->inland;
+    }
+
+    /** @return array<string, int> koniec ostatniej ekspedycji: id dzikiej wyspy → tik */
+    public function wildVisits(): array
+    {
+        return $this->wildVisits;
+    }
+
+    /** @return array<string, int> technologie z questu (artefakty i legenda): id technologii → tik */
+    public function artifacts(): array
+    {
+        return $this->artifacts;
+    }
+
+    /** Czy technologia przyszła z ekspedycji (artefakt albo legenda), a nie z uczelni czy abordażu. */
+    public function hasArtifact(Technology $technology): bool
+    {
+        return isset($this->artifacts[$technology->value]);
+    }
+
+    /** Czy flota stoi na sektorze dzikiej wyspy bieżącego akwenu. */
+    public function isAtWildIsland(WorldMap $world): bool
+    {
+        $this->ensureWorldState($world);
+        $pos = $world->wildIslandPosition();
+
+        return null !== $pos && $pos === $this->position();
+    }
+
+    /** Tik, od którego dzika wyspa przyjmie następną ekspedycję (odpoczynek po poprzedniej). */
+    public function wildIslandReadyAt(string $islandId): int
+    {
+        return isset($this->wildVisits[$islandId]) ? $this->wildVisits[$islandId] + WildIsland::REST_TICKS : 0;
+    }
+
+    /**
+     * Dlaczego ekspedycji nie da się teraz zacząć; null = można. Kolejność:
+     * obecność, trwająca ekspedycja, ranga, odpoczynek wyspy, sprawna flota
+     * (porażka uszkadza statek, więc ryzyko musi coś kosztować).
+     */
+    public function inlandBlocker(WildIsland $island, WorldMap $world): ?InlandBlock
+    {
+        return match (true) {
+            $world->wildIslandId() !== $island->id || !$this->isAtWildIsland($world) => InlandBlock::NotPresent,
+            null !== $this->inland => InlandBlock::InProgress,
+            !$island->isAccessibleFor($this->rank()) => InlandBlock::Rank,
+            $this->tick < $this->wildIslandReadyAt($island->id) => InlandBlock::Resting,
+            [] === $this->activeFleet() => InlandBlock::NoSeaworthyShips,
+            default => null,
+        };
+    }
+
+    /**
+     * Wyprawa w głąb dzikiej wyspy, na której stoi flota: od razu etap 1.
+     *
+     * @return array{stage: int, result: string, reward: Resources, collected: Resources, damagedShip: ?string, treasure: ?array{type: string, technology?: string, sea?: string, gold?: int}, received: ?Resources, lost: ?Resources}
+     */
+    public function startInlandExpedition(WildIsland $island, WorldMap $world): array
+    {
+        $blocker = $this->inlandBlocker($island, $world);
+        if (null !== $blocker) {
+            throw new \DomainException($blocker->message($island));
+        }
+        $this->inland = new InlandExpedition($island->id, 0, Resources::none(), $this->tick);
+
+        return $this->inlandStage($island);
+    }
+
+    /**
+     * „Głębiej”: następny etap ekspedycji w toku.
+     *
+     * @return array{stage: int, result: string, reward: Resources, collected: Resources, damagedShip: ?string, treasure: ?array{type: string, technology?: string, sea?: string, gold?: int}, received: ?Resources, lost: ?Resources}
+     */
+    public function goDeeperInland(WildIsland $island, WorldMap $world): array
+    {
+        $this->ensureWorldState($world);
+        $this->pendingInland($island);
+
+        return $this->inlandStage($island);
+    }
+
+    /**
+     * „Wracaj”: zebrane nagrody trafiają do ładowni (nadmiar ponad pojemność
+     * przepada, na dzikiej wyspie nie ma magazynu). Powrót nie kosztuje tiku.
+     *
+     * @return array{received: Resources, lost: Resources}
+     */
+    public function returnFromInland(WildIsland $island): array
+    {
+        $inland = $this->pendingInland($island);
+
+        return $this->finishInland($island, $inland, null);
+    }
+
+    private function pendingInland(WildIsland $island): InlandExpedition
+    {
+        $inland = $this->inland ?? throw new \DomainException('No inland expedition');
+        if ($inland->island !== $island->id) {
+            throw new \DomainException('No inland expedition');
+        }
+
+        return $inland;
+    }
+
+    /**
+     * Etap ekspedycji za 1 tik: rzut ryzyka z seeda i tiku. Porażka zabiera
+     * wszystko zebrane w tej ekspedycji i uszkadza jeden sprawny statek floty.
+     * Udany etap dokłada nagrodę; po etapie 3 rzut na skarb i powrót.
+     *
+     * @return array{stage: int, result: string, reward: Resources, collected: Resources, damagedShip: ?string, treasure: ?array{type: string, technology?: string, sea?: string, gold?: int}, received: ?Resources, lost: ?Resources}
+     */
+    private function inlandStage(WildIsland $island): array
+    {
+        $inland = $this->inland ?? throw new \LogicException('No inland expedition');
+        $stage = $inland->stage + 1;
+        if ($stage > WildIsland::STAGES) {
+            throw new \DomainException('No deeper stage');
+        }
+        $this->passTicks();
+
+        if (crc32("{$this->worldSeed}:{$this->tick}:inland:{$island->id}:{$stage}") % 100 < WildIsland::risk($stage)) {
+            $active = $this->activeFleet();
+            $ship = [] !== $active ? $active[crc32("{$this->worldSeed}:{$this->tick}:inland-damage") % count($active)] : null;
+            $ship?->markDamaged();
+            $this->inland = null;
+            $this->wildVisits[$island->id] = $this->tick;
+            $this->record($this->tick, LogEvent::InlandFailed, [
+                'island' => $island->id,
+                'stage' => $stage,
+                'lost' => $inland->collected->isZero() ? null : $inland->collected->toArray(),
+                'ship' => $ship?->type->value,
+            ]);
+
+            return ['stage' => $stage, 'result' => 'failed', 'reward' => Resources::none(), 'collected' => Resources::none(), 'damagedShip' => $ship?->type->value, 'treasure' => null, 'received' => null, 'lost' => $inland->collected];
+        }
+
+        $reward = $island->reward($stage);
+        $inland = $inland->passed($stage, $reward);
+        if ($stage < WildIsland::STAGES) {
+            $this->inland = $inland;
+
+            return ['stage' => $stage, 'result' => 'passed', 'reward' => $reward, 'collected' => $inland->collected, 'damagedShip' => null, 'treasure' => null, 'received' => null, 'lost' => null];
+        }
+
+        $treasure = $this->rollTreasure($island);
+        $finish = $this->finishInland($island, $inland, $treasure);
+
+        return ['stage' => $stage, 'result' => 'completed', 'reward' => $reward, 'collected' => $inland->collected, 'damagedShip' => null, 'treasure' => $treasure, 'received' => $finish['received'], 'lost' => $finish['lost']];
+    }
+
+    /**
+     * Skarb etapu 3: jeden rzut z seeda i tiku po szansach wyspy. Skarb, którego
+     * kapitan już ma (mapa, legenda) albo którego nie ma z czego wylosować
+     * (wszystkie kandydaci na artefakt zbadane), zamienia się w złoto.
+     * Mapę przyznaje grantSeaChart, a technologia działa od razu.
+     *
+     * @return array{type: string, technology?: string, sea?: string, gold?: int}|null
+     */
+    private function rollTreasure(WildIsland $island): ?array
+    {
+        $kind = $island->treasureFor(crc32("{$this->worldSeed}:{$this->tick}:inland-treasure:{$island->id}") % 100);
+        $data = ['island' => $island->id];
+
+        switch ($kind) {
+            case null:
+                return null;
+            case InlandTreasure::Chart:
+                if ($this->grantSeaChart(StaticSeaGraph::BLACK_PEARL, SeaChartSource::Expedition, $data)) {
+                    return ['type' => $kind->value, 'sea' => StaticSeaGraph::BLACK_PEARL];
+                }
+                break;
+            case InlandTreasure::Legend:
+                if (!$this->hasResearched(Technology::CzarnaPerla)) {
+                    $this->grantArtifact(Technology::CzarnaPerla, $island);
+
+                    return ['type' => $kind->value, 'technology' => Technology::CzarnaPerla->value];
+                }
+                break;
+            case InlandTreasure::Artifact:
+                $pool = $this->artifactCandidates();
+                if ([] !== $pool) {
+                    $technology = $pool[crc32("{$this->worldSeed}:{$this->tick}:artifact") % count($pool)];
+                    $this->grantArtifact($technology, $island);
+
+                    return ['type' => $kind->value, 'technology' => $technology->value];
+                }
+                break;
+        }
+
+        return ['type' => $kind->value, 'gold' => WildIsland::TREASURE_FALLBACK_GOLD];
+    }
+
+    /**
+     * Technologie, które może dać artefakt: kandydaci z poziomów 1–2 uczelni,
+     * jeszcze niezbadani i nie badani w tej chwili (badanie w toku nie przepada).
+     *
+     * @return list<Technology>
+     */
+    public function artifactCandidates(): array
+    {
+        $inProgress = $this->research['technology'] ?? null;
+
+        return array_values(array_filter(
+            Technology::cases(),
+            fn (Technology $t) => $t->isArtifactCandidate() && !$this->hasResearched($t) && $t !== $inProgress,
+        ));
+    }
+
+    /** Technologia z questu działa od razu: bez uczelni, kosztu i tików (#144, Epic J D7). */
+    private function grantArtifact(Technology $technology, WildIsland $island): void
+    {
+        $this->researched[] = $technology;
+        $this->artifacts[$technology->value] = $this->tick;
+        $this->record($this->tick, LogEvent::ArtifactFound, ['technology' => $technology->value, 'island' => $island->id]);
+    }
+
+    /**
+     * Koniec udanej ekspedycji: zebrane nagrody (i złoto zamiast posiadanego
+     * skarbu) do ładowni, odpoczynek wyspy od tego tiku.
+     *
+     * @param array{type: string, technology?: string, sea?: string, gold?: int}|null $treasure
+     *
+     * @return array{received: Resources, lost: Resources}
+     */
+    private function finishInland(WildIsland $island, InlandExpedition $inland, ?array $treasure): array
+    {
+        $loot = $inland->collected->add(new Resources(gold: $treasure['gold'] ?? 0));
+        [$received, $lost] = $loot->fitInto($this->cargoCapacity() - $this->cargo->total());
+        $this->cargo = $this->cargo->add($received);
+        $this->inland = null;
+        $this->wildVisits[$island->id] = $this->tick;
+        $this->record($this->tick, LogEvent::InlandReturned, [
+            'island' => $island->id,
+            'stage' => $inland->stage,
+            'received' => $received->isZero() ? null : $received->toArray(),
+            'lost' => $lost->isZero() ? null : $lost->toArray(),
+            'treasure' => $treasure['type'] ?? null,
+        ]);
+
+        return ['received' => $received, 'lost' => $lost];
+    }
+
     // --- Spotkania na morzu (#141) ---
 
     public function encounter(): ?Encounter
@@ -1606,13 +1888,14 @@ final class CaptainProfile
 
     /**
      * Spotkanie po rejsie: około 8% szansy z seeda i tiku, jak sztorm. Nie na
-     * sektorze wyspy ani bramy. 60% handlarz, 40% pirat. Przy embargu (#142)
-     * zamiast handlarza przychodzą łowcy nagród — ale tylko do floty, która
-     * ma uzbrojony sprawny statek, bo z łowcami nie ma innego wyjścia niż bitwa.
+     * sektorze wyspy, bramy ani dzikiej wyspy (#144). 60% handlarz, 40% pirat.
+     * Przy embargu (#142) zamiast handlarza przychodzą łowcy nagród — ale tylko
+     * do floty, która ma uzbrojony sprawny statek, bo z łowcami nie ma innego
+     * wyjścia niż bitwa.
      */
     private function rollEncounter(int $x, int $y, WorldMap $world): ?Encounter
     {
-        if (null !== $world->islandAt($x, $y) || null !== $world->gateAt($x, $y)) {
+        if (null !== $world->islandAt($x, $y) || null !== $world->gateAt($x, $y) || ['x' => $x, 'y' => $y] === $world->wildIslandPosition()) {
             return null;
         }
         if (crc32("{$this->worldSeed}:{$this->tick}:encounter") % 100 >= EncounterCatalog::CHANCE) {
@@ -2435,6 +2718,9 @@ final class CaptainProfile
      * @param Encounter|null                                                                                                                                $encounter    spotkanie czekające na decyzję (#141)
      * @param bool                                                                                                                                          $fieldRepairs naprawy kutrów remontowych włączone (#152)
      * @param array<string, int>                                                                                                                            $seaCharts    mapy akwenów: id akwenu → tik zdobycia (#143)
+     * @param InlandExpedition|null                                                                                                                         $inland       ekspedycja w głąb dzikiej wyspy w toku (#144)
+     * @param array<string, int>                                                                                                                            $wildVisits   koniec ostatniej ekspedycji: id dzikiej wyspy → tik (#144)
+     * @param array<string, int>                                                                                                                            $artifacts    technologie z questu: id technologii → tik (#144), tylko spośród $researched
      * @param int                                                                                                                                           $reputation   reputacja kupiec ↔ korsarz (#142); spoza osi przycięta
      */
     public static function fromSnapshot(
@@ -2468,6 +2754,9 @@ final class CaptainProfile
         ?Encounter $encounter = null,
         bool $fieldRepairs = true,
         array $seaCharts = [],
+        ?InlandExpedition $inland = null,
+        array $wildVisits = [],
+        array $artifacts = [],
         int $reputation = 0,
     ): self {
         $self = new self($id, $name, max(0, $xp));
@@ -2516,6 +2805,13 @@ final class CaptainProfile
         $self->lastCounterattack = $counterattacks['last'] ?? null;
         $self->encounter = $encounter;
         $self->fieldRepairs = $fieldRepairs;
+        $self->inland = $inland;
+        $self->wildVisits = $wildVisits;
+        $self->artifacts = array_filter(
+            $artifacts,
+            static fn (string $technology) => in_array(Technology::tryFrom($technology), $researched, true),
+            ARRAY_FILTER_USE_KEY,
+        );
         $self->reputation = Reputation::clamped($reputation);
 
         return $self;

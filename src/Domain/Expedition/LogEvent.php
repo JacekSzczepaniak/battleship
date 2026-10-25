@@ -78,6 +78,15 @@ enum LogEvent: string
     /** Kuter remontowy naprawił statek poza stocznią, za surowce z ładowni (#152). */
     case FieldRepair = 'field-repair';
 
+    /** Udany powrót z ekspedycji w głąb dzikiej wyspy: nagrody w ładowni, po etapie 3 skarb (#144). */
+    case InlandReturned = 'inland-returned';
+
+    /** Porażka ekspedycji: zebrane nagrody przepadły, statek uszkodzony (#144). */
+    case InlandFailed = 'inland-failed';
+
+    /** Artefakt albo legenda z ekspedycji: technologia działa od razu (#144). */
+    case ArtifactFound = 'artifact-found';
+
     /** Reputacja przekroczyła próg: kupiec, neutralny, korsarz albo embargo (#142). */
     case ReputationTier = 'reputation-tier';
 }

@@ -8,6 +8,7 @@ use App\Domain\Expedition\ChartCondition;
 use App\Domain\Expedition\EncounterCatalog;
 use App\Domain\Expedition\EncounterType;
 use App\Domain\Expedition\FleetPreset;
+use App\Domain\Expedition\InlandTreasure;
 use App\Domain\Expedition\IslandCatalog;
 use App\Domain\Expedition\LogEntry;
 use App\Domain\Expedition\Prize;
@@ -17,10 +18,12 @@ use App\Domain\Expedition\Sea;
 use App\Domain\Expedition\SeaGraph;
 use App\Domain\Expedition\ShipType;
 use App\Domain\Expedition\ShipVariant;
+use App\Domain\Expedition\StaticSeaGraph;
 use App\Domain\Expedition\TechBranch;
 use App\Domain\Expedition\TechLevel;
 use App\Domain\Expedition\Technology;
 use App\Domain\Expedition\TechnologyCondition;
+use App\Domain\Expedition\WildIsland;
 use App\Domain\Expedition\WorldMap;
 use App\Domain\Shared\ProfileId;
 
@@ -221,6 +224,10 @@ final class GetExpedition
                 'atGate' => $world->gateAt($position['x'], $position['y']),
                 // port handlowy akwenu (#140): neutralna wyspa z rynkiem; null = akwen bez portu
                 'tradePort' => $this->tradePortView($profile, $sea, $world),
+                // dzika wyspa akwenu (#144): ekspedycja w głąb lądu z ryzykiem i nagrodami z góry
+                'wildIsland' => $this->wildIslandView($profile, $sea, $world),
+                // promień odkrywania: motyw akwenu + legenda „Czarna perła” (#144)
+                'visibility' => $profile->visibility($theme),
                 // bramy akwenu (#107): sektor po odkryciu, cel, blokada i strażnik
                 'gates' => $this->gatesView($profile, $sea, $world),
                 // szansa z motywu akwenu; Mapy sztormowe (Epic G) ją połowią
@@ -298,6 +305,63 @@ final class GetExpedition
                 'seaName' => $this->seas->sea($port->chart->seaId)->name ?? $port->chart->seaId,
                 'price' => $profile->chartPrice($port->chart),
                 'owned' => $profile->hasSeaChart($port->chart->seaId),
+            ] : null,
+        ];
+    }
+
+    /**
+     * Dzika wyspa akwenu floty (#144). Sektor widać dopiero po odkryciu, jak
+     * wyspy; etapy podają ryzyko, nagrodę i tekst z góry (zasada 4), skarby
+     * etapu 3 szansę i to, czy zamienią się w złoto (już posiadane).
+     *
+     * @return array<string,mixed>|null
+     */
+    private function wildIslandView(CaptainProfile $profile, Sea $sea, WorldMap $world): ?array
+    {
+        $island = $sea->wildIsland;
+        $pos = $world->wildIslandPosition();
+        if (null === $island || null === $pos) {
+            return null;
+        }
+        $discovered = $profile->isDiscovered($pos['x'], $pos['y']);
+        $inland = $profile->inlandExpedition();
+        $active = null !== $inland && $inland->island === $island->id ? $inland : null;
+
+        return [
+            'id' => $island->id,
+            'name' => $island->name,
+            'description' => $island->description,
+            'requiredRank' => $island->requiredRank->value,
+            'unlocked' => $island->isAccessibleFor($profile->rank()),
+            'discovered' => $discovered,
+            'position' => $discovered ? $pos : null,
+            'present' => $discovered && $pos === $profile->position(),
+            'stages' => array_map(static fn (int $stage) => [
+                'stage' => $stage,
+                'risk' => WildIsland::risk($stage),
+                'reward' => $island->reward($stage)->toArray(),
+                'story' => $island->stories[$stage - 1],
+            ], range(1, WildIsland::STAGES)),
+            // skarb etapu 3; owned = kapitan już go ma (albo nie ma czego wylosować): wtedy złoto
+            'treasures' => array_map(static fn (array $t) => [
+                'type' => $t[0]->value,
+                'chance' => $t[1],
+                'owned' => match ($t[0]) {
+                    InlandTreasure::Chart => $profile->hasSeaChart(StaticSeaGraph::BLACK_PEARL),
+                    InlandTreasure::Legend => $profile->hasResearched(Technology::CzarnaPerla),
+                    InlandTreasure::Artifact => [] === $profile->artifactCandidates(),
+                },
+            ], $island->treasures),
+            'fallbackGold' => WildIsland::TREASURE_FALLBACK_GOLD,
+            'restTicks' => WildIsland::REST_TICKS,
+            'readyAt' => $profile->wildIslandReadyAt($island->id),
+            // null = można wyruszyć; not-present | in-progress | rank | resting | no-seaworthy-ships
+            'blocker' => null !== $active ? null : $profile->inlandBlocker($island, $world)?->value,
+            // ekspedycja w toku: ostatni przebyty etap i nagrody, które zabierze porażka
+            'expedition' => null !== $active ? [
+                'stage' => $active->stage,
+                'collected' => $active->collected->toArray(),
+                'startedAt' => $active->startedAt,
             ] : null,
         ];
     }
@@ -444,7 +508,7 @@ final class GetExpedition
      * stanem i badanie w toku. Powód blokady liczy się dla wyspy, na której
      * stoi kapitan — tam można zacząć badanie.
      *
-     * @return array{current: array<string,mixed>|null, branches: list<string>, levels: list<array<string,mixed>>, technologies: list<array<string,mixed>>}
+     * @return array{current: array<string,mixed>|null, branches: list<string>, levels: list<array<string,mixed>>, technologies: list<array<string,mixed>>, artifacts: list<string>}
      */
     private function researchView(CaptainProfile $profile, WorldMap $world): array
     {
@@ -461,7 +525,7 @@ final class GetExpedition
                 'id' => $t->value,
                 'branch' => $t->branch()->value,
                 'level' => $t->level()?->value,
-                // academy | boarding: technologia ze zdobyczy jest poza poziomami drzewka (#121)
+                // academy | boarding | quest: technologia ze zdobyczy (#121) i legenda (#144) są poza poziomami drzewka
                 'unlock' => $t->unlock()->value,
                 // researched | in-progress | available | locked (z powodem w blocker)
                 'state' => match (true) {
@@ -494,6 +558,8 @@ final class GetExpedition
                 'requiredRank' => $l->requiredRank()?->value,
             ], TechLevel::cases()),
             'technologies' => $technologies,
+            // technologie z artefaktów i legendy z ekspedycji (#144): ścieżka „z questu” w drzewku
+            'artifacts' => array_keys($profile->artifacts()),
         ];
     }
 
@@ -580,7 +646,10 @@ final class GetExpedition
 
     private function islandName(string $islandId): string
     {
-        // port handlowy nie należy do katalogu wysp (#140)
-        return $this->islands->byId($islandId)->name ?? $this->seas->tradePort($islandId)->name ?? $islandId;
+        // port handlowy (#140) i dzika wyspa (#144) nie należą do katalogu wysp
+        return $this->islands->byId($islandId)->name
+            ?? $this->seas->tradePort($islandId)->name
+            ?? $this->seas->wildIsland($islandId)->name
+            ?? $islandId;
     }
 }

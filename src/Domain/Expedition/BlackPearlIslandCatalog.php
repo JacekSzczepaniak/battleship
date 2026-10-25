@@ -66,6 +66,32 @@ final class BlackPearlIslandCatalog implements IslandCatalog
         ];
     }
 
+    /**
+     * Dzika wyspa Wód Czarnej Perły (#144): poza trasą, bez areny i bandery,
+     * z ekspedycją w głąb lądu na trzy etapy.
+     */
+    public function wildIsland(): WildIsland
+    {
+        return new WildIsland(
+            id: 'wyspa-czaszki',
+            name: 'Wyspa Czaszki',
+            description: 'Skałę w kształcie czaszki widać z daleka. Kaprowie Czarnej Perły chowali tu łupy, a ich kapitan to, czego nie chciał nikomu oddać.',
+            requiredRank: Rank::Admiral,
+            stageRewards: [
+                new Resources(wood: 25),
+                new Resources(wood: 20, steel: 20),
+                new Resources(steel: 20, gold: 20),
+            ],
+            // jedyne źródło legendy „Czarna perła” (#144, Epic J D7)
+            treasures: [[InlandTreasure::Legend, 30], [InlandTreasure::Artifact, 30]],
+            stories: [
+                'Zatoka pełna wraków szalup. Kaprowie zostawili na plaży beczki i liny.',
+                'Tunel w oczodole czaszki. W ścianach pułapki, w niszach skrzynie z łupem.',
+                'Grota pod skałą. Na kamiennym stole leży czarna perła wielkości pięści i dziennik kapitana.',
+            ],
+        );
+    }
+
     public function byId(string $id): ?Island
     {
         foreach ($this->all() as $island) {

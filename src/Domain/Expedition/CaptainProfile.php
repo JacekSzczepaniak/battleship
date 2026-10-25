@@ -47,6 +47,9 @@ final class CaptainProfile
     /** Zapisanych zestawów floty (#125) na profil. */
     public const FLEET_PRESET_LIMIT = 5;
 
+    /** Kuter remontowy (#152) naprawia poza stocznią tylko kadłuby do tylu pól. */
+    public const FIELD_REPAIR_MAX_LENGTH = 3;
+
     /** Dziennik kapitana (#111) trzyma tyle ostatnich wpisów. */
     public const LOG_LIMIT = 50;
 
@@ -200,6 +203,9 @@ final class CaptainProfile
     /** Spotkanie z rejsu czekające na decyzję (#141); null = droga wolna. */
     private ?Encounter $encounter = null;
 
+    /** Naprawy kutrów remontowych poza stocznią (#152); kapitan wyłącza je, żeby oszczędzać ładunek. */
+    private bool $fieldRepairs = true;
+
     private function __construct(
         private ProfileId $id,
         private string $name,
@@ -310,7 +316,7 @@ final class CaptainProfile
 
         $this->stockpiles[$islandId] = $stock;
         $this->cargo = $this->cargo->add($amount);
-        ++$this->tick;
+        $this->passTicks();
     }
 
     /** Rozładunek z ładowni do magazynu wyspy. Dokowanie kosztuje tik. */
@@ -322,7 +328,7 @@ final class CaptainProfile
 
         $this->cargo = $this->cargo->subtract($amount);
         $this->stockpiles[$islandId] = $this->stockpile($islandId)->add($amount);
-        ++$this->tick;
+        $this->passTicks();
     }
 
     /**
@@ -402,9 +408,11 @@ final class CaptainProfile
     {
         // kolejność doboru: nośniki broni od największego, potem tratwy;
         // transportowiec płynie do bitwy tylko wskazany wprost
+        // (kuter remontowy bez broni, #152, płynie razem z tratwami)
         $priority = [ShipType::Lotniskowiec, ShipType::Niszczyciel, ShipType::Kuter, ShipType::Tratwa];
+        $rank = static fn (OwnedShip $s) => $s->isArmed() ? array_search($s->type, $priority, true) : count($priority);
         $candidates = array_values(array_filter($this->activeFleet(), static fn (OwnedShip $s) => in_array($s->type, $priority, true)));
-        usort($candidates, static fn (OwnedShip $a, OwnedShip $b) => array_search($a->type, $priority, true) <=> array_search($b->type, $priority, true));
+        usort($candidates, static fn (OwnedShip $a, OwnedShip $b) => $rank($a) <=> $rank($b));
 
         $squad = [];
         $cells = 0;
@@ -426,7 +434,7 @@ final class CaptainProfile
 
     /**
      * Konwój = statki z co najmniej jednym transportowcem (także uszkodzonym —
-     * wozi ładunek); eskortuje go sprawny statek z bronią. Reguła nie dotyczy
+     * wozi ładunek); eskortuje go sprawny statek z bronią (kuter remontowy jej nie ma, #152). Reguła nie dotyczy
      * floty bez transportowca, więc same tratwy nadal walczą (bezpiecznik
      * anty-softlock).
      *
@@ -436,7 +444,7 @@ final class CaptainProfile
     {
         $hasTransport = false;
         foreach ($ships as $ship) {
-            if ($ship->type->isArmed() && !$ship->isDamaged()) {
+            if ($ship->isArmed() && !$ship->isDamaged()) {
                 return false;
             }
             $hasTransport = $hasTransport || ShipType::Transportowiec === $ship->type;
@@ -535,6 +543,65 @@ final class CaptainProfile
         usort($damaged, fn (OwnedShip $a, OwnedShip $b) => $this->repairCost($a->type)->total() <=> $this->repairCost($b->type)->total());
 
         return $damaged;
+    }
+
+    public function fieldRepairsEnabled(): bool
+    {
+        return $this->fieldRepairs;
+    }
+
+    /** Przełącznik napraw kutrów remontowych poza stocznią (#152). */
+    public function setFieldRepairs(bool $enabled): void
+    {
+        $this->fieldRepairs = $enabled;
+    }
+
+    /**
+     * Upływ czasu: każdy tik (rejs, przeładunek, start bitwy, handel) daje
+     * kutrom remontowym okazję do napraw (#152).
+     */
+    private function passTicks(int $ticks = 1): void
+    {
+        for ($i = 0; $i < $ticks; ++$i) {
+            ++$this->tick;
+            $this->repairInField();
+        }
+    }
+
+    /**
+     * Naprawy poza stocznią (#152): każdy sprawny kuter remontowy naprawia na
+     * tiku jeden uszkodzony statek do FIELD_REPAIR_MAX_LENGTH pól, od
+     * najmniejszego, za koszt remontu (repairCost) z ładowni. Statek, na który
+     * brakuje surowców w ładowni, czeka; kuter próbuje następnego. Uszkodzony
+     * kuter nie naprawia, także siebie — może go naprawić inny kuter. Bitwa
+     * nie tyka, więc w jej trakcie nic się nie naprawia.
+     */
+    private function repairInField(): void
+    {
+        if (!$this->fieldRepairs) {
+            return;
+        }
+        $repairers = count(array_filter($this->fleet, static fn (OwnedShip $s) => $s->isFieldRepairer() && !$s->isDamaged()));
+        $queue = array_values(array_filter(
+            $this->repairQueue(),
+            static fn (OwnedShip $s) => $s->type->length() <= self::FIELD_REPAIR_MAX_LENGTH,
+        ));
+        // od najmniejszego kadłuba; przy równej długości kolejność remontu
+        usort($queue, static fn (OwnedShip $a, OwnedShip $b) => $a->type->length() <=> $b->type->length());
+
+        foreach ($queue as $ship) {
+            if (0 === $repairers) {
+                return;
+            }
+            $cost = $this->repairCost($ship->type);
+            if (!$this->cargo->covers($cost)) {
+                continue;
+            }
+            $this->cargo = $this->cargo->subtract($cost);
+            $ship->repair();
+            --$repairers;
+            $this->record($this->tick, LogEvent::FieldRepair, ['ship' => $ship->type->value, 'variant' => $ship->variant?->value, 'paid' => $cost->toArray()]);
+        }
     }
 
     /** Koszt remontu statku danego typu: Dok remontowy daje połowę ceny, z zaokrągleniem w górę. */
@@ -1164,7 +1231,7 @@ final class CaptainProfile
         }
 
         ++$this->moveCount;
-        ++$this->tick;
+        $this->passTicks();
 
         // rejs o 2 sektory odkrywa też sektor po drodze: krok od startu w stronę
         // celu (przy ruchu 2+1 po skosie). Przy widoczności 1 leży on i tak
@@ -1329,7 +1396,7 @@ final class CaptainProfile
         $arrival = $to->gatePosition($passage->gate->id) ?? throw new \LogicException('Gate has no sector on the target sea');
 
         ++$this->moveCount;
-        ++$this->tick;
+        $this->passTicks();
         $this->record($this->tick, LogEvent::GatePassed, ['gate' => $passage->gate->id, 'from' => $passage->from, 'to' => $passage->to]);
         $this->sea = $passage->to;
         $outcome = $this->arrive($arrival['x'], $arrival['y'], $to);
@@ -1392,7 +1459,7 @@ final class CaptainProfile
 
         $this->pay($port->id, $paid);
         $this->cargo = $this->cargo->add($received);
-        ++$this->tick;
+        $this->passTicks();
         $this->record($this->tick, LogEvent::MarketTrade, [
             'island' => $port->id,
             'side' => $side->value,
@@ -1435,7 +1502,7 @@ final class CaptainProfile
 
         $this->fleet = array_values(array_filter($this->fleet, static fn (OwnedShip $s) => $s->id !== $shipId));
         $this->cargo = $this->cargo->add(new Resources(gold: $gold));
-        ++$this->tick;
+        $this->passTicks();
         $this->record($this->tick, LogEvent::ShipSold, [
             'ship' => $ship->type->value,
             'variant' => $ship->variant?->value,
@@ -1517,7 +1584,7 @@ final class CaptainProfile
                 $encounter = $this->pendingEncounter(EncounterType::Pirate);
                 $cargoLost = $this->fleeCargoLoss();
                 $this->cargo = $this->cargo->subtract($cargoLost);
-                $this->tick += EncounterCatalog::FLEE_TICKS;
+                $this->passTicks(EncounterCatalog::FLEE_TICKS);
                 break;
             case EncounterDecision::Ransom:
                 $encounter = $this->pendingEncounter(EncounterType::Pirate);
@@ -1579,7 +1646,7 @@ final class CaptainProfile
         }
 
         $this->cargo = $cargo;
-        $this->tick += EncounterCatalog::TRADE_TICKS;
+        $this->passTicks(EncounterCatalog::TRADE_TICKS);
         $this->encounter = null;
         $this->record($this->tick, LogEvent::EncounterResolved, [
             'encounter' => $encounter->type->value,
@@ -1729,7 +1796,7 @@ final class CaptainProfile
         }
 
         $this->battles[$key] = ['island' => $islandId, 'settled' => false, 'result' => null, 'kind' => $kind->value, 'ships' => $shipIds];
-        ++$this->tick;
+        $this->passTicks();
     }
 
     /** Wyspa (przy bitwie strażnika: brama), o którą toczy się dana gra; null gdy gra nie należy do profilu. */
@@ -2226,6 +2293,7 @@ final class CaptainProfile
      * @param array<string, int>                                                                                                                            $besieged     oblężone twierdze: id wyspy → tik wygranej potyczki (#120)
      * @param list<FleetPreset>                                                                                                                             $fleetPresets zapisane zestawy floty (#125)
      * @param Encounter|null                                                                                                                                $encounter    spotkanie czekające na decyzję (#141)
+     * @param bool                                                                                                                                          $fieldRepairs naprawy kutrów remontowych włączone (#152)
      */
     public static function fromSnapshot(
         ProfileId $id,
@@ -2256,6 +2324,7 @@ final class CaptainProfile
         array $besieged = [],
         array $fleetPresets = [],
         ?Encounter $encounter = null,
+        bool $fieldRepairs = true,
     ): self {
         $self = new self($id, $name, max(0, $xp));
         $self->battles = $battles;
@@ -2301,6 +2370,7 @@ final class CaptainProfile
         $self->counterattackRolledTo = $counterattacks['rolledTo'] ?? $self->tick;
         $self->lastCounterattack = $counterattacks['last'] ?? null;
         $self->encounter = $encounter;
+        $self->fieldRepairs = $fieldRepairs;
 
         return $self;
     }

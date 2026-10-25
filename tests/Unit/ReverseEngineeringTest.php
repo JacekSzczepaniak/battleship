@@ -53,7 +53,7 @@ it('warianty ze zdobyczy mają swój kadłub i wyposażenie', function () {
         // kuter i lotniskowiec bez wariantu to statek podstawowy
         ->and(ShipVariant::defaultFor(ShipType::Kuter))->toBeNull()
         ->and(ShipVariant::defaultFor(ShipType::Lotniskowiec))->toBeNull()
-        ->and(ShipVariant::forType(ShipType::Kuter))->toBe([ShipVariant::KuterTorpedowy])
+        ->and(ShipVariant::forType(ShipType::Kuter))->toBe([ShipVariant::KuterTorpedowy, ShipVariant::KuterRemontowy])
         ->and(ShipVariant::forType(ShipType::Lotniskowiec))->toBe([ShipVariant::LotniskowiecEskortowy]);
 });
 

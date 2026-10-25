@@ -47,11 +47,14 @@ enum Technology: string
     /** Stocznia buduje lotniskowiec eskortowy: nalot i sonar. Tylko z abordażu (#121). */
     case LotniskowiecEskortowy = 'lotniskowiec-eskortowy';
 
+    /** Stocznia buduje kuter remontowy: warsztat zamiast sonaru, naprawy floty poza stocznią (#152). */
+    case KuterRemontowy = 'kuter-remontowy';
+
     public function branch(): TechBranch
     {
         return match ($this) {
             self::Spichlerze, self::LepszeNarzedzia => TechBranch::Osady,
-            self::PojemneLadownie, self::DokRemontowy => TechBranch::Kadluby,
+            self::PojemneLadownie, self::DokRemontowy, self::KuterRemontowy => TechBranch::Kadluby,
             self::MapySztormowe, self::ZeglugaDwusektorowa, self::NawigacjaOceaniczna => TechBranch::Nawigacja,
             self::SonarDalekiegoZasiegu, self::NiszczycielZwiadowczy,
             self::KuterTorpedowy, self::CiezkiNiszczyciel, self::LotniskowiecEskortowy => TechBranch::Uzbrojenie,
@@ -64,7 +67,7 @@ enum Technology: string
         return match ($this) {
             self::Spichlerze, self::MapySztormowe, self::SonarDalekiegoZasiegu, self::PojemneLadownie => TechLevel::First,
             self::ZeglugaDwusektorowa, self::LepszeNarzedzia, self::DokRemontowy, self::NiszczycielZwiadowczy => TechLevel::Second,
-            self::NawigacjaOceaniczna => TechLevel::Third,
+            self::NawigacjaOceaniczna, self::KuterRemontowy => TechLevel::Third,
             self::KuterTorpedowy, self::CiezkiNiszczyciel, self::LotniskowiecEskortowy => null,
         };
     }

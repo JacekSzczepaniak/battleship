@@ -119,6 +119,8 @@ final class GetExpedition
             'length' => $ship->type->length(),
             // wariant stały od budowy; null = typ bez wariantów (#99)
             'variant' => $ship->variant?->value,
+            // nośnik broni = eskorta konwoju; wariant bez broni (kuter remontowy, #152) nim nie jest
+            'armed' => $ship->isArmed(),
             'damaged' => $ship->isDamaged(),
             'repairCost' => $profile->repairCost($ship->type)->toArray(),
             // złomowanie (#124): zwrot do magazynu wyspy i blokada domeny; stocznię w porcie sprawdza widok
@@ -165,6 +167,8 @@ final class GetExpedition
                     : null,
                 'cargo' => $profile->cargo()->toArray(),
                 'cargoCapacity' => $profile->cargoCapacity(),
+                // naprawy kutrów remontowych poza stocznią (#152); przełącznik w zakładce Flota
+                'fieldRepairs' => $profile->fieldRepairsEnabled(),
                 'enemyShipsSunk' => $profile->enemyShipsSunk(),
                 // wyspy pod banderą na wszystkich akwenach
                 'ownedIslands' => count(array_filter(

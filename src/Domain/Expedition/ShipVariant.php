@@ -32,12 +32,18 @@ enum ShipVariant: string
     /** Lotniskowiec z nalotem i sonarem (Morze Mgieł, #121). */
     case LotniskowiecEskortowy = 'lotniskowiec-eskortowy';
 
+    /**
+     * Kuter z warsztatem zamiast sonaru (#152): bez broni, więc nie eskortuje
+     * konwoju; poza stocznią naprawia flotę (CaptainProfile, naprawy w polu).
+     */
+    case KuterRemontowy = 'kuter-remontowy';
+
     /** Typ, którego to wariant. */
     public function type(): ShipType
     {
         return match ($this) {
             self::Torpedowy, self::Zwiadowczy, self::CiezkiNiszczyciel => ShipType::Niszczyciel,
-            self::KuterTorpedowy => ShipType::Kuter,
+            self::KuterTorpedowy, self::KuterRemontowy => ShipType::Kuter,
             self::LotniskowiecEskortowy => ShipType::Lotniskowiec,
         };
     }
@@ -63,6 +69,7 @@ enum ShipVariant: string
             self::KuterTorpedowy => Technology::KuterTorpedowy,
             self::CiezkiNiszczyciel => Technology::CiezkiNiszczyciel,
             self::LotniskowiecEskortowy => Technology::LotniskowiecEskortowy,
+            self::KuterRemontowy => Technology::KuterRemontowy,
         };
     }
 
@@ -75,7 +82,14 @@ enum ShipVariant: string
             self::KuterTorpedowy => Loadout::of(WeaponKind::Torpedo),
             self::CiezkiNiszczyciel => Loadout::of(WeaponKind::Torpedo, 2),
             self::LotniskowiecEskortowy => Loadout::fromArray([WeaponKind::AirRaid->value => 1, WeaponKind::Sonar->value => 1]),
+            self::KuterRemontowy => Loadout::none(),
         };
+    }
+
+    /** Nośnik broni w bitwie — tylko taki statek eskortuje konwój. */
+    public function isArmed(): bool
+    {
+        return [] !== $this->loadout()->toArray();
     }
 
     /** Wariant statku z planszy bitwy po długości i wyposażeniu; null = statek bez wariantów. */

@@ -406,6 +406,15 @@ nie ulepszenie. Techniczna droga wejścia: WeaponSpec + koszt w stoczni.
   skład, a nie technologia, więc lustrzana flota wroga go przejmuje.
 - ✅ (#121) **Kuter torpedowy, ciężki niszczyciel, lotniskowiec eskortowy**:
   warianty tylko z abordażu (wyżej, druga ścieżka odblokowania).
+- ✅ (#152) **Kuter remontowy** (Kadłuby, poziom 3, po Doku remontowym, ranga
+  kapitan): kuter z warsztatem zamiast sonaru, bez broni, więc nie eskortuje
+  konwoju; koszt budowy i remontu jak kutra. Na każdym tiku (rejs,
+  przeładunek, start bitwy, handel) każdy sprawny kuter remontowy naprawia
+  jeden uszkodzony statek do 3 pól, od najmniejszego, za koszt remontu
+  z ładowni (z Dokiem remontowym). Bez surowców w ładowni nie naprawia,
+  uszkodzony nie naprawia (także siebie), a bitwa nie tyka. Lotniskowiec
+  i transportowiec wymagają stoczni. Każda naprawa trafia do dziennika;
+  przełącznik w zakładce Flota wyłącza naprawy, żeby oszczędzać ładunek.
 - ⏸️ **Lotniskowiec śmigłowcowy** czeka na okręty podwodne: bez nich nie ma
   czego zwalczać (Epic G, D5).
 

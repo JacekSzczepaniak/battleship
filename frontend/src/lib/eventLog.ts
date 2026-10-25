@@ -69,6 +69,8 @@ export function logText(e: LogEntryDTO, tick?: number): string {
                 : 'Handlarz na kursie — handel, napad albo minięcie. Rejs czeka na decyzję.';
         case 'encounter-resolved':
             return encounterResolvedText(e);
+        case 'field-repair':
+            return `Kuter remontowy naprawił: ${prizeLabel(e).toLowerCase()} — z ładowni: ${formatResources(e.paid ?? { wood: 0, steel: 0, gold: 0 }, 'nic')}.`;
         case 'encounter-battle':
             if (e.encounter === 'pirate') {
                 return e.result === 'won' ? 'Piraci pokonani — łup w ładowni.' : 'Piraci wygrali bitwę — odpłynęli z tym, co zatopili.';

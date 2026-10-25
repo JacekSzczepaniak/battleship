@@ -42,6 +42,7 @@ const EFFECTS: Record<TechnologyName, string> = {
     'kuter-torpedowy': 'Stocznia buduje kuter torpedowy: torpeda zamiast sonaru. Pływa u wroga na Oceanie Sztormów.',
     'ciezki-niszczyciel': 'Stocznia buduje ciężki niszczyciel: 2 torpedy. Pływa u wroga na Oceanie Sztormów.',
     'lotniskowiec-eskortowy': 'Stocznia buduje lotniskowiec eskortowy: nalot i sonar. Pływa u wroga na Morzu Mgieł.',
+    'kuter-remontowy': 'Stocznia buduje kuter remontowy: warsztat zamiast sonaru, bez broni i bez eskorty. Na każdym tiku naprawia jeden statek do 3 pól, od najmniejszego, za koszt remontu z ładowni.',
 };
 
 const current = computed(() => props.research.current);

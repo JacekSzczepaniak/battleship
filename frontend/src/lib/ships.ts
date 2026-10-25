@@ -22,6 +22,8 @@ export const VARIANTS: Record<ShipVariantName, { length: number; w: Loadout; nam
     'kuter-torpedowy': { length: 2, w: { torpedo: 1 }, name: SHIP_VARIANT_NAMES['kuter-torpedowy'] },
     'ciezki-niszczyciel': { length: 3, w: { torpedo: 2 }, name: SHIP_VARIANT_NAMES['ciezki-niszczyciel'] },
     'lotniskowiec-eskortowy': { length: 4, w: { airRaid: 1, sonar: 1 }, name: SHIP_VARIANT_NAMES['lotniskowiec-eskortowy'] },
+    // warsztat zamiast sonaru (#152): bez broni, naprawia flotę poza stocznią
+    'kuter-remontowy': { length: 2, w: {}, name: SHIP_VARIANT_NAMES['kuter-remontowy'] },
 };
 
 const LOADOUT_WEAPON: Record<keyof Loadout, Exclude<WeaponKey, 'shot'>> = {

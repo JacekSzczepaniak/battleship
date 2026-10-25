@@ -44,7 +44,7 @@ final class ScoutDestroyerApiTest extends WebTestCase
         ], $types['niszczyciel']['variants']);
         self::assertSame('torpedowy', $types['niszczyciel']['defaultVariant']);
         self::assertNull($types['kuter']['defaultVariant']);
-        self::assertSame(['kuter-torpedowy'], array_column($types['kuter']['variants'], 'variant'));
+        self::assertSame(['kuter-torpedowy', 'kuter-remontowy'], array_column($types['kuter']['variants'], 'variant'));
 
         $this->post($client, "/api/profiles/$profileId/ships", ['type' => 'niszczyciel', 'islandId' => 'wyspa-sygnalowa', 'variant' => 'zwiadowczy']);
         self::assertResponseStatusCodeSame(403);

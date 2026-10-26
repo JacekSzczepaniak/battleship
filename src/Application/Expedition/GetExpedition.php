@@ -131,8 +131,8 @@ final class GetExpedition
             'armed' => $ship->isArmed(),
             'damaged' => $ship->isDamaged(),
             'repairCost' => $profile->repairCostOf($ship)->toArray(),
-            // perk „remont po wygranej” (#161) obniżył repairCost (uszkodzenie z wygranej bitwy; tratwa i tak nic nie kosztuje)
-            'repairDiscount' => $profile->repairCostOf($ship)->toArray() !== $profile->repairCost($ship->type)->toArray(),
+            // prawo do zniżki perku „remont po wygranej” (#161), także przy remoncie za darmo (tratwa)
+            'repairDiscount' => $profile->hasRepairDiscount($ship),
             // złomowanie (#124): zwrot do magazynu wyspy i blokada domeny; stocznię w porcie sprawdza widok
             'scrapValue' => $profile->scrapValue($ship)->toArray(),
             'scrapBlock' => $profile->scrapBlocker($ship)?->value,

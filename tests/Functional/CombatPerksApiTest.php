@@ -23,6 +23,7 @@ final class CombatPerksApiTest extends WebTestCase
 {
     private const BATTLE_KUTER = 'd1f1f6f0-2c9c-4a51-9d0e-1f4c1d5e7161';
     private const STORM_KUTER = 'd1f1f6f0-2c9c-4a51-9d0e-1f4c1d5e7162';
+    private const BATTLE_TRATWA = 'd1f1f6f0-2c9c-4a51-9d0e-1f4c1d5e7163';
 
     protected static function getKernelClass(): string
     {
@@ -86,7 +87,7 @@ final class CombatPerksApiTest extends WebTestCase
         self::assertSame(['wood' => 18, 'steel' => 6, 'gold' => 0], $settled['loot']);
         self::assertSame(['wood' => 3, 'steel' => 1, 'gold' => 0], $settled['lootBonus']);
 
-        // AI strzela losowo: każdy statek uszkodzony w tej wygranej ma remont ze zniżką
+        // AI strzela losowo: każdy statek uszkodzony w tej wygranej ma prawo do zniżki, także tratwa za 0 (#168)
         $fleet = $this->get($client, "/api/profiles/{$settled['profileId']}/expedition")['fleet'];
         foreach (array_filter($fleet, static fn (array $ship) => $ship['damaged']) as $ship) {
             self::assertTrue($ship['repairDiscount']);
@@ -125,6 +126,9 @@ final class CombatPerksApiTest extends WebTestCase
         self::assertTrue($fleet[self::BATTLE_KUTER]['repairDiscount']);
         self::assertSame(['wood' => 8, 'steel' => 0, 'gold' => 0], $fleet[self::STORM_KUTER]['repairCost']);
         self::assertFalse($fleet[self::STORM_KUTER]['repairDiscount']);
+        // flaga mówi o prawie do zniżki, nie o różnicy kosztów: tratwa remontuje się za darmo (#168)
+        self::assertSame(['wood' => 0, 'steel' => 0, 'gold' => 0], $fleet[self::BATTLE_TRATWA]['repairCost']);
+        self::assertTrue($fleet[self::BATTLE_TRATWA]['repairDiscount']);
 
         $body = $this->post($client, "/api/profiles/$profileId/fleet/repair", ['islandId' => 'zatoka-rozbitka']);
         self::assertResponseIsSuccessful();
@@ -132,7 +136,7 @@ final class CombatPerksApiTest extends WebTestCase
         self::assertSame(['wood' => 6, 'steel' => 0, 'gold' => 0], $body['stockpile']);
     }
 
-    /** Kapitan na poziomie 1 w Zatoce: kuter uszkodzony w wygranej bitwie i kuter uszkodzony w sztormie. */
+    /** Kapitan na poziomie 1 w Zatoce: kuter i tratwa uszkodzone w wygranej bitwie oraz kuter uszkodzony w sztormie. */
     private function captainWithDamagedCutters(KernelBrowser $client): string
     {
         $profileId = $this->post($client, '/api/profiles', ['name' => 'Jacek'])['id'];
@@ -144,6 +148,7 @@ final class CombatPerksApiTest extends WebTestCase
             [
                 new OwnedShip(self::BATTLE_KUTER, ShipType::Kuter, damaged: true, battleDamage: true),
                 new OwnedShip(self::STORM_KUTER, ShipType::Kuter, damaged: true),
+                new OwnedShip(self::BATTLE_TRATWA, ShipType::Tratwa, damaged: true, battleDamage: true),
             ],
             Resources::none(), $profile->worldSeed(), $world->islandPosition('zatoka-rozbitka'),
             stockpiles: ['zatoka-rozbitka' => new Resources(wood: 20)],

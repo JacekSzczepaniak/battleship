@@ -44,4 +44,13 @@ final class DoctrineGameRepository implements GameRepository
 
         return $this->mapper->toDomain($rec->id(), $rec->state());
     }
+
+    public function remove(GameId $id): void
+    {
+        $rec = $this->em->find(GameRecord::class, (string) $id);
+        if ($rec) {
+            $this->em->remove($rec);
+            $this->em->flush();
+        }
+    }
 }

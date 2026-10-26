@@ -128,6 +128,14 @@ final class ProfileSnapshotMapper
             if (isset($battle['encounter'])) {
                 $entry['encounter'] = (string) $battle['encounter'];
             }
+            // miejsce spotkania i kara za napad: anulowanie bitwy je przywraca (#166)
+            $at = $battle['encounterAt'] ?? null;
+            if (is_array($at) && isset($at['x'], $at['y'])) {
+                $entry['encounterAt'] = ['tick' => (int) ($at['tick'] ?? 0), 'x' => (int) $at['x'], 'y' => (int) $at['y']];
+            }
+            if (isset($battle['raidPenalty'])) {
+                $entry['raidPenalty'] = max(0, (int) $battle['raidPenalty']);
+            }
             $battles[(string) $gameId] = $entry;
         }
 

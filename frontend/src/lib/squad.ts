@@ -41,3 +41,30 @@ export function defaultSquad(fleet: FleetShipDTO[], limit: number): FleetShipDTO
 export function isUnescortedConvoy(ships: FleetShipDTO[]): boolean {
     return ships.some(s => s.type === 'transportowiec') && !ships.some(s => !s.damaged && s.armed);
 }
+
+/** Sprawne statki floty — tylko one mogą stanąć do bitwy. */
+export function activeShips(fleet: FleetShipDTO[]): FleetShipDTO[] {
+    return fleet.filter(s => !s.damaged);
+}
+
+/** Skład, który popłynie: wybrany ręcznie (pick) albo dobrany domyślnie w limicie pól. */
+export function squadOf(fleet: FleetShipDTO[], limit: number, pick: Set<string> | null): FleetShipDTO[] {
+    if (pick) return activeShips(fleet).filter(s => pick.has(s.id));
+    return defaultSquad(fleet, limit);
+}
+
+/** Dobór domyślny zostawia w porcie statki spoza priorytetu (transportowiec), choć jest miejsce. */
+export function leavesShipsInPort(fleet: FleetShipDTO[], limit: number): boolean {
+    return defaultSquad(fleet, limit).length < activeShips(fleet).length;
+}
+
+/** Wybór składu ma sens, gdy flota przekracza limit albo dobór domyślny zostawia statki w porcie (#73, #166 D3). */
+export function squadChoiceNeeded(fleet: FleetShipDTO[], limit: number): boolean {
+    return squadCells(activeShips(fleet)) > limit || leavesShipsInPort(fleet, limit);
+}
+
+/** Konwój bez eskorty nie atakuje — także gdy sprawne są same transportowce (dobór domyślny jest pusty). */
+export function convoyBlocked(fleet: FleetShipDTO[], limit: number, pick: Set<string> | null): boolean {
+    const squad = squadOf(fleet, limit, pick);
+    return isUnescortedConvoy(squad.length ? squad : activeShips(fleet));
+}

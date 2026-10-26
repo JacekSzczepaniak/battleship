@@ -20,4 +20,9 @@ final class InMemoryGameRepository implements GameRepository
     {
         return $this->store[(string) $id] ?? null;
     }
+
+    public function remove(GameId $id): void
+    {
+        unset($this->store[(string) $id]);
+    }
 }

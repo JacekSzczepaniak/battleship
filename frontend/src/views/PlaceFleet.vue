@@ -128,6 +128,14 @@
                 </button>
             </div>
             <p v-if="error" class="err">{{ error }}</p>
+            <!-- „Zmień skład” (#166 D2): tylko bitwa wyprawy, tylko przed rozstawieniem -->
+            <div v-if="battle" class="change-squad">
+                <button class="btn btn-small btn-secondary" :class="{ danger: confirmChange }" :disabled="busy" @click="changeSquad">
+                    <Undo2 :size="14" /> {{ confirmChange ? 'Kliknij jeszcze raz — kontratak uderzy' : 'Zmień skład' }}
+                </button>
+                <p class="muted">Bitwa się anuluje, statki wrócą do wyboru składu. Wydany tik przepada.</p>
+                <p v-if="strikeDue" class="warn">⚠️ Termin uderzenia kontrataku minął — bez tej obrony kontratak rozstrzygnie się od razu: {{ strikeDue === 'fort' ? 'fort utrzyma banderę, ale przepadnie połowa magazynu' : 'wyspa przepadnie razem z połową magazynu' }}.</p>
+            </div>
             <router-link :to="{ name: 'home' }" class="back">← Port</router-link>
         </div>
     </section>
@@ -136,11 +144,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Anchor, Ban, Check, Crosshair, Download, Eraser, Pencil, RotateCw, Save, Shuffle, Trash2, X } from 'lucide-vue-next';
+import { Anchor, Ban, Check, Crosshair, Download, Eraser, Pencil, RotateCw, Save, Shuffle, Trash2, Undo2, X } from 'lucide-vue-next';
 import SeaGrid from '../components/SeaGrid.vue';
 import { createGame, getGame, placeFleet, type GameViewDTO, type Loadout, type PlayerFleetItem, type RulesetName } from '../api/gameApi';
-import { deleteFleetPreset, getExpedition, renameFleetPreset, saveFleetPreset, type FleetPresetDTO, type FleetShipDTO } from '../api/expeditionApi';
-import { getCurrentBattle, setCurrentBattle } from '../lib/expeditionSession';
+import { cancelBattle, deleteFleetPreset, getExpedition, renameFleetPreset, saveFleetPreset, type FleetPresetDTO, type FleetShipDTO } from '../api/expeditionApi';
+import { clearCurrentBattle, getCurrentBattle, setCurrentBattle } from '../lib/expeditionSession';
 import {
     FLEET_PRESET_LIMIT, FLEET_PRESET_NAME_MAX, missingMessage, presetErrorMessage, presetPlacements, slotShipIds,
 } from '../lib/fleetPresets';
@@ -264,6 +272,10 @@ async function loadPresets() {
         const expedition = await getExpedition(b.profileId);
         presets.value = expedition.fleetPresets ?? [];
         fleet.value = expedition.fleet;
+        // obrona, której termin uderzenia minął (#166): anulowanie odda wyspę od razu
+        const pending = expedition.counterattack.pending;
+        const due = !b.kind && !!pending && pending.island === b.islandId && pending.defenseStarted && pending.ticksLeft === 0;
+        strikeDue.value = due ? (pending.fort ? 'fort' : 'lost') : null;
         squadIds.value = expedition.battleSquads?.[b.gameId] ?? [];
     } catch {
         // bez profilu zestawy po prostu się nie pokażą — rozstawianie działa dalej
@@ -600,6 +612,34 @@ async function switchTraining(change: { size?: number; ruleset?: RulesetName; si
     }
 }
 
+// --- „Zmień skład” (#166 D2) ---
+
+// skutek uderzenia przy anulowaniu: fort tylko plądruje, bez fortu wyspa przepada (#81)
+const strikeDue = ref<'fort' | 'lost' | null>(null);
+// po minionym terminie uderzenia anulowanie wymaga drugiego kliknięcia
+const confirmChange = ref(false);
+
+/** Anuluje nierozstawioną bitwę i wraca do wyboru składu tam, skąd wystartowała — ze składem tej bitwy. */
+async function changeSquad() {
+    const b = battle.value;
+    if (!b) return;
+    if (strikeDue.value && !confirmChange.value) {
+        confirmChange.value = true;
+        return;
+    }
+    busy.value = true;
+    error.value = '';
+    try {
+        const { ships: squad } = await cancelBattle(b.profileId, b.gameId);
+        clearCurrentBattle();
+        await router.push({ name: b.from === 'port' ? 'home' : 'expedition', state: { squadDraft: squad } });
+    } catch (e: any) {
+        error.value = e?.message ?? 'Nie udało się anulować bitwy';
+    } finally {
+        busy.value = false;
+    }
+}
+
 async function submitFleet() {
     if (!allPlaced.value) return;
     busy.value = true;
@@ -732,6 +772,11 @@ kbd { font: 600 10px var(--font-mono); padding: 1px 5px; border-radius: 4px; bor
 .buttons { display: flex; flex-direction: column; gap: 10px; margin-top: auto; }
 .buttons .btn-secondary { justify-content: flex-start; }
 .back { font: 500 12px var(--font-mono); color: var(--text-muted); }
+.change-squad { display: flex; flex-direction: column; gap: 6px; }
+.change-squad .btn { align-self: flex-start; }
+.change-squad .btn.danger { border-color: var(--danger); color: var(--danger); }
+.change-squad p { margin: 0; font: 500 11px var(--font-mono); }
+.change-squad .warn { color: var(--warn); }
 
 @media (max-width: 1200px) {
     .frame { grid-template-columns: 1fr; }

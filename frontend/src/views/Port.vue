@@ -14,13 +14,23 @@
                 </p>
 
                 <div class="actions">
-                    <button class="btn btn-primary main-cta" :disabled="starting || loading" @click="onPrimary">
+                    <button class="btn btn-primary main-cta" :disabled="starting || loading || squadEmpty" @click="onPrimary">
                         <span class="cta-text">
                             {{ primary.label }}
                             <small>{{ primary.hint }}</small>
                         </span>
                         <span class="key">ENTER</span>
                     </button>
+                    <!-- skład bitwy jak na Rejsie (#166 D3), gdy flota przekracza limit albo zostawia transportowiec -->
+                    <SquadPicker
+                        v-if="showSquadPicker && expedition && squadLimit !== null"
+                        v-model:pick="squadPick"
+                        v-model:preset-id="squadPresetId"
+                        class="port-squad"
+                        :fleet="expedition.fleet"
+                        :limit="squadLimit"
+                        :presets="expedition.fleetPresets ?? []"
+                    />
                     <button v-if="primary.kind !== 'training'" class="link-training" :disabled="starting" @click="startTraining">
                         albo bitwa treningowa — bez stawki →
                     </button>
@@ -153,7 +163,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue';
 import { useRouter } from 'vue-router';
 import { Anchor, Compass, Container, Map as MapIcon, Plane, Radar, Settings, Ship, Sailboat, Wrench, Crosshair } from 'lucide-vue-next';
 import {
@@ -164,9 +174,11 @@ import {
 import { createGame } from '../api/gameApi';
 import { ApiError } from '../api/http';
 import {
-    clearCurrentBattle, clearProfileId, getCurrentBattle, getProfileId,
-    setCurrentBattle, setProfileId, type CurrentBattle,
+    battleRoute, clearCurrentBattle, clearProfileId, getCurrentBattle, getProfileId,
+    setCurrentBattle, setProfileId, takeSquadDraft, type CurrentBattle,
 } from '../lib/expeditionSession';
+import SquadPicker from '../components/SquadPicker.vue';
+import { squadChoiceNeeded, squadOf } from '../lib/squad';
 import { getTrainingPrefs } from '../lib/battleSession';
 import { VARIANTS, carriedWeapon, shipTypeForLength } from '../lib/ships';
 import { RESOURCES, formatResources, isEmpty, totalResources } from '../lib/resources';
@@ -309,9 +321,28 @@ const primary = computed<Primary>(() => {
     };
 });
 
+// --- skład bitewny (#166 D3): ten sam wybór co na Rejsie ---
+
+const squadPick = ref<Set<string> | null>(null);
+// zestaw floty (#125), z którego wziął się skład; powrót do składu domyślnego go odpina
+const squadPresetId = ref<string | null>(null);
+watch(squadPick, pick => { if (pick === null) squadPresetId.value = null; });
+
+/** Limit pól składu bitwy z Portu: oblężenie liczy planszę fortu (#120); null = główna akcja to nie bitwa wyprawy. */
+const squadLimit = computed<number | null>(() => {
+    const island = currentIsland.value;
+    if (primary.value.kind !== 'island' || !island) return null;
+    return island.besieged && !island.owned && island.siegeSquadLimit !== null ? island.siegeSquadLimit : island.squadLimit;
+});
+
+const showSquadPicker = computed(() => squadLimit.value !== null && squadChoiceNeeded(expedition.value?.fleet ?? [], squadLimit.value));
+// ręcznie odznaczony cały skład — nie ma z kim płynąć
+const squadEmpty = computed(() => squadLimit.value !== null && squadOf(expedition.value?.fleet ?? [], squadLimit.value, squadPick.value).length === 0);
+
 async function onPrimary() {
     if (primary.value.kind === 'resume' && pendingBattle.value) {
-        await router.push({ name: 'game', params: { id: pendingBattle.value.gameId } });
+        // nierozstawiona bitwa wraca do rozstawiania (#166 D1)
+        await router.push(await battleRoute(pendingBattle.value.gameId));
         return;
     }
     if (primary.value.kind === 'island') {
@@ -329,8 +360,12 @@ async function startIsland() {
     error.value = '';
     try {
         const siege = island.besieged && !island.owned;
-        const game = siege ? await startSiege(profileId, island.id) : await startIslandBattle(profileId, island.id);
-        setCurrentBattle({ profileId, gameId: game.id, islandId: island.id, islandName: island.name, kind: siege ? 'siege' : undefined });
+        const shipIds = squadPick.value ? [...squadPick.value] : undefined;
+        const game = siege ? await startSiege(profileId, island.id, shipIds) : await startIslandBattle(profileId, island.id, shipIds);
+        setCurrentBattle({
+            profileId, gameId: game.id, islandId: island.id, islandName: island.name,
+            kind: siege ? 'siege' : undefined, presetId: squadPresetId.value ?? undefined, from: 'port',
+        });
         await router.push({ name: 'place-fleet', params: { id: game.id } });
     } catch (e: any) {
         error.value = e?.message ?? 'Nie udało się rozpocząć bitwy';
@@ -368,8 +403,15 @@ async function load() {
     try {
         const profileId = getProfileId();
         if (!profileId) return;
+        // „Zmień skład” (#166) wraca tu ze składem anulowanej bitwy — wybór otwiera się z nim
+        const draft = takeSquadDraft();
         await settlePendingBattle(profileId);
         expedition.value = await getExpedition(profileId);
+        // bez wyboru (flota mieści się w limicie) skład i tak jest jeden — szkic odpada
+        if (draft && showSquadPicker.value) {
+            const active = new Set(expedition.value.fleet.filter(s => !s.damaged).map(s => s.id));
+            squadPick.value = new Set(draft.filter(id => active.has(id)));
+        }
     } catch (e: any) {
         if (e instanceof ApiError && e.status === 404) {
             clearProfileId();
@@ -491,6 +533,7 @@ h1 span { color: var(--info); }
     cursor: pointer;
 }
 .link-training:hover { color: var(--info); }
+.port-squad { margin-top: -4px; }
 .secondary { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .secondary .btn { justify-content: flex-start; text-align: left; }
 .secondary em { margin-left: auto; font: 600 9px var(--font-mono); font-style: normal; letter-spacing: .14em; text-transform: uppercase; }

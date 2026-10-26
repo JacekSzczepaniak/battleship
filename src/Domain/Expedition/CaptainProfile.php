@@ -67,7 +67,7 @@ final class CaptainProfile
     public const REPAIR_DISCOUNT_PERK_PERCENT = 20;
     public const LOOT_BONUS_PERK_PERCENT = 20;
 
-    /** @var array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int, stronghold?: bool, encounter?: string}> klucz: gameId */
+    /** @var array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int, stronghold?: bool, encounter?: string, encounterAt?: array{tick:int, x:int, y:int}, raidPenalty?: int}> klucz: gameId */
     private array $battles = [];
 
     /**
@@ -2207,10 +2207,16 @@ final class CaptainProfile
     {
         $encounter = $this->encounter ?? throw new \DomainException('No encounter pending');
         $this->registerBattle($encounter->sea, $gameId, BattleKind::Encounter, $shipIds);
-        $this->battles[(string) $gameId]['encounter'] = $encounter->type->value;
+        $key = (string) $gameId;
+        $this->battles[$key]['encounter'] = $encounter->type->value;
+        // miejsce i czas spotkania: anulowana bitwa przywraca je do decyzji (#166)
+        $this->battles[$key]['encounterAt'] = ['tick' => $encounter->tick, 'x' => $encounter->x, 'y' => $encounter->y];
         $this->encounter = null;
         if (EncounterType::Merchant === $encounter->type) {
+            $before = $this->reputation->value;
             $this->changeReputation(Reputation::RAID);
+            // faktyczna kara (przy granicy osi mniejsza) — tyle zwraca anulowanie
+            $this->battles[$key]['raidPenalty'] = $before - $this->reputation->value;
         }
 
         return $encounter;
@@ -2375,6 +2381,48 @@ final class CaptainProfile
 
         $this->battles[$key] = ['island' => $islandId, 'settled' => false, 'result' => null, 'kind' => $kind->value, 'ships' => $shipIds];
         $this->passTicks();
+    }
+
+    /**
+     * Anuluje nierozstawioną bitwę wyprawy, żeby kapitan mógł zmienić skład
+     * (#166). Czy gra się już zaczęła, sprawdza warstwa aplikacji. Bitwa znika
+     * z rejestru, więc jej statki wracają do floty; wydany tik przepada, nic
+     * innego się nie cofa. Obronę można podjąć ponownie — chyba że termin
+     * uderzenia minął w trakcie, wtedy kontratak rozstrzyga się od razu jak
+     * przy nieobecności. Spotkanie na morzu wraca do decyzji, a kara
+     * reputacji za napad wraca do kapitana, bo napadu nie było.
+     *
+     * @return list<string> statki, które miały płynąć
+     */
+    public function cancelBattle(GameId $gameId, WorldMap $world): array
+    {
+        $key = (string) $gameId;
+        $battle = $this->battles[$key] ?? throw new \DomainException('Battle not registered for this profile');
+        if ($battle['settled']) {
+            throw new \DomainException('Battle already settled');
+        }
+
+        unset($this->battles[$key]);
+        $kind = self::battleKind($battle);
+        if (BattleKind::Defense === $kind && null !== $this->counterattack && $this->counterattack['defense'] === $key) {
+            $this->counterattack['defense'] = null;
+            if ($this->tick >= $this->counterattack['strikeAt']) {
+                $this->resolveCounterattack($this->counterattack['strikeAt'], held: false, absent: true, world: $world);
+            }
+        }
+        if (BattleKind::Encounter === $kind) {
+            $type = EncounterType::tryFrom($battle['encounter'] ?? '');
+            $at = $battle['encounterAt'] ?? null;
+            // nowe spotkanie (flota popłynęła mimo bitwy) ma pierwszeństwo przed przywróconym
+            if (null !== $type && null !== $at && null === $this->encounter) {
+                $this->encounter = new Encounter($type, $at['tick'], $battle['island'], $at['x'], $at['y']);
+            }
+            if (($battle['raidPenalty'] ?? 0) > 0) {
+                $this->changeReputation($battle['raidPenalty']);
+            }
+        }
+
+        return $battle['ships'] ?? [];
     }
 
     /** Wyspa (przy bitwie strażnika: brama), o którą toczy się dana gra; null gdy gra nie należy do profilu. */
@@ -2926,7 +2974,7 @@ final class CaptainProfile
         return $this->unplacedResources;
     }
 
-    /** @return array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int, stronghold?: bool, encounter?: string}> */
+    /** @return array<string, array{island: string, settled: bool, result: ?string, kind?: string, ships?: list<string>, enemySunk?: int, stronghold?: bool, encounter?: string, encounterAt?: array{tick:int, x:int, y:int}, raidPenalty?: int}> */
     public function battles(): array
     {
         return $this->battles;

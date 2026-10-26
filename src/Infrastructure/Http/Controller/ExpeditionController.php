@@ -5,6 +5,7 @@ namespace App\Infrastructure\Http\Controller;
 use App\Application\Expedition\BuildBuilding;
 use App\Application\Expedition\BuildShip;
 use App\Application\Expedition\BuySeaChart;
+use App\Application\Expedition\CancelBattle;
 use App\Application\Expedition\CreateProfile;
 use App\Application\Expedition\DecidePrize;
 use App\Application\Expedition\DeleteFleetPreset;
@@ -69,6 +70,7 @@ final class ExpeditionController
         private SellShip $sellShip,
         private SetFieldRepairs $setFieldRepairs,
         private BuySeaChart $buySeaChart,
+        private CancelBattle $cancelBattle,
     ) {
     }
 
@@ -142,6 +144,16 @@ final class ExpeditionController
         $this->assertUuid($gameId, 'game');
 
         return new JsonResponse($this->settleBattle->handle($id, $gameId));
+    }
+
+    /** „Zmień skład” (#166): anuluje bitwę przed rozstawieniem floty. */
+    #[Route('/{id}/battles/{gameId}/cancel', name: 'api_profiles_battle_cancel', methods: ['POST'])]
+    public function cancel(string $id, string $gameId): JsonResponse
+    {
+        $this->assertUuid($id, 'profile');
+        $this->assertUuid($gameId, 'game');
+
+        return new JsonResponse($this->cancelBattle->handle($id, $gameId));
     }
 
     #[Route('/{id}/sail', name: 'api_profiles_sail', methods: ['POST'])]

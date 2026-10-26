@@ -113,9 +113,7 @@
             <!-- Trwająca bitwa -->
             <section v-if="pendingBattle" class="alert pending">
                 <span>⚔️ Trwa bitwa {{ pendingBattle.kind === 'guardian' || pendingBattle.kind === 'encounter' ? 'z:' : 'o' }} <strong>{{ pendingBattle.islandName }}</strong>.</span>
-                <router-link class="btn btn-small btn-primary" :to="{ name: 'game', params: { id: pendingBattle.gameId } }">
-                    Wróć do bitwy
-                </router-link>
+                <button class="btn btn-small btn-primary" @click="onResumeBattle(pendingBattle)">Wróć do bitwy</button>
             </section>
 
             <!-- Zdobycz z abordażu (#118): stan do decyzji, jak kontratak — na wierzchu, w dowolnym miejscu mapy -->
@@ -153,29 +151,14 @@
                         </template>
                         <span v-else-if="encounter.type === 'pirate'" class="rep-note">⚖️ Wygrana: {{ battleReputation.text }}<template v-if="battleReputation.crossing"> ({{ battleReputation.crossing }})</template>.</span>
                         <span v-else class="rep-note">⚖️ Łowcy nagród ścigają korsarza objętego embargiem: nie przyjmą okupu i nie dadzą uciec. Wygrana nie zmienia reputacji — z embarga wyprowadzają tylko pokonani piraci ({{ signed(reputation.changes.pirateDefeated) }}).</span>
-                        <div class="squad">
-                            <span :class="{ over: activeCells > encounter.battle.squadLimit }">
-                                skład: {{ squadCells(squadFor(encounter.battle)) }} / {{ encounter.battle.squadLimit }} pól
-                                <template v-if="activeCells > encounter.battle.squadLimit"> · flota ma {{ activeCells }} pól — część nie stanie do bitwy</template>
-                            </span>
-                            <button v-if="activeCells > encounter.battle.squadLimit || leavesShipsInPort(encounter.battle)" class="btn btn-small btn-secondary" @click="togglePicker(encounter.battle)">
-                                {{ squadPick ? 'skład domyślny' : 'wybierz skład' }}
-                            </button>
-                            <ul v-if="squadPick" class="squad-pick">
-                                <li v-for="ship in activeShips" :key="ship.id">
-                                    <label :class="{ off: !squadPick.has(ship.id) && squadCells(squadFor(encounter.battle)) + ship.length > encounter.battle.squadLimit }">
-                                        <input
-                                            type="checkbox"
-                                            :checked="squadPick.has(ship.id)"
-                                            :disabled="!squadPick.has(ship.id) && squadCells(squadFor(encounter.battle)) + ship.length > encounter.battle.squadLimit"
-                                            @change="toggleShip(ship.id)"
-                                        />
-                                        {{ SHIP_ICONS[ship.type] }} {{ fleetShipLabel(ship) }} · {{ fieldsLabel(ship.length) }}
-                                    </label>
-                                </li>
-                            </ul>
-                            <span v-if="convoyBlocked(encounter.battle)" class="over">⚠️ konwój bez eskorty nie stanie do bitwy — dobierz kuter, niszczyciel albo lotniskowiec</span>
-                        </div>
+                        <SquadPicker
+                            v-model:pick="squadPick"
+                            v-model:preset-id="squadPresetId"
+                            :fleet="expedition!.fleet"
+                            :limit="encounter.battle.squadLimit"
+                            overflow="część nie stanie do bitwy"
+                            convoy="nie stanie do bitwy"
+                        />
                         <button
                             class="btn btn-small btn-primary"
                             :disabled="busy || starting !== null || pendingBattle !== null || squadFor(encounter.battle).length === 0 || convoyBlocked(encounter.battle)"
@@ -317,38 +300,14 @@
                                     <span class="muted">porażka: +{{ currentIsland.xpLoss }} XP, {{ formatResources(currentIsland.lootLoss, 'bez łupów') }}</span>
                                     <span class="muted">plansza {{ currentIsland.board.w }}×{{ currentIsland.board.h }}<template v-if="currentIsland.wins || currentIsland.losses"> · bilans: {{ currentIsland.wins }}W / {{ currentIsland.losses }}P</template></span>
                                 </div>
-                                <div v-if="currentIsland.unlocked && (!currentIsland.owned || canDefend(currentIsland, counterattack.pending))" class="squad">
-                                    <span :class="{ over: activeCells > islandTarget!.squadLimit }">
-                                        skład: {{ squadCells(squadFor(islandTarget!)) }} / {{ islandTarget!.squadLimit }} pól
-                                        <template v-if="activeCells > islandTarget!.squadLimit"> · flota ma {{ activeCells }} pól — część zostanie w porcie</template>
-                                        <template v-else-if="!squadPick && leavesShipsInPort(islandTarget!)"> · transportowiec płynie tylko wybrany ręcznie</template>
-                                    </span>
-                                    <button v-if="activeCells > islandTarget!.squadLimit || leavesShipsInPort(islandTarget!)" class="btn btn-small btn-secondary" @click="togglePicker(islandTarget!)">
-                                        {{ squadPick ? 'skład domyślny' : 'wybierz skład' }}
-                                    </button>
-                                    <FleetPresetPicker
-                                        v-if="expedition!.fleetPresets?.length"
-                                        :presets="expedition!.fleetPresets"
-                                        :fleet="expedition!.fleet"
-                                        :limit="islandTarget!.squadLimit"
-                                        :selected="squadPresetId"
-                                        @pick="onPickPreset"
-                                    />
-                                    <ul v-if="squadPick" class="squad-pick">
-                                        <li v-for="ship in activeShips" :key="ship.id">
-                                            <label :class="{ off: !squadPick.has(ship.id) && squadCells(squadFor(islandTarget!)) + ship.length > islandTarget!.squadLimit }">
-                                                <input
-                                                    type="checkbox"
-                                                    :checked="squadPick.has(ship.id)"
-                                                    :disabled="!squadPick.has(ship.id) && squadCells(squadFor(islandTarget!)) + ship.length > islandTarget!.squadLimit"
-                                                    @change="toggleShip(ship.id)"
-                                                />
-                                                {{ SHIP_ICONS[ship.type] }} {{ fleetShipLabel(ship) }} · {{ fieldsLabel(ship.length) }}
-                                            </label>
-                                        </li>
-                                    </ul>
-                                    <span v-if="convoyBlocked(islandTarget!)" class="over">⚠️ konwój bez eskorty nie zaatakuje wyspy — dobierz kuter, niszczyciel albo lotniskowiec</span>
-                                </div>
+                                <SquadPicker
+                                    v-if="currentIsland.unlocked && (!currentIsland.owned || canDefend(currentIsland, counterattack.pending))"
+                                    v-model:pick="squadPick"
+                                    v-model:preset-id="squadPresetId"
+                                    :fleet="expedition!.fleet"
+                                    :limit="islandTarget!.squadLimit"
+                                    :presets="expedition!.fleetPresets ?? []"
+                                />
                                 <!-- wyspa pod banderą nie jest areną: bitwa tylko w obronie przed kontratakiem (#78) -->
                                 <template v-if="currentIsland.owned">
                                     <button
@@ -499,37 +458,14 @@
                                 </div>
                                 <p class="muted">Łup trafia do ładowni — przy bramie nie ma magazynu, nadmiar ponad pojemność przepada.</p>
                                 <template v-if="currentGate.blocker === 'guardian'">
-                                    <div class="squad">
-                                        <span :class="{ over: activeCells > currentGate.guardian.squadLimit }">
-                                            skład: {{ squadCells(squadFor(currentGate.guardian)) }} / {{ currentGate.guardian.squadLimit }} pól
-                                            <template v-if="activeCells > currentGate.guardian.squadLimit"> · flota ma {{ activeCells }} pól — część zostanie w porcie</template>
-                                        </span>
-                                        <button v-if="activeCells > currentGate.guardian.squadLimit || leavesShipsInPort(currentGate.guardian)" class="btn btn-small btn-secondary" @click="togglePicker(currentGate.guardian)">
-                                            {{ squadPick ? 'skład domyślny' : 'wybierz skład' }}
-                                        </button>
-                                        <FleetPresetPicker
-                                            v-if="expedition!.fleetPresets?.length"
-                                            :presets="expedition!.fleetPresets"
-                                            :fleet="expedition!.fleet"
-                                            :limit="currentGate.guardian.squadLimit"
-                                            :selected="squadPresetId"
-                                            @pick="onPickPreset"
-                                        />
-                                        <ul v-if="squadPick" class="squad-pick">
-                                            <li v-for="ship in activeShips" :key="ship.id">
-                                                <label :class="{ off: !squadPick.has(ship.id) && squadCells(squadFor(currentGate.guardian)) + ship.length > currentGate.guardian.squadLimit }">
-                                                    <input
-                                                        type="checkbox"
-                                                        :checked="squadPick.has(ship.id)"
-                                                        :disabled="!squadPick.has(ship.id) && squadCells(squadFor(currentGate.guardian)) + ship.length > currentGate.guardian.squadLimit"
-                                                        @change="toggleShip(ship.id)"
-                                                    />
-                                                    {{ SHIP_ICONS[ship.type] }} {{ fleetShipLabel(ship) }} · {{ fieldsLabel(ship.length) }}
-                                                </label>
-                                            </li>
-                                        </ul>
-                                        <span v-if="convoyBlocked(currentGate.guardian)" class="over">⚠️ konwój bez eskorty nie stanie do bitwy — dobierz kuter, niszczyciel albo lotniskowiec</span>
-                                    </div>
+                                    <SquadPicker
+                                        v-model:pick="squadPick"
+                                        v-model:preset-id="squadPresetId"
+                                        :fleet="expedition!.fleet"
+                                        :limit="currentGate.guardian.squadLimit"
+                                        :presets="expedition!.fleetPresets ?? []"
+                                        convoy="nie stanie do bitwy"
+                                    />
                                     <button
                                         class="btn btn-primary act"
                                         :disabled="starting !== null || pendingBattle !== null || squadFor(currentGate.guardian).length === 0 || convoyBlocked(currentGate.guardian)"
@@ -836,16 +772,16 @@ import {
 import { ApiError } from '../api/http';
 import {
     clearCurrentBattle, clearProfileId, getCurrentBattle, getProfileId,
-    setCurrentBattle, setProfileId, type CurrentBattle,
+    battleRoute, setCurrentBattle, setProfileId, takeSquadDraft, type CurrentBattle,
 } from '../lib/expeditionSession';
-import { defaultSquad, isUnescortedConvoy, squadCells } from '../lib/squad';
-import { VARIANTS, carriedWeapon, columnLabel, fieldsLabel } from '../lib/ships';
+import { convoyBlocked as squadConvoyBlocked, isUnescortedConvoy, squadOf } from '../lib/squad';
+import { VARIANTS, carriedWeapon, columnLabel } from '../lib/ships';
 import { depositLabel, depositState, whereToFind } from '../lib/economy';
 import { logText, logTone } from '../lib/eventLog';
 import { buyCost, sellValue } from '../lib/merchant';
 import { axisPercent, changePreview, nextThresholds, signed, TIER_LABELS, tierEffect } from '../lib/reputation';
 import CargoPanel from '../components/CargoPanel.vue';
-import FleetPresetPicker from '../components/FleetPresetPicker.vue';
+import SquadPicker from '../components/SquadPicker.vue';
 import FleetPanel from '../components/FleetPanel.vue';
 import ScrapButton from '../components/ScrapButton.vue';
 import MarketPanel from '../components/MarketPanel.vue';
@@ -1881,8 +1817,14 @@ async function load() {
             needsProfile.value = true;
             return;
         }
+        // „Zmień skład” (#166) wraca tu ze składem anulowanej bitwy — wybór otwiera się z nim
+        const draft = takeSquadDraft();
         await settlePendingBattle(profileId);
         expedition.value = await getExpedition(profileId);
+        if (draft) {
+            const active = new Set(expedition.value.fleet.filter(s => !s.damaged).map(s => s.id));
+            squadPick.value = new Set(draft.filter(id => active.has(id)));
+        }
         // wejście z portu „Stocznia” (#stocznia) otwiera zakładkę stoczni, o ile flota przy niej stoi
         setTab(tabFromHash(route.hash) ?? defaultTab());
     } catch (e: any) {
@@ -1922,6 +1864,11 @@ async function settlePendingBattle(profileId: string) {
     }
 }
 
+/** Powrót do trwającej bitwy (#166 D1): nierozstawiona prowadzi do rozstawiania. */
+async function onResumeBattle(battle: CurrentBattle) {
+    await router.push(await battleRoute(battle.gameId));
+}
+
 async function onCreateProfile() {
     creating.value = true;
     error.value = '';
@@ -1948,43 +1895,16 @@ const squadPick = ref<Set<string> | null>(null);
 // które płyną; powrót do składu domyślnego go odpina
 const squadPresetId = ref<string | null>(null);
 watch(squadPick, pick => { if (pick === null) squadPresetId.value = null; });
-const activeShips = computed(() => (expedition.value?.fleet ?? []).filter(s => !s.damaged));
-const activeCells = computed(() => squadCells(activeShips.value));
-
 // konwój w rejsie: flota z transportowcem (także uszkodzonym) bez sprawnego statku z bronią
 const unescortedConvoy = computed(() => isUnescortedConvoy(expedition.value?.fleet ?? []));
 
-/** Dobór domyślny zostawia w porcie statki spoza priorytetu (transportowiec), choć jest miejsce. */
-function leavesShipsInPort(island: SquadTarget): boolean {
-    return defaultSquad(expedition.value?.fleet ?? [], island.squadLimit).length < activeShips.value.length;
-}
-
-/** Konwój bez eskorty nie atakuje — także gdy sprawne są same transportowce (dobór domyślny jest pusty). */
+// wybór składu pokazuje SquadPicker; tu tylko to, od czego zależy przycisk startu bitwy
 function convoyBlocked(island: SquadTarget): boolean {
-    const squad = squadFor(island);
-    return isUnescortedConvoy(squad.length ? squad : activeShips.value);
+    return squadConvoyBlocked(expedition.value?.fleet ?? [], island.squadLimit, squadPick.value);
 }
 
 function squadFor(island: SquadTarget): FleetShipDTO[] {
-    if (squadPick.value) return activeShips.value.filter(s => squadPick.value!.has(s.id));
-    return defaultSquad(expedition.value?.fleet ?? [], island.squadLimit);
-}
-
-function togglePicker(island: SquadTarget) {
-    squadPick.value = squadPick.value ? null : new Set(defaultSquad(expedition.value?.fleet ?? [], island.squadLimit).map(s => s.id));
-}
-
-function toggleShip(shipId: string) {
-    if (!squadPick.value) return;
-    const next = new Set(squadPick.value);
-    if (next.has(shipId)) next.delete(shipId); else next.add(shipId);
-    squadPick.value = next;
-}
-
-/** Zestaw floty (#125) ustawia skład; bez zestawu skład wraca do domyślnego. */
-function onPickPreset(presetId: string | null, shipIds: string[] | null) {
-    squadPick.value = shipIds ? new Set(shipIds) : null;
-    squadPresetId.value = presetId;
+    return squadOf(expedition.value?.fleet ?? [], island.squadLimit, squadPick.value);
 }
 
 async function onStartBattle(island: IslandDTO) {
@@ -2234,11 +2154,6 @@ h2, h3 { font-family: var(--font-head); }
 .block > .kicker { font-size: 11px; }
 .meta { display: flex; gap: 4px 14px; flex-wrap: wrap; font-size: 14px; }
 .act { align-self: flex-start; padding: 11px 18px; font-size: 14px; border-radius: 10px; }
-.squad { display: flex; flex-wrap: wrap; gap: 0.5rem 0.8rem; align-items: center; font: 500 12px var(--font-mono); color: var(--text-muted); }
-.squad .over { color: var(--warn); }
-.squad-pick { list-style: none; padding: 0; margin: 0; width: 100%; display: flex; flex-wrap: wrap; gap: 6px 14px; }
-.squad-pick label { cursor: pointer; color: var(--text-2); }
-.squad-pick label.off { opacity: .45; cursor: not-allowed; }
 .hint-box { padding: 14px 16px; border-radius: 12px; background: var(--bg-card); border: 1px dashed var(--line-btn); font: 400 12px var(--font-body); color: var(--text-muted); line-height: 1.5; }
 .ships { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .ship { display: flex; gap: 6px 10px; align-items: center; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--line); }

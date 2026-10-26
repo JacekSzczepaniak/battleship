@@ -889,6 +889,11 @@ export async function settleBattle(profileId: string, gameId: string): Promise<S
     return http.post<SettleResultDTO>(`/profiles/${profileId}/battles/${gameId}/settle`, {});
 }
 
+/** „Zmień skład” (#166): anuluje bitwę przed rozstawieniem floty; zwraca statki, które miały płynąć. Tik przepada. */
+export async function cancelBattle(profileId: string, gameId: string): Promise<{ ships: string[] }> {
+    return http.post<{ ships: string[] }>(`/profiles/${profileId}/battles/${gameId}/cancel`, {});
+}
+
 export async function buildShip(profileId: string, islandId: string, type: ShipTypeName, variant?: ShipVariantName): Promise<FleetShipDTO> {
     return http.post<FleetShipDTO>(`/profiles/${profileId}/ships`, { type, islandId, ...(variant ? { variant } : {}) });
 }

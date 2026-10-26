@@ -147,6 +147,8 @@ final class ExceptionSubscriber implements EventSubscriberInterface
             'Island not found' => ['ISLAND_NOT_FOUND', 404],
             'Battle not registered for this profile' => ['BATTLE_NOT_REGISTERED', 404],
             'Battle not finished yet' => ['BATTLE_NOT_FINISHED', 409],
+            'Battle already started' => ['BATTLE_ALREADY_STARTED', 409],
+            'Battle already settled' => ['BATTLE_ALREADY_SETTLED', 409],
             'Not enough resources' => ['NOT_ENOUGH_RESOURCES', 409],
             'Cargo capacity exceeded' => ['CARGO_FULL', 409],
             'Squad exceeds island limit' => ['SQUAD_TOO_LARGE', 409],

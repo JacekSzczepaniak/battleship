@@ -9,7 +9,7 @@ import { clearCurrentBattle, getCurrentBattle } from '../lib/expeditionSession';
 import { getBattleReport, saveBattleReport, type BattleReport } from '../lib/battleSession';
 import { carriedWeapons, fieldsLabel, shipName } from '../lib/ships';
 import { attackerMissingShip, battleBonusLabel } from '../lib/counterattack';
-import type { BattleActionName, MoveDirection, PlayerFleetItem, TorpedoDirection } from '../api/gameApi';
+import { getGame, type BattleActionName, type MoveDirection, type PlayerFleetItem, type TorpedoDirection } from '../api/gameApi';
 import { FX_SPEEDS, fxSpeed, setFxSpeed } from '../fx/speed';
 
 const {
@@ -23,6 +23,16 @@ const {
     enemyBoard, ownBoard, animating, opponentAnimating, skipFx,
 } = useGame();
 const router = useRouter();
+
+// nierozstawiona gra (#166 D1): bez floty nie ma bitwy — wróć do rozstawiania
+onMounted(async () => {
+    const id = String(router.currentRoute.value.params.id ?? '');
+    try {
+        if ((await getGame(id)).status === 'pending') await router.replace({ name: 'place-fleet', params: { id } });
+    } catch {
+        // błąd odczytu pokaże sama bitwa
+    }
+});
 
 const battle = getCurrentBattle();
 const expeditionBattle = computed(() => battle !== null && battle.gameId === gameId.value);

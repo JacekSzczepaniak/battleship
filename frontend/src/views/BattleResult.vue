@@ -568,4 +568,12 @@ h1 { font: 700 60px var(--font-head); line-height: .95; letter-spacing: -.02em; 
     .body { grid-template-columns: 1fr; }
     .col.side { border-left: none; border-top: 1px solid var(--line); }
 }
+/* wąski ekran: nagłówek „ZWYCIĘSTWO” nie może rozpychać kolumny ponad ramkę */
+@media (max-width: 560px) {
+    .head { grid-template-columns: minmax(0, 1fr); padding: 24px 16px 16px; }
+    .actions, .col { padding-left: 16px; padding-right: 16px; }
+    h1 { font-size: 40px; }
+    .rank-head { gap: 12px; }
+    .gain { white-space: nowrap; }
+}
 </style>

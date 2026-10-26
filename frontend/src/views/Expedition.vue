@@ -636,7 +636,7 @@
                                         :title="repairBlock(g.repair) ?? ''"
                                         @click="onRepair(g.repair)"
                                     >
-                                        Remont 1 szt. ({{ formatResources(g.repair.repairCost) }}<template v-if="g.repair.repairDiscount"> · perk −20%</template>)
+                                        Remont 1 szt. ({{ formatResources(g.repair.repairCost) }}<template v-if="g.repair.repairDiscount && !isEmpty(g.repair.repairCost)"> · perk −20%</template>)
                                     </button>
                                     <span v-if="repairBlock(g.repair)" class="why">{{ repairBlock(g.repair) }}</span>
                                 </li>

@@ -109,6 +109,18 @@ it('zniżka nie obejmuje uszkodzenia spoza bitwy (sztorm, wyprawa lądowa)', fun
     expect($profile->repairCostOf($stormDamaged))->toEqual(new Resources(wood: 10, steel: 10));
 });
 
+it('prawo do zniżki nie zależy od kosztu: tratwa uszkodzona w wygranej ma zniżkę, choć remont jest za darmo (#168)', function () {
+    $raft = new OwnedShip('t1', ShipType::Tratwa, damaged: true, battleDamage: true);
+    $stormRaft = new OwnedShip('t2', ShipType::Tratwa, damaged: true);
+    $veteran = combatCaptain(1, [$raft, $stormRaft]);
+    $novice = combatCaptain(0, [$raft]);
+
+    expect($veteran->hasRepairDiscount($raft))->toBeTrue()
+        ->and($veteran->repairCostOf($raft))->toEqual(Resources::none())
+        ->and($veteran->hasRepairDiscount($stormRaft))->toBeFalse()
+        ->and($novice->hasRepairDiscount($raft))->toBeFalse();
+});
+
 it('zniżka liczy się po Doku remontowym, z zaokrągleniem w dół, i obejmuje remont floty i kuter', function () {
     $kuter = new OwnedShip('k1', ShipType::Kuter, true, battleDamage: true);
     $profile = combatCaptain(1, [$kuter, new OwnedShip('n1', ShipType::Niszczyciel, true, battleDamage: true)]);

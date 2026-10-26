@@ -765,7 +765,7 @@ final class CaptainProfile
     public function repairCostOf(OwnedShip $ship): Resources
     {
         $cost = $this->repairCost($ship->type);
-        if (!$ship->isBattleDamaged() || !$this->hasPerk(Perk::RepairDiscount)) {
+        if (!$this->hasRepairDiscount($ship)) {
             return $cost;
         }
 
@@ -773,6 +773,15 @@ final class CaptainProfile
             static fn (int $amount) => intdiv($amount * (100 - self::REPAIR_DISCOUNT_PERK_PERCENT), 100),
             $cost->toArray(),
         ));
+    }
+
+    /**
+     * Prawo do zniżki perku „remont po wygranej” (#161): statek uszkodzony w wygranej
+     * bitwie u kapitana z perkiem. Nie zależy od kosztu — tratwa ma prawo, choć remont i tak nic nie kosztuje.
+     */
+    public function hasRepairDiscount(OwnedShip $ship): bool
+    {
+        return $ship->isBattleDamaged() && $this->hasPerk(Perk::RepairDiscount);
     }
 
     /**

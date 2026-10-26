@@ -11,7 +11,7 @@ import {
     type FleetShipDTO, type ShipTypeDTO,
 } from '../api/expeditionApi';
 import { VARIANTS, carriedWeapon } from '../lib/ships';
-import { cheapestRepair, formatResources } from '../lib/resources';
+import { cheapestRepair, formatResources, isEmpty } from '../lib/resources';
 import ScrapButton from './ScrapButton.vue';
 
 const props = defineProps<{
@@ -136,7 +136,7 @@ function unitsLabel(n: number): string {
                         :title="repairBlock(g.repair) ?? ''"
                         @click="emit('repair', g.repair)"
                     >
-                        Remont 1 szt. ({{ formatResources(g.repair.repairCost) }}<template v-if="g.repair.repairDiscount"> · perk −20%</template>)
+                        Remont 1 szt. ({{ formatResources(g.repair.repairCost) }}<template v-if="g.repair.repairDiscount && !isEmpty(g.repair.repairCost)"> · perk −20%</template>)
                     </button>
                     <span v-if="repairBlock(g.repair)" class="block">{{ repairBlock(g.repair) }}</span>
                     <ScrapButton :ship="scrapCandidate(g.damaged)" :busy="busy" :block="scrapBlock(scrapCandidate(g.damaged))" @scrap="emit('scrap', $event)" />

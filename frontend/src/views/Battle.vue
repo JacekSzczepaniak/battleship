@@ -1002,7 +1002,17 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
     .weapons { flex-wrap: wrap; }
     .weapon { flex: 1 1 200px; }
 }
+/* jedna kolumna: plansza dopasowuje komórkę do szerokości kolumny (SeaGrid --sea-room) */
 @media (max-width: 900px) {
     .arena { grid-template-columns: 1fr; }
+    .waters { container-type: inline-size; min-width: 0; }
+    .board-box { --sea-room: calc(100cqi - 30px); }
+    .hud-right { flex-wrap: wrap; }
+}
+@media (max-width: 560px) {
+    .hud { gap: 14px 20px; padding: 16px; }
+    .waters { padding: 16px 12px; }
+    .waters-head { flex-wrap: wrap; gap: 8px; }
+    .board-box { padding: 8px; --sea-room: calc(100cqi - 18px); }
 }
 </style>

@@ -6,6 +6,8 @@
       nakładki: preview | preview-ok | preview-bad | launch | sonar-ship | sonar-water | note
       fort (#119, odsłonięte konstrukcje): fort-gun | fort-wall | fort-magazine; nakładka: blast
     Nad komórkami leży warstwa efektów (#145) — `fxBoard()` daje jej geometrię.
+    Rodzic może ustawić `--sea-room` (szerokość na całą planszę z osiami):
+    komórka zmniejsza się wtedy, żeby plansza się zmieściła (wąski ekran).
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue';
@@ -41,7 +43,6 @@ const size = computed(() => {
 });
 
 const gridStyle = computed(() => ({
-    '--cell': `${size.value}px`,
     gridTemplateColumns: `repeat(${width.value}, var(--cell))`,
 }));
 
@@ -59,7 +60,7 @@ defineExpose({ fxBoard });
 </script>
 
 <template>
-    <div class="sea" :style="{ '--cell': `${size}px` }" @mouseleave="emit('leave')">
+    <div class="sea" :style="{ '--cell-max': `${size}px`, '--cols': width }" @mouseleave="emit('leave')">
         <div></div>
         <div class="axis cols" :style="gridStyle">
             <div v-for="x in width" :key="x">{{ columnLabel(x - 1) }}</div>
@@ -90,6 +91,8 @@ defineExpose({ fxBoard });
 
 <style scoped>
 .sea {
+    /* 23px = oś wierszy (20px) + odstęp osi (6px) − jeden odstęp komórek (3px) */
+    --cell: min(var(--cell-max), calc((var(--sea-room, 9999px) - 23px) / var(--cols) - 3px));
     display: grid;
     grid-template-columns: 20px auto;
     grid-template-rows: 18px auto;

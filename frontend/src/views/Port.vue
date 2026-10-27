@@ -504,7 +504,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
     position: relative;
     min-height: 812px;
     display: grid;
-    grid-template-columns: 1fr 380px;
+    /* minmax(0,…): bez tego kolumna rośnie do min-content przycisków i wychodzi poza ramkę (#173) */
+    grid-template-columns: minmax(0, 1fr) 380px;
 }
 
 .hero { padding: 66px 60px; display: flex; flex-direction: column; }
@@ -578,7 +579,7 @@ h1 span { color: var(--info); }
 .stores li { display: flex; gap: 8px; align-items: baseline; font: 500 11px var(--font-mono); color: var(--text-2); }
 .stores li.here .st-name { color: var(--text); font-weight: 700; }
 .st-name { flex: 0 0 auto; }
-.st-stock { flex: 1; color: var(--text-muted); text-align: right; }
+.st-stock { flex: 1; min-width: 0; color: var(--text-muted); text-align: right; overflow-wrap: anywhere; }
 .st-dep { flex: 0 0 auto; }
 .dep-working { color: var(--info); }
 .dep-full { color: var(--warn); }
@@ -628,8 +629,23 @@ h1 span { color: var(--info); }
 .small { font-size: 12px !important; }
 
 @media (max-width: 1100px) {
-    .layout { grid-template-columns: 1fr; }
+    .layout { grid-template-columns: minmax(0, 1fr); }
     .captain { border-left: none; border-top: 1px solid var(--line); }
     h1 { font-size: 64px; }
+}
+
+/* telefon (#173): węższe marginesy, przyciski w jednej kolumnie, ładownia po dwa kafelki */
+@media (max-width: 560px) {
+    .hero { padding: 36px 20px; }
+    .hero-kicker { letter-spacing: .2em; }
+    h1 { font-size: 52px; }
+    .lead { font-size: 16px; }
+    .actions { padding-top: 32px; }
+    .main-cta { padding: 18px 20px; }
+    .secondary { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+    .captain { padding: 28px 20px; }
+    .resources { flex-wrap: wrap; }
+    .res { flex: 1 1 calc(50% - 5px); }
+    .where { flex-wrap: wrap; }
 }
 </style>

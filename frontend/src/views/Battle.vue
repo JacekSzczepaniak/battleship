@@ -905,11 +905,12 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
 .ai-pill { display: inline-flex; align-items: center; gap: 6px; padding: 9px 13px; border-radius: 9px; background: var(--bg-card); border: 1px solid var(--line-card); font: 600 12px var(--font-mono); color: var(--text-2); }
 .ai-pill.empty { opacity: .45; }
 
-.arena { flex: 1; display: grid; grid-template-columns: 1fr 1fr 320px; }
-.waters { padding: 24px 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+/* kolumny nie rosną do min-content planszy: plansza dopasowuje komórkę do kolumny (SeaGrid --sea-room) */
+.arena { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 320px; }
+.waters { padding: 24px 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; container-type: inline-size; min-width: 0; }
 .waters-head { align-self: stretch; display: flex; justify-content: space-between; align-items: center; min-height: 30px; }
 .kicker.enemy { color: var(--accent); }
-.board-box { padding: 14px; border-radius: 14px; background: var(--bg-panel); border: 1px solid var(--line); transition: opacity .2s; }
+.board-box { padding: 14px; border-radius: 14px; background: var(--bg-panel); border: 1px solid var(--line); transition: opacity .2s; --sea-room: calc(100cqi - 30px); }
 .board-box.locked { opacity: .85; }
 .foot { margin: 0; font: 500 11px var(--font-mono); color: var(--text-muted); text-align: center; max-width: 480px; }
 .fort-legend { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; font: 500 11px var(--font-mono); color: var(--text-muted); }
@@ -996,17 +997,15 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
 .turn-box b { font: 700 17px var(--font-head); color: var(--text-dim); }
 .turn-box.mine b { color: var(--accent); }
 
-@media (max-width: 1280px) {
-    .arena { grid-template-columns: 1fr 1fr; }
+/* dziennik pod planszami: obok nich komórka 14×14 spadłaby poniżej ~24 px */
+@media (max-width: 1360px) {
+    .arena { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
     .log { grid-column: 1 / -1; border-left: none; border-top: 1px solid var(--line); }
     .weapons { flex-wrap: wrap; }
     .weapon { flex: 1 1 200px; }
 }
-/* jedna kolumna: plansza dopasowuje komórkę do szerokości kolumny (SeaGrid --sea-room) */
 @media (max-width: 900px) {
-    .arena { grid-template-columns: 1fr; }
-    .waters { container-type: inline-size; min-width: 0; }
-    .board-box { --sea-room: calc(100cqi - 30px); }
+    .arena { grid-template-columns: minmax(0, 1fr); }
     .hud-right { flex-wrap: wrap; }
 }
 @media (max-width: 560px) {

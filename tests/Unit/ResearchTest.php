@@ -14,6 +14,7 @@ use App\Domain\Expedition\StaticIslandCatalog;
 use App\Domain\Expedition\TechBranch;
 use App\Domain\Expedition\TechLevel;
 use App\Domain\Expedition\Technology;
+use App\Domain\Expedition\TechUnlock;
 use App\Domain\Expedition\WorldMap;
 use App\Domain\Shared\GameId;
 use App\Infrastructure\Persistence\Doctrine\Mapper\ProfileSnapshotMapper;
@@ -80,7 +81,7 @@ it('uczelnia kosztuje 30 drewna, 20 stali i 15 złota i stoi także w Zatoce Roz
 });
 
 it('katalog zawiera tylko działające technologie, a poziom niesie koszt, czas i rangę', function () {
-    expect(Technology::cases())->toBe([Technology::Spichlerze, Technology::MapySztormowe, Technology::SonarDalekiegoZasiegu, Technology::ZeglugaDwusektorowa, Technology::PojemneLadownie, Technology::DokRemontowy, Technology::LepszeNarzedzia, Technology::NiszczycielZwiadowczy, Technology::NawigacjaOceaniczna, Technology::KuterTorpedowy, Technology::CiezkiNiszczyciel, Technology::LotniskowiecEskortowy, Technology::KuterRemontowy, Technology::CzarnaPerla, Technology::Nawigator])
+    expect(Technology::cases())->toBe([Technology::Spichlerze, Technology::MapySztormowe, Technology::SonarDalekiegoZasiegu, Technology::ZeglugaDwusektorowa, Technology::PojemneLadownie, Technology::DokRemontowy, Technology::LepszeNarzedzia, Technology::NiszczycielZwiadowczy, Technology::NawigacjaOceaniczna, Technology::KuterTorpedowy, Technology::CiezkiNiszczyciel, Technology::LotniskowiecEskortowy, Technology::KuterRemontowy, Technology::CzarnaPerla, Technology::Nawigator, Technology::LunetyArtyleryjskie, Technology::LontyProchowe])
         ->and(Technology::Spichlerze->branch())->toBe(TechBranch::Osady)
         ->and(Technology::MapySztormowe->branch())->toBe(TechBranch::Nawigacja)
         ->and(Technology::Spichlerze->level())->toBe(TechLevel::First)
@@ -110,6 +111,32 @@ it('poziom 2 wymaga zbadanego poziomu 1 w tej samej gałęzi i rangi sternik', f
         ->and(TechLevel::Second->treeBlocker(TechBranch::Osady, [Technology::Spichlerze], Rank::Sternik))->toBeNull()
         ->and(TechLevel::First->treeBlocker(TechBranch::Kadluby, [], Rank::Rozbitek))->toBeNull()
         ->and(ResearchBlock::Rank->message(Technology::Spichlerze))->toStartWith('Technology locked');
+});
+
+it('Oblężnictwo (#177): piąta gałąź, Lunety na poziomie 1, Lonty na poziomie 2 za Lunetami i rangą sternik', function () {
+    $mielizny = academyIsland('mielizny');
+    [$novice, $world] = scholar(xp: 40);
+    [$noSpyglasses, $noSpyglassesWorld] = scholar(xp: 250);
+    [$lowRank, $lowRankWorld] = scholar(xp: 150, researched: [Technology::LunetyArtyleryjskie]);
+    [$ready, $readyWorld] = scholar(xp: 250, researched: [Technology::LunetyArtyleryjskie]);
+
+    expect(TechBranch::cases())->toContain(TechBranch::Obleznictwo)
+        ->and(Technology::LunetyArtyleryjskie->branch())->toBe(TechBranch::Obleznictwo)
+        ->and(Technology::LunetyArtyleryjskie->level())->toBe(TechLevel::First)
+        ->and(Technology::LontyProchowe->branch())->toBe(TechBranch::Obleznictwo)
+        ->and(Technology::LontyProchowe->level())->toBe(TechLevel::Second)
+        ->and(Technology::LontyProchowe->unlock())->toBe(TechUnlock::Academy)
+        ->and($novice->researchBlocker(Technology::LunetyArtyleryjskie, $mielizny, $world))->toBeNull()
+        // poziom 1 innej gałęzi nie otwiera Lontów
+        ->and(TechLevel::Second->treeBlocker(TechBranch::Obleznictwo, [Technology::SonarDalekiegoZasiegu], Rank::Admiral))->toBe(ResearchBlock::Prerequisite)
+        ->and($noSpyglasses->researchBlocker(Technology::LontyProchowe, $mielizny, $noSpyglassesWorld))->toBe(ResearchBlock::Prerequisite)
+        ->and($lowRank->researchBlocker(Technology::LontyProchowe, $mielizny, $lowRankWorld))->toBe(ResearchBlock::Rank)
+        ->and($ready->researchBlocker(Technology::LontyProchowe, $mielizny, $readyWorld))->toBeNull();
+});
+
+it('Oblężnictwo nie wypada jako artefakt z ekspedycji: działa tylko na twierdze', function () {
+    expect(Technology::LunetyArtyleryjskie->isArtifactCandidate())->toBeFalse()
+        ->and(Technology::LontyProchowe->isArtifactCandidate())->toBeFalse();
 });
 
 it('start badania płaci najpierw z magazynu wyspy, resztę z ładowni, i nie kosztuje tiku', function () {

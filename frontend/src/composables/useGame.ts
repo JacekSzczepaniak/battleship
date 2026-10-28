@@ -391,6 +391,10 @@ export function useGame() {
                     : g.fort
                         ? `Flota pod fortem. Zniszcz ${g.fort.guns.total} działa nadbrzeżne — mury tylko pochłaniają strzały, magazyn prochu wybucha.`
                         : 'Flota na pozycjach. Wróg czeka we mgle — oddaj pierwszą salwę.');
+            if (g.shotsCount === 0 && (g.fort?.spotted.length ?? 0) > 0) {
+                const [gun] = g.fort!.spotted;
+                pushLog('TY', `Lunety artyleryjskie namierzyły działo fortu na ${cellLabel(gun.x, gun.y)} — zestrzel je.`);
+            }
         } catch (e: any) {
             error.value = e?.message ?? 'Start failed';
             try { console.warn('[useGame.start] ERROR', e); } catch {}
@@ -429,7 +433,8 @@ export function useGame() {
     function logFort(before: FortView | null, now: FortView) {
         if (!before) return;
         if (now.explosion && !before.explosion) {
-            pushLog('TY', 'Magazyn prochu wybuchł! Eksplozja trafiła pola 3×3 wokół niego.');
+            const side = 2 * (now.blastRadius ?? 1) + 1;
+            pushLog('TY', `Magazyn prochu wybuchł! Eksplozja trafiła pola ${side}×${side} wokół niego.`);
         }
         const seen = new Set(before.revealed.map(c => `${c.x}:${c.y}`));
         const walls = now.revealed.filter(c => c.kind === 'wall' && !seen.has(`${c.x}:${c.y}`)).length;

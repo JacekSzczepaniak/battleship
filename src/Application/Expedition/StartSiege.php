@@ -29,7 +29,8 @@ final class StartSiege
      * przy wyspie, a potyczka z flotą strażniczą musi być wygrana. Gra toczy
      * się na planszy fortu (#119), którego układ wynika z seeda świata, wyspy
      * i numeru próby — każda próba to nowy fort. Fort nie jest statkiem, więc
-     * abordażu w oblężeniu nie ma.
+     * abordażu w oblężeniu nie ma. Technologie Oblężnictwa (#177) działają
+     * tylko tutaj.
      *
      * @param list<string>|null $shipIds skład bitewny; null = dobór domyślny
      */
@@ -69,7 +70,7 @@ final class StartSiege
         $attempt = $profile->siegeAttempts($island->id) + 1;
         $fortSeed = crc32("{$profile->worldSeed()}:{$island->id}:fort:{$attempt}") & 0x7FFFFFFF;
 
-        $game = $this->createGame->handle(null, null, 'fun', $composition, 'player', null, $variants ?: null, $sonarRadius, fortSeed: $fortSeed, perks: CaptainBattlePerks::of($profile));
+        $game = $this->createGame->handle(null, null, 'fun', $composition, 'player', null, $variants ?: null, $sonarRadius, fortSeed: $fortSeed, perks: CaptainBattlePerks::of($profile), siegeTech: CaptainSiegeTech::of($profile));
         $profile->startSiege($island->id, $game->id(), array_map(static fn ($s) => $s->id, $squad));
         $this->profiles->save($profile);
 

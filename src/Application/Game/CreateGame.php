@@ -10,6 +10,7 @@ use App\Domain\Game\Game;
 use App\Domain\Game\GameRepository;
 use App\Domain\Game\Siege\FortGenerator;
 use App\Domain\Game\Siege\FortRules;
+use App\Domain\Game\Siege\SiegeTech;
 use App\Domain\Game\Weapon\Loadout;
 
 final class CreateGame
@@ -31,8 +32,9 @@ final class CreateGame
      *                                                        plansza zawsze FortRules::SIZE, zasady fun (pełny arsenał i energia)
      * @param bool                          $boarding         abordaż ostatniego statku wroga (#118): bitwy wyprawy; działa tylko z energią (fun), nie w oblężeniu
      * @param BattlePerks|null              $perks            przewagi gracza z perków kapitana (#161): bitwy wyprawy; null = bez perków (trening)
+     * @param SiegeTech|null                $siegeTech        technologie oblężnicze gracza (#177): tylko z $fortSeed; null = bez technologii (trening)
      */
-    public function handle(?int $w = null, ?int $h = null, string $mode = 'classic', ?array $ships = null, string $firstTurn = 'player', ?array $opponentShips = null, ?array $variants = null, ?int $sonarRadius = null, ?array $opponentVariants = null, ?int $fortSeed = null, bool $boarding = false, ?BattlePerks $perks = null): Game
+    public function handle(?int $w = null, ?int $h = null, string $mode = 'classic', ?array $ships = null, string $firstTurn = 'player', ?array $opponentShips = null, ?array $variants = null, ?int $sonarRadius = null, ?array $opponentVariants = null, ?int $fortSeed = null, bool $boarding = false, ?BattlePerks $perks = null, ?SiegeTech $siegeTech = null): Game
     {
         $perks ??= BattlePerks::none();
         if (null !== $fortSeed) {
@@ -50,7 +52,7 @@ final class CreateGame
             $game->enableBoarding($perks->boardingEdge);
         }
         if (null !== $fortSeed) {
-            $game->placeFort($this->forts->generate($fortSeed));
+            $game->placeFort($this->forts->generate($fortSeed), $siegeTech);
         }
         $this->repo->save($game);
 

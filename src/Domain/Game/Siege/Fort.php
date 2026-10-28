@@ -66,14 +66,15 @@ final class Fort
     }
 
     /**
-     * Pola eksplozji magazynu: kwadrat o promieniu FortRules::EXPLOSION_RADIUS,
+     * Pola eksplozji magazynu: kwadrat o promieniu $radius (domyślnie
+     * FortRules::EXPLOSION_RADIUS, większy z Lontami prochowymi, #177),
      * przycięty do planszy.
      *
      * @return list<Coordinate>
      */
-    public function blastCells(int $width, int $height): array
+    public function blastCells(int $width, int $height, int $radius = FortRules::EXPLOSION_RADIUS): array
     {
-        $r = FortRules::EXPLOSION_RADIUS;
+        $r = $radius;
         $cells = [];
         for ($y = $this->magazine->y - $r; $y <= $this->magazine->y + $r; ++$y) {
             for ($x = $this->magazine->x - $r; $x <= $this->magazine->x + $r; ++$x) {
@@ -84,6 +85,21 @@ final class Fort
         }
 
         return $cells;
+    }
+
+    /**
+     * Działo namierzone Lunetami artyleryjskimi (#177): wybór wynika z seeda
+     * fortu, więc ta sama próba oblężenia odsłania zawsze to samo działo.
+     */
+    public function spottedGun(): Coordinate
+    {
+        if ([] === $this->guns) {
+            throw new \LogicException('Fort has no guns');
+        }
+
+        $n = count($this->guns);
+
+        return $this->guns[(($this->seed % $n) + $n) % $n];
     }
 
     /**

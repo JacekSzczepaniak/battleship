@@ -9,4 +9,6 @@ enum TechBranch: string
     case Uzbrojenie = 'uzbrojenie';
     case Nawigacja = 'nawigacja';
     case Osady = 'osady';
+    /** Technologie oblężnicze (#122/#177): działają tylko w oblężeniu fortu. */
+    case Obleznictwo = 'obleznictwo';
 }

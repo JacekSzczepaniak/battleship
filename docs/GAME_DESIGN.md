@@ -422,6 +422,19 @@ rejsu się nie zmieniają. Nawigator jest poziomem 2, więc może też wypaść 
 remontowy (remont za pół ceny, w górę) w Kadłubach; Lepsze narzędzia (złoże
 +1/tik, tartak i kopalnia podwajają powiększony urobek) w Osadach.
 
+✅ (#177) Piąta gałąź **Oblężnictwo** (Epic H, D1–D2 w #122). Koszt, czas
+i bramka rangi jak na pozostałych poziomach. Działa tylko w oblężeniu fortu
+wyprawy, a w treningu i zwykłych bitwach nic nie zmienia:
+- poziom 1, **Lunety artyleryjskie**: na starcie oblężenia jedno działo fortu
+  jest namierzone na planszy wroga (osobny stan „działo namierzone”, nie
+  trafienie, więc trzeba je jeszcze zestrzelić). Wybór działa wynika z seeda
+  fortu, więc ta sama próba odsłania zawsze to samo działo,
+- poziom 2, **Lonty prochowe**: wybuch magazynu prochu obejmuje 5×5 zamiast
+  3×3, przycięte do planszy fortu,
+- poziom 3 (Moździerz, #178) dojdzie później,
+- technologie Oblężnictwa nie wypadają jako artefakt z ekspedycji (#144):
+  są przewagą na twierdze, czyli cel końcowy akwenu.
+
 Każdy węzeł ma **dwie ścieżki odblokowania**:
 - **standardową** — surowce + tiki + wymagana uczelnia (wolniej),
 - **questową** — artefakt/wyczyn = natychmiast (Twoje „przyspieszenie").

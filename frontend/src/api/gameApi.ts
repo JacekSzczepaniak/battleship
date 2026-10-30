@@ -70,6 +70,10 @@ export interface FortView {
     seed: number;
     guns: { left: number; total: number };
     revealed: { x: number; y: number; kind: FortPieceKind }[];
+    // działo namierzone Lunetami artyleryjskimi (#177): widoczne od startu, nietrafione
+    spotted: { x: number; y: number }[];
+    // promień wybuchu magazynu: 1 = 3×3, 2 = 5×5 z Lontami prochowymi (#177)
+    blastRadius: number;
     // pola eksplozji magazynu prochu; null = magazyn jeszcze stoi
     explosion: [number, number][] | null;
 }

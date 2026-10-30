@@ -29,7 +29,7 @@ final class ResearchApiTest extends WebTestCase
 
         $research = $this->expedition($client, $profileId)['research'];
         self::assertNull($research['current']);
-        self::assertSame(['kadluby', 'uzbrojenie', 'nawigacja', 'osady'], $research['branches']);
+        self::assertSame(['kadluby', 'uzbrojenie', 'nawigacja', 'osady', 'obleznictwo'], $research['branches']);
         self::assertSame([
             ['level' => 1, 'cost' => ['wood' => 20, 'steel' => 20, 'gold' => 5], 'ticks' => 6, 'requiredRank' => null],
             ['level' => 2, 'cost' => ['wood' => 40, 'steel' => 30, 'gold' => 15], 'ticks' => 10, 'requiredRank' => 'sternik'],
@@ -52,6 +52,9 @@ final class ResearchApiTest extends WebTestCase
             ['id' => 'kuter-remontowy', 'branch' => 'kadluby', 'level' => 3, 'unlock' => 'academy', 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'prerequisite'],
             ['id' => 'czarna-perla', 'branch' => 'nawigacja', 'level' => null, 'unlock' => 'quest', 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'quest-only'],
             ['id' => 'nawigator', 'branch' => 'nawigacja', 'level' => 2, 'unlock' => 'academy', 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'prerequisite'],
+            // Oblężnictwo (#177): piąta gałąź, poziomy 1–2
+            ['id' => 'lunety-artyleryjskie', 'branch' => 'obleznictwo', 'level' => 1, 'unlock' => 'academy', 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'no-academy'],
+            ['id' => 'lonty-prochowe', 'branch' => 'obleznictwo', 'level' => 2, 'unlock' => 'academy', 'state' => 'locked', 'ticksLeft' => null, 'blocker' => 'prerequisite'],
         ], $research['technologies']);
 
         // bez uczelni badania nie da się zacząć
@@ -63,7 +66,7 @@ final class ResearchApiTest extends WebTestCase
         $this->post($client, "/api/profiles/$profileId/islands/zatoka-rozbitka/buildings", ['type' => 'uczelnia']);
         self::assertResponseStatusCodeSame(201);
         self::assertSame(
-            ['spichlerze' => 'available', 'mapy-sztormowe' => 'available', 'sonar-dalekiego-zasiegu' => 'available', 'zegluga-dwusektorowa' => 'locked', 'pojemne-ladownie' => 'available', 'dok-remontowy' => 'locked', 'lepsze-narzedzia' => 'locked', 'niszczyciel-zwiadowczy' => 'locked', 'nawigacja-oceaniczna' => 'locked', 'kuter-torpedowy' => 'locked', 'ciezki-niszczyciel' => 'locked', 'lotniskowiec-eskortowy' => 'locked', 'kuter-remontowy' => 'locked', 'czarna-perla' => 'locked', 'nawigator' => 'locked'],
+            ['spichlerze' => 'available', 'mapy-sztormowe' => 'available', 'sonar-dalekiego-zasiegu' => 'available', 'zegluga-dwusektorowa' => 'locked', 'pojemne-ladownie' => 'available', 'dok-remontowy' => 'locked', 'lepsze-narzedzia' => 'locked', 'niszczyciel-zwiadowczy' => 'locked', 'nawigacja-oceaniczna' => 'locked', 'kuter-torpedowy' => 'locked', 'ciezki-niszczyciel' => 'locked', 'lotniskowiec-eskortowy' => 'locked', 'kuter-remontowy' => 'locked', 'czarna-perla' => 'locked', 'nawigator' => 'locked', 'lunety-artyleryjskie' => 'available', 'lonty-prochowe' => 'locked'],
             $this->states($this->expedition($client, $profileId)),
         );
 
@@ -134,7 +137,7 @@ final class ResearchApiTest extends WebTestCase
         $expedition = $this->expedition($client, $granary);
         self::assertNull($expedition['research']['current']);
         self::assertSame(
-            ['spichlerze' => 'researched', 'mapy-sztormowe' => 'researched', 'sonar-dalekiego-zasiegu' => 'available', 'zegluga-dwusektorowa' => 'locked', 'pojemne-ladownie' => 'available', 'dok-remontowy' => 'locked', 'lepsze-narzedzia' => 'locked', 'niszczyciel-zwiadowczy' => 'locked', 'nawigacja-oceaniczna' => 'locked', 'kuter-torpedowy' => 'locked', 'ciezki-niszczyciel' => 'locked', 'lotniskowiec-eskortowy' => 'locked', 'kuter-remontowy' => 'locked', 'czarna-perla' => 'locked', 'nawigator' => 'locked'],
+            ['spichlerze' => 'researched', 'mapy-sztormowe' => 'researched', 'sonar-dalekiego-zasiegu' => 'available', 'zegluga-dwusektorowa' => 'locked', 'pojemne-ladownie' => 'available', 'dok-remontowy' => 'locked', 'lepsze-narzedzia' => 'locked', 'niszczyciel-zwiadowczy' => 'locked', 'nawigacja-oceaniczna' => 'locked', 'kuter-torpedowy' => 'locked', 'ciezki-niszczyciel' => 'locked', 'lotniskowiec-eskortowy' => 'locked', 'kuter-remontowy' => 'locked', 'czarna-perla' => 'locked', 'nawigator' => 'locked', 'lunety-artyleryjskie' => 'available', 'lonty-prochowe' => 'locked'],
             $this->states($expedition),
         );
         $mielizny = array_column($expedition['islands'], null, 'id')['mielizny'];

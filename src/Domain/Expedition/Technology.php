@@ -57,6 +57,12 @@ enum Technology: string
     /** Planowanie trasy po odkrytych sektorach i przez otwarte bramy: seria zwykłych rejsów za te same tiki (#153). */
     case Nawigator = 'nawigator';
 
+    /** Na starcie oblężenia jedno działo fortu jest namierzone na planszy wroga (nietrafione), wybrane z seeda fortu (#177). */
+    case LunetyArtyleryjskie = 'lunety-artyleryjskie';
+
+    /** Wybuch magazynu prochu w oblężeniu obejmuje 5×5 zamiast 3×3, przycięte do planszy (#177). */
+    case LontyProchowe = 'lonty-prochowe';
+
     public function branch(): TechBranch
     {
         return match ($this) {
@@ -65,6 +71,7 @@ enum Technology: string
             self::MapySztormowe, self::ZeglugaDwusektorowa, self::NawigacjaOceaniczna, self::CzarnaPerla, self::Nawigator => TechBranch::Nawigacja,
             self::SonarDalekiegoZasiegu, self::NiszczycielZwiadowczy,
             self::KuterTorpedowy, self::CiezkiNiszczyciel, self::LotniskowiecEskortowy => TechBranch::Uzbrojenie,
+            self::LunetyArtyleryjskie, self::LontyProchowe => TechBranch::Obleznictwo,
         };
     }
 
@@ -72,8 +79,8 @@ enum Technology: string
     public function level(): ?TechLevel
     {
         return match ($this) {
-            self::Spichlerze, self::MapySztormowe, self::SonarDalekiegoZasiegu, self::PojemneLadownie => TechLevel::First,
-            self::ZeglugaDwusektorowa, self::LepszeNarzedzia, self::DokRemontowy, self::NiszczycielZwiadowczy, self::Nawigator => TechLevel::Second,
+            self::Spichlerze, self::MapySztormowe, self::SonarDalekiegoZasiegu, self::PojemneLadownie, self::LunetyArtyleryjskie => TechLevel::First,
+            self::ZeglugaDwusektorowa, self::LepszeNarzedzia, self::DokRemontowy, self::NiszczycielZwiadowczy, self::Nawigator, self::LontyProchowe => TechLevel::Second,
             self::NawigacjaOceaniczna, self::KuterRemontowy => TechLevel::Third,
             self::KuterTorpedowy, self::CiezkiNiszczyciel, self::LotniskowiecEskortowy, self::CzarnaPerla => null,
         };
@@ -95,13 +102,14 @@ enum Technology: string
     /**
      * Czy technologia może wypaść jako artefakt z ekspedycji (#144): poziomy
      * 1–2 uczelni. Poziom 3 (klucz do Morza Mgieł, kuter remontowy) zostaje
-     * na uczelni, żeby artefakt nie przeskoczył progresji.
+     * na uczelni, żeby artefakt nie przeskoczył progresji. Oblężnictwo (#177)
+     * też: to przewaga na twierdze, które są celem końcowym akwenu.
      */
     public function isArtifactCandidate(): bool
     {
         $level = $this->level();
 
-        return null !== $level && $level->value <= TechLevel::Second->value;
+        return null !== $level && $level->value <= TechLevel::Second->value && TechBranch::Obleznictwo !== $this->branch();
     }
 
     /** Poziom technologii z uczelni (badanie w toku, koszt, tiki); technologia ze zdobyczy i z questu go nie ma. */

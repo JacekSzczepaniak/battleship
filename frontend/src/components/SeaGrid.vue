@@ -5,6 +5,7 @@
       treść:    ship | hit | sunk | miss
       nakładki: preview | preview-ok | preview-bad | launch | sonar-ship | sonar-water | note
       fort (#119, odsłonięte konstrukcje): fort-gun | fort-wall | fort-magazine; nakładka: blast
+      fort-spotted (#177): działo namierzone Lunetami, jeszcze nietrafione
     Nad komórkami leży warstwa efektów (#145) — `fxBoard()` daje jej geometrię.
     Rodzic może ustawić `--sea-room` (szerokość na całą planszę z osiami):
     komórka zmniejsza się wtedy, żeby plansza się zmieściła (wąski ekran).
@@ -207,6 +208,21 @@ defineExpose({ fxBoard });
     border-radius: 2px;
     background: var(--warn);
     transform: translate(-50%, -50%) rotate(45deg);
+}
+/* Lunety artyleryjskie (#177): działo widać, ale stoi — sylwetka bez przekreślenia, celownik przerywany */
+.cell.fort-spotted { background: #1c1411; box-shadow: inset 0 0 0 1.5px #c0505088; }
+.cell.fort-spotted::after {
+    width: calc(var(--cell) * .42);
+    height: calc(var(--cell) * .42);
+    background: #3a1d12;
+    box-shadow: 0 0 0 2px var(--danger);
+}
+.cell.fort-spotted::before {
+    width: calc(var(--cell) * .78);
+    height: calc(var(--cell) * .78);
+    border-radius: 50%;
+    border: 1.5px dashed var(--danger);
+    background: transparent;
 }
 .cell.blast { outline: 1.5px dashed #e8843caa; outline-offset: -4px; }
 .cell.blast.miss { background: #23160f; }

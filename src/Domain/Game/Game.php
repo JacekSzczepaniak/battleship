@@ -10,6 +10,8 @@ use App\Domain\Game\Boarding\CaptainBoardingEdge;
 use App\Domain\Game\Boarding\HalfHullHit;
 use App\Domain\Game\Siege\Fort;
 use App\Domain\Game\Siege\FortPiece;
+use App\Domain\Game\Siege\FortRules;
+use App\Domain\Game\Siege\SiegeTech;
 use App\Domain\Game\Weapon\Loadout;
 use App\Domain\Game\Weapon\WeaponKind;
 use App\Domain\Game\Weapon\WeaponSpecs;
@@ -87,6 +89,12 @@ final class Game
 
     /** Fort na planszy wroga w bitwie oblężniczej (#119); null = zwykła bitwa z flotą. */
     private ?Fort $fort = null;
+
+    /** Promień wybuchu magazynu fortu (#177: Lonty prochowe); 1 = 3×3. */
+    private int $fortBlastRadius = FortRules::EXPLOSION_RADIUS;
+
+    /** Działo fortu namierzone od startu (#177: Lunety artyleryjskie); null = żadne. */
+    private ?Coordinate $spottedFortGun = null;
 
     public function __construct(
         private GameId $id,
@@ -586,25 +594,58 @@ final class Game
      * Stawia fort na planszy wroga zamiast floty AI (bitwa oblężnicza).
      * Konstrukcje są statkami bez broni, więc fort nie ma broni specjalnych;
      * w przeciwieństwie do floty mogą stać na styk (bez nakładania).
+     * Technologie oblężnicze gracza (#177) ustawiają promień wybuchu
+     * magazynu i namierzone działo.
      */
-    public function placeFort(Fort $fort): void
+    public function placeFort(Fort $fort, ?SiegeTech $tech = null): void
     {
         if ($this->opponentSide->hasFleet()) {
             throw new \DomainException('Opponent fleet already placed');
         }
+        $tech ??= SiegeTech::none();
         $this->opponentSide->allowContact();
         $this->opponentSide->placeFleet($fort->toShips());
         $this->fort = $fort;
+        $this->fortBlastRadius = $tech->blastRadius;
+        $this->spottedFortGun = $tech->spyglasses ? $fort->spottedGun() : null;
     }
 
     /**
      * Odtworzenie ze snapshotu: plansza wroga wraca z opponentFleet, tu tylko
-     * opis fortu. Wołać PRZED setOpponentFleetFromSnapshot (konstrukcje na styk).
+     * opis fortu i skutki technologii (#177; brak = wartości domyślne).
+     * Wołać PRZED setOpponentFleetFromSnapshot (konstrukcje na styk).
      */
-    public function setFortFromSnapshot(Fort $fort): void
+    public function setFortFromSnapshot(Fort $fort, int $blastRadius = FortRules::EXPLOSION_RADIUS, ?Coordinate $spottedGun = null): void
     {
         $this->opponentSide->allowContact();
         $this->fort = $fort;
+        $this->fortBlastRadius = $blastRadius;
+        $this->spottedFortGun = $spottedGun;
+    }
+
+    public function fortBlastRadius(): int
+    {
+        return $this->fortBlastRadius;
+    }
+
+    public function spottedFortGun(): ?Coordinate
+    {
+        return $this->spottedFortGun;
+    }
+
+    /**
+     * Pola wybuchu magazynu w tej grze (promień z technologii), przycięte do planszy.
+     *
+     * @return list<Coordinate>
+     */
+    public function fortBlastCells(): array
+    {
+        if (null === $this->fort) {
+            return [];
+        }
+        $size = $this->ruleset->boardSize();
+
+        return $this->fort->blastCells($size->width, $size->height, $this->fortBlastRadius);
     }
 
     public function fort(): ?Fort
@@ -641,15 +682,14 @@ final class Game
 
     /**
      * Skutki strzału w fort: trafiony magazyn wybucha i trafia pola 3×3 wokół
-     * siebie (działa i mury też); mur tylko pochłania strzał. Wygrana dopiero
+     * siebie (5×5 z Lontami prochowymi, #177) (działa i mury też); mur tylko pochłania strzał. Wygrana dopiero
      * po zniszczeniu ostatniego działa.
      */
     private function resolveFortShot(Coordinate $c, ShotResult $result): void
     {
         \assert(null !== $this->fort);
         if (ShotResult::Sunk === $result && FortPiece::Magazine === $this->fort->pieceAt($c->x, $c->y)) {
-            $size = $this->ruleset->boardSize();
-            foreach ($this->fort->blastCells($size->width, $size->height) as $cell) {
+            foreach ($this->fortBlastCells() as $cell) {
                 $this->opponentSide->receiveShot($cell);
             }
         }

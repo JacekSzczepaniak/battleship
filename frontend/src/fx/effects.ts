@@ -131,12 +131,14 @@ export function sunk(tok: FxToken, b: FxBoard, cells: Cell[]): void {
 
 /**
  * Eksplozja magazynu prochu (#119): efekt trafienia na wszystkich polach
- * eksplozji (do 9), falą od magazynu, z jednym mocnym wstrząsem.
+ * eksplozji (9, a z Lontami prochowymi 25, #177), falą od magazynu, pierścień
+ * po pierścieniu, z jednym mocnym wstrząsem.
  */
 export async function blast(tok: FxToken, b: FxBoard, at: Cell, cells: Cell[]): Promise<void> {
     const ring = (c: Cell) => Math.max(Math.abs(c[0] - at[0]), Math.abs(c[1] - at[1]));
+    const rings = Math.max(0, ...cells.map(ring));
     shake(tok, b, 4);
-    for (const dist of [0, 1]) {
+    for (let dist = 0; dist <= rings; dist++) {
         cells.filter(c => ring(c) === dist).forEach(([x, y]) => hit(tok, b, x, y, false));
         await tok.wait(120);
     }

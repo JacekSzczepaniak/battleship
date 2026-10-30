@@ -134,10 +134,12 @@ final class GameQueryController
     /**
      * Fort we mgle: licznik dział, rodzaj konstrukcji tylko na trafionych
      * polach (trafienie odsłania mur) i pola eksplozji, gdy magazyn wybuchł.
+     * Działo namierzone Lunetami (#177) jest widoczne od startu, choć nie
+     * trafione; blastRadius mówi, jak duży będzie wybuch (Lonty prochowe).
      *
      * @param list<array{0:int,1:int}> $hits
      *
-     * @return array{seed:int, guns:array{left:int,total:int}, revealed:list<array{x:int,y:int,kind:string}>, explosion:list<array{0:int,1:int}>|null}|null
+     * @return array{seed:int, guns:array{left:int,total:int}, revealed:list<array{x:int,y:int,kind:string}>, spotted:list<array{x:int,y:int}>, blastRadius:int, explosion:list<array{0:int,1:int}>|null}|null
      */
     private function fortView(Game $game, array $hits): ?array
     {
@@ -153,14 +155,16 @@ final class GameQueryController
                 $revealed[] = ['x' => $x, 'y' => $y, 'kind' => $piece->value];
             }
         }
-        $size = $game->ruleset()->boardSize();
+        $spotted = $game->spottedFortGun();
 
         return [
             'seed' => $fort->seed,
             'guns' => ['left' => $game->fortGunsLeft(), 'total' => count($fort->guns)],
             'revealed' => $revealed,
+            'spotted' => null !== $spotted ? [['x' => $spotted->x, 'y' => $spotted->y]] : [],
+            'blastRadius' => $game->fortBlastRadius(),
             'explosion' => $game->fortExploded()
-                ? array_map(static fn ($c) => [$c->x, $c->y], $fort->blastCells($size->width, $size->height))
+                ? array_map(static fn ($c) => [$c->x, $c->y], $game->fortBlastCells())
                 : null,
         ];
     }

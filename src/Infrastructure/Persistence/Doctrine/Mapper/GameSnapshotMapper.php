@@ -14,6 +14,7 @@ use App\Domain\Game\Orientation;
 use App\Domain\Game\Ruleset;
 use App\Domain\Game\Ship;
 use App\Domain\Game\Siege\Fort;
+use App\Domain\Game\Siege\FortRules;
 use App\Domain\Game\Weapon\Loadout;
 use App\Domain\Game\Weapon\SonarSpec;
 use App\Domain\Shared\GameId;
@@ -83,6 +84,8 @@ final class GameSnapshotMapper
             'boarding' => $game->boardingEnabled() ? ['attempt' => $game->boardingAttempt()?->toArray()] + ($game->boardingEdge() > 0 ? ['edge' => $game->boardingEdge()] : []) : null,
             // układ fortu w bitwie oblężniczej (#119) — tylko, gdy jest
             'fort' => $game->fort()?->toArray(),
+            // technologie oblężnicze gracza (#177) — tylko, gdy coś zmieniają
+            'siegeTech' => $this->siegeTechOrNull($game),
             // Iteration 1 meta
             'mode' => $game->mode(),
             'opponent' => $game->opponent(),
@@ -125,7 +128,10 @@ final class GameSnapshotMapper
         // opis fortu (#119) — PRZED flotą przeciwnika: konstrukcje fortu stoją
         // na styk, więc plansza wroga musi to wiedzieć, zanim je odtworzy
         if (!empty($state['fort']) && is_array($state['fort'])) {
-            $game->setFortFromSnapshot(Fort::fromArray($state['fort']));
+            // promień wybuchu i namierzone działo (#177): brak = bez technologii
+            $tech = is_array($state['siegeTech'] ?? null) ? $state['siegeTech'] : [];
+            $spotted = is_array($tech['spotted'] ?? null) ? new Coordinate((int) $tech['spotted'][0], (int) $tech['spotted'][1]) : null;
+            $game->setFortFromSnapshot(Fort::fromArray($state['fort']), (int) ($tech['blastRadius'] ?? FortRules::EXPLOSION_RADIUS), $spotted);
         }
 
         // opponent fleet from snapshot (optional) — PRZED strzałami gracza:
@@ -269,6 +275,21 @@ final class GameSnapshotMapper
             (int) $s['l'],
             isset($s['w']) && is_array($s['w']) ? Loadout::fromArray($s['w']) : null,
         );
+    }
+
+    /** @return array{blastRadius?:int, spotted?:array{0:int,1:int}}|null */
+    private function siegeTechOrNull(Game $game): ?array
+    {
+        $tech = [];
+        if (FortRules::EXPLOSION_RADIUS !== $game->fortBlastRadius()) {
+            $tech['blastRadius'] = $game->fortBlastRadius();
+        }
+        $spotted = $game->spottedFortGun();
+        if (null !== $spotted) {
+            $tech['spotted'] = [$spotted->x, $spotted->y];
+        }
+
+        return [] !== $tech ? $tech : null;
     }
 
     private function sonarRadiusOrNull(Ruleset $ruleset): ?int

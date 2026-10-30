@@ -39,6 +39,11 @@ const expeditionBattle = computed(() => battle !== null && battle.gameId === gam
 const gameOver = computed(() => finished.value || status.value === 'won' || status.value === 'lost');
 // oblężenie fortu (#119): licznik zniszczonych dział zamiast zatopień
 const gunsDestroyed = computed(() => (fort.value ? fort.value.guns.total - fort.value.guns.left : 0));
+// wybuch magazynu: 3×3, z Lontami prochowymi 5×5 (#177)
+const blastSize = computed(() => {
+    const side = 2 * (fort.value?.blastRadius ?? 1) + 1;
+    return `${side}×${side}`;
+});
 
 // bonus pełnej bandery (#79): obrona tej wyspy przy wszystkich wyspach pod banderą
 const fullFlagDefense = ref(false);
@@ -426,6 +431,8 @@ const enemyCells = computed<string[][]>(() => {
     // (mur nie pulsuje jak trafiony statek — nie ma czego dobijać)
     const fortKinds = new Map((fort.value?.revealed ?? []).map(c => [`${c.x}:${c.y}`, c.kind]));
     const blast = new Set((fort.value?.explosion ?? []).map(([x, y]) => `${x}:${y}`));
+    // działo namierzone Lunetami (#177): widać je, póki nie zostanie trafione
+    const spotted = new Set((fort.value?.spotted ?? []).map(c => `${c.x}:${c.y}`));
 
     return enemyFogGrid.value.map((row, y) => row.map((cell, x) => {
         const key = `${x}:${y}`;
@@ -434,6 +441,7 @@ const enemyCells = computed<string[][]>(() => {
         else if (sunk.has(key)) cls = 'sunk';
         else if (cell === 'hit') cls += ' hit';
         else if (cell === 'miss') cls += ' miss';
+        else if (spotted.has(key)) cls += ' fort-spotted';
         else {
             if (sonar.has(key)) cls += sonar.get(key) ? ' sonar-ship' : ' sonar-water';
             if (noteMarks.value.has(key)) cls += ' note';
@@ -726,9 +734,10 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
                 <p class="foot">{{ enemyHint }}</p>
                 <div v-if="fort" class="fort-legend" aria-label="legenda fortu">
                     <span><i class="sw fort-gun"></i> działo</span>
+                    <span v-if="fort.spotted.length" title="Lunety artyleryjskie: działo widać od startu, ale trzeba je zestrzelić"><i class="sw fort-spotted"></i> działo namierzone</span>
                     <span><i class="sw fort-wall"></i> mur</span>
                     <span><i class="sw fort-magazine"></i> magazyn prochu</span>
-                    <span><i class="sw blast"></i> eksplozja</span>
+                    <span><i class="sw blast"></i> eksplozja {{ blastSize }}</span>
                 </div>
             </div>
 
@@ -795,7 +804,8 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
                 <p v-if="error" class="err small">{{ error }}</p>
                 <div v-if="fort" class="note">
                     Oblężenie: zniszcz wszystkie działa fortu. Trafiony mur tylko pochłania strzał,
-                    a trafiony magazyn prochu wybucha i trafia pola 3×3 wokół siebie. Fort oddaje
+                    a trafiony magazyn prochu wybucha i trafia pola {{ blastSize }} wokół siebie<template v-if="fort.blastRadius > 1"> (Lonty prochowe)</template>.
+                    <template v-if="fort.spotted.length">Lunety artyleryjskie namierzyły jedno działo — widać je od startu, ale trzeba je zestrzelić.</template> Fort oddaje
                     jedną salwę na turę, dopóki ma choć jedno działo.
                 </div>
                 <div v-else-if="energy" class="note">
@@ -920,6 +930,7 @@ watch([gameOver, shooting], ([over, busy]) => { if (over && !busy) finalize(); }
 .fort-legend .sw.fort-gun { background: #24130e; box-shadow: inset 0 0 0 1.5px var(--danger); }
 .fort-legend .sw.fort-wall { background: repeating-linear-gradient(0deg, #4a5257 0 3px, #2e3438 3px 4px); box-shadow: inset 0 0 0 1px #6b767c; }
 .fort-legend .sw.fort-magazine { background: #3b2d0e; box-shadow: inset 0 0 0 1.5px var(--warn); }
+.fort-legend .sw.fort-spotted { background: #1c1411; box-shadow: inset 0 0 0 1.5px var(--danger); outline: 1.5px dashed var(--danger); outline-offset: -5px; }
 .fort-legend .sw.blast { background: #23160f; outline: 1.5px dashed #e8843caa; outline-offset: -3px; }
 
 .log { border-left: 1px solid var(--line); background: var(--bg-panel-a); padding: 22px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }

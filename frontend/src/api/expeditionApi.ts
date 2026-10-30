@@ -542,9 +542,10 @@ export interface LastCounterattackDTO {
 }
 
 // drzewko technologii (Epic G): katalog zawiera tylko działające technologie
-export type TechBranchName = 'kadluby' | 'uzbrojenie' | 'nawigacja' | 'osady';
+export type TechBranchName = 'kadluby' | 'uzbrojenie' | 'nawigacja' | 'osady' | 'obleznictwo';
 export type TechnologyName = 'spichlerze' | 'mapy-sztormowe' | 'sonar-dalekiego-zasiegu' | 'zegluga-dwusektorowa' | 'pojemne-ladownie' | 'dok-remontowy' | 'lepsze-narzedzia' | 'niszczyciel-zwiadowczy' | 'nawigacja-oceaniczna'
-    | 'kuter-torpedowy' | 'ciezki-niszczyciel' | 'lotniskowiec-eskortowy' | 'kuter-remontowy' | 'czarna-perla' | 'nawigator';
+    | 'kuter-torpedowy' | 'ciezki-niszczyciel' | 'lotniskowiec-eskortowy' | 'kuter-remontowy' | 'czarna-perla' | 'nawigator'
+    | 'lunety-artyleryjskie' | 'lonty-prochowe';
 
 // ścieżka odblokowania (#121): uczelnia (drzewko z poziomami), zbadanie konstrukcji zdobytego statku
 // albo legenda z ekspedycji (#144)
@@ -555,6 +556,7 @@ export const TECH_BRANCH_LABELS: Record<TechBranchName, string> = {
     uzbrojenie: 'Uzbrojenie',
     nawigacja: 'Nawigacja',
     osady: 'Osady',
+    obleznictwo: 'Oblężnictwo',
 };
 
 export const TECH_LABELS: Record<TechnologyName, string> = {
@@ -573,6 +575,8 @@ export const TECH_LABELS: Record<TechnologyName, string> = {
     'kuter-remontowy': 'Kuter remontowy',
     'czarna-perla': 'Czarna perła',
     nawigator: 'Nawigator',
+    'lunety-artyleryjskie': 'Lunety artyleryjskie',
+    'lonty-prochowe': 'Lonty prochowe',
 };
 
 // powód blokady badania (Domain/Expedition/ResearchBlock); null = można badać
